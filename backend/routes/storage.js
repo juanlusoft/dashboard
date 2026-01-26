@@ -215,7 +215,7 @@ exclude .fseventsd
         execSync(`sudo mkdir -p ${POOL_MOUNT}`, { encoding: 'utf8' });
         execSync(`sudo umount ${POOL_MOUNT} 2>/dev/null || true`, { encoding: 'utf8' });
 
-        const mergerfsOpts = 'defaults,allow_other,use_ino,cache.files=partial,dropcacheonclose=true,category.create=mfs';
+        const mergerfsOpts = 'defaults,allow_other,nonempty,use_ino,cache.files=partial,dropcacheonclose=true,category.create=mfs';
         execSync(`sudo mergerfs -o ${mergerfsOpts} ${mergerfsSource} ${POOL_MOUNT}`, { encoding: 'utf8' });
         results.push(`MergerFS pool mounted at ${POOL_MOUNT}`);
 
