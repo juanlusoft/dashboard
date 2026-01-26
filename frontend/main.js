@@ -1003,64 +1003,453 @@ async function renderStorageDashboard() {
 
 // Real Docker Logic
 async function renderDockerManager() {
+    // Fetch containers and update status
+    let updateStatus = { lastCheck: null, updatesAvailable: 0 };
     try {
-        const res = await fetch(`${API_BASE}/docker/containers`);
-        if (!res.ok) throw new Error('Failed to fetch containers');
-        state.dockers = await res.json();
+        const [containersRes, updateRes] = await Promise.all([
+            fetch(`${API_BASE}/docker/containers`),
+            fetch(`${API_BASE}/docker/update-status`)
+        ]);
+        if (containersRes.ok) state.dockers = await containersRes.json();
+        if (updateRes.ok) updateStatus = await updateRes.json();
     } catch (e) {
         console.error('Docker unreachable:', e);
         state.dockers = [];
     }
 
+    // Fetch compose files
+    let composeFiles = [];
+    try {
+        const composeRes = await fetch(`${API_BASE}/docker/compose/list`);
+        if (composeRes.ok) composeFiles = await composeRes.json();
+    } catch (e) {
+        console.error('Compose list error:', e);
+    }
+
+    // Header with actions
+    const headerCard = document.createElement('div');
+    headerCard.className = 'glass-card';
+    headerCard.style.cssText = 'grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;';
+
+    const headerLeft = document.createElement('div');
+    const h3 = document.createElement('h3');
+    h3.style.margin = '0';
+    h3.textContent = 'Containers';
+    const updateInfo = document.createElement('span');
+    updateInfo.style.cssText = 'font-size: 0.8rem; color: var(--text-dim); display: block; margin-top: 5px;';
+    updateInfo.textContent = updateStatus.lastCheck
+        ? `Last check: ${new Date(updateStatus.lastCheck).toLocaleString()}`
+        : 'Updates not checked yet';
+    headerLeft.appendChild(h3);
+    headerLeft.appendChild(updateInfo);
+
+    const headerRight = document.createElement('div');
+    headerRight.style.cssText = 'display: flex; gap: 10px; flex-wrap: wrap;';
+
+    const checkUpdatesBtn = document.createElement('button');
+    checkUpdatesBtn.className = 'btn-primary';
+    checkUpdatesBtn.style.cssText = 'background: #6366f1; padding: 8px 16px; font-size: 0.85rem;';
+    checkUpdatesBtn.innerHTML = '🔄 Check Updates';
+    checkUpdatesBtn.addEventListener('click', checkDockerUpdates);
+
+    const importComposeBtn = document.createElement('button');
+    importComposeBtn.className = 'btn-primary';
+    importComposeBtn.style.cssText = 'background: #10b981; padding: 8px 16px; font-size: 0.85rem;';
+    importComposeBtn.innerHTML = '📦 Import Compose';
+    importComposeBtn.addEventListener('click', openComposeModal);
+
+    headerRight.appendChild(checkUpdatesBtn);
+    headerRight.appendChild(importComposeBtn);
+    headerCard.appendChild(headerLeft);
+    headerCard.appendChild(headerRight);
+    dashboardContent.appendChild(headerCard);
+
+    // Containers section
     if (state.dockers.length === 0) {
-        dashboardContent.innerHTML = `<div class="glass-card" style="grid-column: 1/-1; text-align:center; padding: 50px;">
-            <h3>No Containers Detected</h3>
-            <p style="color: var(--text-dim)">Ensure Docker is running on your CM5 Node.</p>
-        </div>`;
+        const emptyCard = document.createElement('div');
+        emptyCard.className = 'glass-card';
+        emptyCard.style.cssText = 'grid-column: 1/-1; text-align:center; padding: 40px;';
+        emptyCard.innerHTML = `
+            <h4 style="color: var(--text-dim);">No Containers Detected</h4>
+            <p style="color: var(--text-dim); font-size: 0.9rem;">Import a docker-compose file or run containers manually.</p>
+        `;
+        dashboardContent.appendChild(emptyCard);
+    } else {
+        const containerGrid = document.createElement('div');
+        containerGrid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; grid-column: 1 / -1;';
+
+        state.dockers.forEach(container => {
+            const card = document.createElement('div');
+            card.className = 'glass-card docker-card';
+            card.style.padding = '20px';
+
+            const isRunning = container.status === 'running';
+            const hasUpdate = container.hasUpdate;
+
+            // Header row
+            const header = document.createElement('div');
+            header.style.cssText = 'display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;';
+
+            const info = document.createElement('div');
+            const nameRow = document.createElement('div');
+            nameRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+            const h4 = document.createElement('h4');
+            h4.style.margin = '0';
+            h4.textContent = container.name || 'Unknown';
+            nameRow.appendChild(h4);
+
+            if (hasUpdate) {
+                const updateBadge = document.createElement('span');
+                updateBadge.style.cssText = 'background: #10b981; color: white; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: 600;';
+                updateBadge.textContent = 'UPDATE';
+                nameRow.appendChild(updateBadge);
+            }
+
+            const imageSpan = document.createElement('span');
+            imageSpan.style.cssText = 'font-size: 0.8rem; color: var(--text-dim); display: block; margin-top: 4px;';
+            imageSpan.textContent = container.image || 'N/A';
+            info.appendChild(nameRow);
+            info.appendChild(imageSpan);
+
+            const statusSpan = document.createElement('span');
+            statusSpan.style.cssText = `
+                padding: 4px 10px;
+                border-radius: 12px;
+                font-size: 0.75rem;
+                font-weight: 600;
+                background: ${isRunning ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'};
+                color: ${isRunning ? '#10b981' : '#ef4444'};
+            `;
+            statusSpan.textContent = isRunning ? 'RUNNING' : 'STOPPED';
+
+            header.appendChild(info);
+            header.appendChild(statusSpan);
+
+            // Stats row (only if running)
+            if (isRunning) {
+                const statsRow = document.createElement('div');
+                statsRow.style.cssText = 'display: flex; gap: 20px; margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 8px;';
+                statsRow.innerHTML = `
+                    <div style="flex: 1; text-align: center;">
+                        <div style="font-size: 0.7rem; color: var(--text-dim);">CPU</div>
+                        <div style="font-size: 1rem; font-weight: 600; color: ${container.cpu !== '---' && parseFloat(container.cpu) > 50 ? '#f59e0b' : '#10b981'}">${escapeHtml(container.cpu)}</div>
+                    </div>
+                    <div style="flex: 1; text-align: center;">
+                        <div style="font-size: 0.7rem; color: var(--text-dim);">RAM</div>
+                        <div style="font-size: 1rem; font-weight: 600; color: #6366f1;">${escapeHtml(container.ram)}</div>
+                    </div>
+                `;
+                card.appendChild(header);
+                card.appendChild(statsRow);
+            } else {
+                card.appendChild(header);
+            }
+
+            // Controls row
+            const controls = document.createElement('div');
+            controls.style.cssText = 'display: flex; gap: 8px; flex-wrap: wrap;';
+
+            const actionBtn = document.createElement('button');
+            actionBtn.className = 'btn-sm';
+            actionBtn.style.cssText = `flex: 1; padding: 8px; background: ${isRunning ? '#ef4444' : '#10b981'}; color: white; border: none; border-radius: 6px; cursor: pointer;`;
+            actionBtn.textContent = isRunning ? 'Stop' : 'Start';
+            actionBtn.addEventListener('click', () => handleDockerAction(container.id, isRunning ? 'stop' : 'start', actionBtn));
+
+            const restartBtn = document.createElement('button');
+            restartBtn.className = 'btn-sm';
+            restartBtn.style.cssText = 'flex: 1; padding: 8px; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer;';
+            restartBtn.textContent = 'Restart';
+            restartBtn.addEventListener('click', () => handleDockerAction(container.id, 'restart', restartBtn));
+
+            controls.appendChild(actionBtn);
+            controls.appendChild(restartBtn);
+
+            if (hasUpdate) {
+                const updateBtn = document.createElement('button');
+                updateBtn.className = 'btn-sm';
+                updateBtn.style.cssText = 'width: 100%; margin-top: 8px; padding: 10px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;';
+                updateBtn.innerHTML = '⬆️ Update Container';
+                updateBtn.addEventListener('click', () => updateContainer(container.id, container.name, updateBtn));
+                controls.appendChild(updateBtn);
+            }
+
+            card.appendChild(controls);
+            containerGrid.appendChild(card);
+        });
+
+        dashboardContent.appendChild(containerGrid);
+    }
+
+    // Compose Files Section
+    if (composeFiles.length > 0) {
+        const composeSectionTitle = document.createElement('h3');
+        composeSectionTitle.style.cssText = 'grid-column: 1 / -1; margin-top: 30px; margin-bottom: 10px;';
+        composeSectionTitle.textContent = 'Docker Compose Files';
+        dashboardContent.appendChild(composeSectionTitle);
+
+        const composeGrid = document.createElement('div');
+        composeGrid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; grid-column: 1 / -1;';
+
+        composeFiles.forEach(compose => {
+            const card = document.createElement('div');
+            card.className = 'glass-card';
+            card.style.padding = '15px';
+
+            const header = document.createElement('div');
+            header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;';
+
+            const name = document.createElement('h4');
+            name.style.margin = '0';
+            name.textContent = compose.name;
+
+            const modified = document.createElement('span');
+            modified.style.cssText = 'font-size: 0.75rem; color: var(--text-dim);';
+            modified.textContent = new Date(compose.modified).toLocaleDateString();
+
+            header.appendChild(name);
+            header.appendChild(modified);
+
+            const controls = document.createElement('div');
+            controls.style.cssText = 'display: flex; gap: 8px;';
+
+            const runBtn = document.createElement('button');
+            runBtn.style.cssText = 'flex: 1; padding: 8px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;';
+            runBtn.textContent = 'Run';
+            runBtn.addEventListener('click', () => runCompose(compose.name, runBtn));
+
+            const stopBtn = document.createElement('button');
+            stopBtn.style.cssText = 'flex: 1; padding: 8px; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;';
+            stopBtn.textContent = 'Stop';
+            stopBtn.addEventListener('click', () => stopCompose(compose.name, stopBtn));
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.style.cssText = 'padding: 8px 12px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;';
+            deleteBtn.textContent = '🗑️';
+            deleteBtn.addEventListener('click', () => deleteCompose(compose.name));
+
+            controls.appendChild(runBtn);
+            controls.appendChild(stopBtn);
+            controls.appendChild(deleteBtn);
+
+            card.appendChild(header);
+            card.appendChild(controls);
+            composeGrid.appendChild(card);
+        });
+
+        dashboardContent.appendChild(composeGrid);
+    }
+}
+
+// Docker Update Functions
+async function checkDockerUpdates() {
+    const btn = event.target;
+    btn.disabled = true;
+    btn.innerHTML = '🔄 Checking...';
+
+    try {
+        const res = await authFetch(`${API_BASE}/docker/check-updates`, { method: 'POST' });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'Check failed');
+
+        alert(`Update check complete!\n\nImages checked: ${data.totalImages}\nUpdates available: ${data.updatesAvailable}`);
+        renderContent('docker');
+    } catch (e) {
+        console.error('Docker update check error:', e);
+        alert('Error: ' + e.message);
+        btn.disabled = false;
+        btn.innerHTML = '🔄 Check Updates';
+    }
+}
+
+async function updateContainer(containerId, containerName, btn) {
+    if (!confirm(`Update container "${containerName}"?\n\nThis will:\n1. Stop the container\n2. Pull the latest image\n3. Recreate the container\n\nVolumes and data will be preserved.`)) {
         return;
     }
 
-    state.dockers.forEach(container => {
-        const card = document.createElement('div');
-        card.className = 'glass-card docker-card';
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Updating...';
 
-        const isRunning = container.status === 'running';
+    try {
+        const res = await authFetch(`${API_BASE}/docker/update`, {
+            method: 'POST',
+            body: JSON.stringify({ containerId })
+        });
+        const data = await res.json();
 
-        // Create header
-        const header = document.createElement('div');
-        header.style.cssText = 'display: flex; justify-content: space-between;';
+        if (!res.ok) throw new Error(data.error || 'Update failed');
 
-        const info = document.createElement('div');
-        const h4 = document.createElement('h4');
-        h4.textContent = container.name || 'Unknown';
-        const imageSpan = document.createElement('span');
-        imageSpan.style.cssText = 'font-size: 0.8rem; color: var(--text-dim);';
-        imageSpan.textContent = container.image || 'N/A';
-        info.appendChild(h4);
-        info.appendChild(imageSpan);
-
-        const statusSpan = document.createElement('span');
-        statusSpan.className = `docker-status status-${isRunning ? 'running' : 'stopped'}`;
-
-        header.appendChild(info);
-        header.appendChild(statusSpan);
-
-        // Create controls
-        const controls = document.createElement('div');
-        controls.className = 'docker-controls';
-
-        const btn = document.createElement('button');
-        btn.className = 'btn-sm';
-        btn.textContent = isRunning ? 'Stop' : 'Start';
-        btn.addEventListener('click', () => handleDockerAction(container.id, isRunning ? 'stop' : 'start', btn));
-
-        controls.appendChild(btn);
-
-        card.appendChild(header);
-        card.appendChild(controls);
-        dashboardContent.appendChild(card);
-    });
+        alert(`Container "${containerName}" updated successfully!`);
+        renderContent('docker');
+    } catch (e) {
+        console.error('Container update error:', e);
+        alert('Update failed: ' + e.message);
+        btn.disabled = false;
+        btn.innerHTML = '⬆️ Update Container';
+    }
 }
+
+// Compose Functions
+function openComposeModal() {
+    const modal = document.createElement('div');
+    modal.id = 'compose-modal';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.8); display: flex; align-items: center;
+        justify-content: center; z-index: 1000;
+    `;
+
+    modal.innerHTML = `
+        <div style="background: var(--card-bg); padding: 30px; border-radius: 16px; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0;">Import Docker Compose</h3>
+                <button id="close-compose-modal" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer;">&times;</button>
+            </div>
+            <div class="input-group" style="margin-bottom: 15px;">
+                <input type="text" id="compose-name" placeholder=" " required>
+                <label>Stack Name</label>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 8px; color: var(--text-dim);">docker-compose.yml content:</label>
+                <textarea id="compose-content" style="
+                    width: 100%; height: 300px; background: rgba(0,0,0,0.3);
+                    border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+                    color: white; font-family: monospace; padding: 15px; resize: vertical;
+                " placeholder="version: '3'
+services:
+  myapp:
+    image: nginx:latest
+    ports:
+      - '8080:80'"></textarea>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button id="save-compose-btn" class="btn-primary" style="flex: 1; padding: 12px;">Save Compose</button>
+                <button id="save-run-compose-btn" class="btn-primary" style="flex: 1; padding: 12px; background: #10b981;">Save & Run</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    document.getElementById('close-compose-modal').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+    document.getElementById('save-compose-btn').addEventListener('click', () => saveCompose(false));
+    document.getElementById('save-run-compose-btn').addEventListener('click', () => saveCompose(true));
+}
+
+async function saveCompose(andRun) {
+    const name = document.getElementById('compose-name').value.trim();
+    const content = document.getElementById('compose-content').value;
+
+    if (!name) {
+        alert('Please enter a stack name');
+        return;
+    }
+    if (!content) {
+        alert('Please enter compose content');
+        return;
+    }
+
+    try {
+        const res = await authFetch(`${API_BASE}/docker/compose/import`, {
+            method: 'POST',
+            body: JSON.stringify({ name, content })
+        });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'Import failed');
+
+        if (andRun) {
+            const runRes = await authFetch(`${API_BASE}/docker/compose/up`, {
+                method: 'POST',
+                body: JSON.stringify({ name })
+            });
+            const runData = await runRes.json();
+            if (!runRes.ok) throw new Error(runData.error || 'Run failed');
+            alert(`Compose "${name}" saved and started!`);
+        } else {
+            alert(`Compose "${name}" saved!`);
+        }
+
+        document.getElementById('compose-modal').remove();
+        renderContent('docker');
+    } catch (e) {
+        console.error('Compose save error:', e);
+        alert('Error: ' + e.message);
+    }
+}
+
+async function runCompose(name, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Starting...';
+
+    try {
+        const res = await authFetch(`${API_BASE}/docker/compose/up`, {
+            method: 'POST',
+            body: JSON.stringify({ name })
+        });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'Start failed');
+
+        alert(`Compose "${name}" started!`);
+        renderContent('docker');
+    } catch (e) {
+        console.error('Compose run error:', e);
+        alert('Error: ' + e.message);
+        btn.disabled = false;
+        btn.textContent = 'Run';
+    }
+}
+
+async function stopCompose(name, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Stopping...';
+
+    try {
+        const res = await authFetch(`${API_BASE}/docker/compose/down`, {
+            method: 'POST',
+            body: JSON.stringify({ name })
+        });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'Stop failed');
+
+        alert(`Compose "${name}" stopped!`);
+        renderContent('docker');
+    } catch (e) {
+        console.error('Compose stop error:', e);
+        alert('Error: ' + e.message);
+        btn.disabled = false;
+        btn.textContent = 'Stop';
+    }
+}
+
+async function deleteCompose(name) {
+    if (!confirm(`Delete compose "${name}"?\n\nThis will stop all containers and remove the compose file.`)) {
+        return;
+    }
+
+    try {
+        const res = await authFetch(`${API_BASE}/docker/compose/${encodeURIComponent(name)}`, {
+            method: 'DELETE'
+        });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'Delete failed');
+
+        alert(`Compose "${name}" deleted!`);
+        renderContent('docker');
+    } catch (e) {
+        console.error('Compose delete error:', e);
+        alert('Error: ' + e.message);
+    }
+}
+
+window.checkDockerUpdates = checkDockerUpdates;
+window.updateContainer = updateContainer;
+window.openComposeModal = openComposeModal;
 
 async function handleDockerAction(id, action, btn) {
     if (!btn) return;

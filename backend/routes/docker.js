@@ -1,13 +1,21 @@
 /**
  * HomePiNAS - Docker Routes
- * v1.5.6 - Modular Architecture
+ * v1.5.8 - Enhanced Docker Manager
  *
- * Docker container management
+ * Features:
+ * - List containers with CPU/RAM stats and update status
+ * - Import and run docker-compose files
+ * - Check for image updates (pull and compare IDs)
+ * - Update containers (stop, remove, pull, recreate)
+ * - Compose stack management (up, down, delete)
  */
 
 const express = require('express');
 const router = express.Router();
 const Docker = require('dockerode');
+const fs = require('fs');
+const path = require('path');
+const { execSync, exec } = require('child_process');
 
 const { requireAuth } = require('../middleware/auth');
 const { logSecurityEvent } = require('../utils/security');
@@ -15,18 +23,85 @@ const { validateDockerAction } = require('../utils/sanitize');
 
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
-// List containers
+// Paths for compose files and update cache
+const COMPOSE_DIR = path.join(__dirname, '..', 'config', 'compose');
+const UPDATE_CACHE_FILE = path.join(__dirname, '..', 'config', 'docker-updates.json');
+
+// Ensure directories exist
+if (!fs.existsSync(COMPOSE_DIR)) {
+    fs.mkdirSync(COMPOSE_DIR, { recursive: true });
+}
+
+// Load update cache
+function loadUpdateCache() {
+    try {
+        if (fs.existsSync(UPDATE_CACHE_FILE)) {
+            return JSON.parse(fs.readFileSync(UPDATE_CACHE_FILE, 'utf8'));
+        }
+    } catch (e) {
+        console.error('Error loading update cache:', e.message);
+    }
+    return { lastCheck: null, updates: {} };
+}
+
+// Save update cache
+function saveUpdateCache(cache) {
+    try {
+        fs.writeFileSync(UPDATE_CACHE_FILE, JSON.stringify(cache, null, 2));
+    } catch (e) {
+        console.error('Error saving update cache:', e.message);
+    }
+}
+
+// List containers with update status
 router.get('/containers', async (req, res) => {
     try {
         const containers = await docker.listContainers({ all: true });
-        res.json(containers.map(c => ({
-            id: c.Id,
-            name: c.Names[0].replace('/', ''),
-            status: c.State,
-            image: c.Image,
-            cpu: '---',
-            ram: '---'
-        })));
+        const updateCache = loadUpdateCache();
+
+        const result = await Promise.all(containers.map(async (c) => {
+            const name = c.Names[0].replace('/', '');
+            const image = c.Image;
+
+            // Check if update is available from cache
+            const hasUpdate = updateCache.updates[image] || false;
+
+            // Get container stats if running
+            let cpu = '---';
+            let ram = '---';
+
+            if (c.State === 'running') {
+                try {
+                    const container = docker.getContainer(c.Id);
+                    const stats = await container.stats({ stream: false });
+
+                    // Calculate CPU percentage
+                    const cpuDelta = stats.cpu_stats.cpu_usage.total_usage - stats.precpu_stats.cpu_usage.total_usage;
+                    const systemDelta = stats.cpu_stats.system_cpu_usage - stats.precpu_stats.system_cpu_usage;
+                    const cpuPercent = (cpuDelta / systemDelta) * stats.cpu_stats.online_cpus * 100;
+                    cpu = cpuPercent.toFixed(1) + '%';
+
+                    // Calculate memory usage
+                    const memUsage = stats.memory_stats.usage / 1024 / 1024;
+                    ram = memUsage.toFixed(0) + 'MB';
+                } catch (e) {
+                    // Stats not available
+                }
+            }
+
+            return {
+                id: c.Id,
+                name,
+                status: c.State,
+                image,
+                cpu,
+                ram,
+                hasUpdate,
+                created: c.Created
+            };
+        }));
+
+        res.json(result);
     } catch (e) {
         console.warn('Docker check failed:', e.message);
         res.json([]);
@@ -56,6 +131,351 @@ router.post('/action', requireAuth, async (req, res) => {
     } catch (e) {
         console.error('Docker action error:', e.message);
         res.status(500).json({ error: 'Docker action failed' });
+    }
+});
+
+// Check for image updates
+router.post('/check-updates', requireAuth, async (req, res) => {
+    try {
+        logSecurityEvent('DOCKER_CHECK_UPDATES', { user: req.user.username }, req.ip);
+
+        const containers = await docker.listContainers({ all: true });
+        const images = [...new Set(containers.map(c => c.Image))];
+        const updates = {};
+        const results = [];
+
+        for (const imageName of images) {
+            try {
+                // Get current image ID
+                const currentImage = await docker.getImage(imageName).inspect();
+                const currentId = currentImage.Id;
+
+                // Pull latest and check if ID changed
+                results.push(`Checking ${imageName}...`);
+
+                await new Promise((resolve, reject) => {
+                    docker.pull(imageName, (err, stream) => {
+                        if (err) {
+                            results.push(`  Skip: ${err.message}`);
+                            resolve();
+                            return;
+                        }
+
+                        docker.modem.followProgress(stream, async (err, output) => {
+                            if (err) {
+                                results.push(`  Error: ${err.message}`);
+                                resolve();
+                                return;
+                            }
+
+                            try {
+                                const newImage = await docker.getImage(imageName).inspect();
+                                const newId = newImage.Id;
+
+                                if (newId !== currentId) {
+                                    updates[imageName] = true;
+                                    results.push(`  UPDATE AVAILABLE!`);
+                                } else {
+                                    updates[imageName] = false;
+                                    results.push(`  Up to date`);
+                                }
+                            } catch (e) {
+                                results.push(`  Check failed: ${e.message}`);
+                            }
+                            resolve();
+                        });
+                    });
+                });
+            } catch (e) {
+                results.push(`${imageName}: Error - ${e.message}`);
+            }
+        }
+
+        // Save update cache
+        const cache = {
+            lastCheck: new Date().toISOString(),
+            updates
+        };
+        saveUpdateCache(cache);
+
+        const updatesAvailable = Object.values(updates).filter(v => v).length;
+
+        res.json({
+            success: true,
+            lastCheck: cache.lastCheck,
+            updatesAvailable,
+            totalImages: images.length,
+            updates,
+            log: results
+        });
+    } catch (e) {
+        console.error('Docker update check error:', e);
+        res.status(500).json({ error: 'Failed to check for updates' });
+    }
+});
+
+// Get update status (cached)
+router.get('/update-status', async (req, res) => {
+    const cache = loadUpdateCache();
+    res.json({
+        lastCheck: cache.lastCheck,
+        updates: cache.updates,
+        updatesAvailable: Object.values(cache.updates).filter(v => v).length
+    });
+});
+
+// Update a specific container
+router.post('/update', requireAuth, async (req, res) => {
+    const { containerId } = req.body;
+
+    if (!containerId) {
+        return res.status(400).json({ error: 'Container ID required' });
+    }
+
+    try {
+        const container = docker.getContainer(containerId);
+        const info = await container.inspect();
+        const imageName = info.Config.Image;
+        const containerName = info.Name.replace('/', '');
+
+        logSecurityEvent('DOCKER_UPDATE', { containerId, image: imageName, user: req.user.username }, req.ip);
+
+        // Get container config for recreation
+        const hostConfig = info.HostConfig;
+        const config = info.Config;
+
+        // Stop and remove old container
+        try {
+            await container.stop();
+        } catch (e) {
+            // Already stopped
+        }
+        await container.remove();
+
+        // Pull latest image
+        await new Promise((resolve, reject) => {
+            docker.pull(imageName, (err, stream) => {
+                if (err) return reject(err);
+                docker.modem.followProgress(stream, (err) => {
+                    if (err) return reject(err);
+                    resolve();
+                });
+            });
+        });
+
+        // Recreate container with same config
+        const newContainer = await docker.createContainer({
+            Image: imageName,
+            name: containerName,
+            Env: config.Env,
+            ExposedPorts: config.ExposedPorts,
+            HostConfig: hostConfig,
+            Labels: config.Labels,
+            Volumes: config.Volumes
+        });
+
+        // Start the new container
+        await newContainer.start();
+
+        // Update cache - mark as no update available
+        const cache = loadUpdateCache();
+        cache.updates[imageName] = false;
+        saveUpdateCache(cache);
+
+        res.json({
+            success: true,
+            message: `Container ${containerName} updated successfully`,
+            newContainerId: newContainer.id
+        });
+    } catch (e) {
+        console.error('Docker update error:', e);
+        res.status(500).json({ error: `Update failed: ${e.message}` });
+    }
+});
+
+// Import docker-compose.yml
+router.post('/compose/import', requireAuth, async (req, res) => {
+    const { name, content } = req.body;
+
+    if (!name || !content) {
+        return res.status(400).json({ error: 'Name and content required' });
+    }
+
+    // Sanitize name
+    const safeName = name.replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 50);
+    if (!safeName) {
+        return res.status(400).json({ error: 'Invalid compose name' });
+    }
+
+    try {
+        const composeDir = path.join(COMPOSE_DIR, safeName);
+        const composeFile = path.join(composeDir, 'docker-compose.yml');
+
+        // Create directory
+        if (!fs.existsSync(composeDir)) {
+            fs.mkdirSync(composeDir, { recursive: true });
+        }
+
+        // Save compose file
+        fs.writeFileSync(composeFile, content, 'utf8');
+
+        logSecurityEvent('DOCKER_COMPOSE_IMPORT', { name: safeName, user: req.user.username }, req.ip);
+
+        res.json({
+            success: true,
+            message: `Compose file "${safeName}" saved`,
+            path: composeFile
+        });
+    } catch (e) {
+        console.error('Compose import error:', e);
+        res.status(500).json({ error: 'Failed to save compose file' });
+    }
+});
+
+// List saved compose files
+router.get('/compose/list', async (req, res) => {
+    try {
+        const composes = [];
+
+        if (fs.existsSync(COMPOSE_DIR)) {
+            const dirs = fs.readdirSync(COMPOSE_DIR);
+            for (const dir of dirs) {
+                const composeFile = path.join(COMPOSE_DIR, dir, 'docker-compose.yml');
+                if (fs.existsSync(composeFile)) {
+                    const stat = fs.statSync(composeFile);
+                    composes.push({
+                        name: dir,
+                        path: composeFile,
+                        modified: stat.mtime
+                    });
+                }
+            }
+        }
+
+        res.json(composes);
+    } catch (e) {
+        console.error('Compose list error:', e);
+        res.status(500).json({ error: 'Failed to list compose files' });
+    }
+});
+
+// Run docker-compose up
+router.post('/compose/up', requireAuth, async (req, res) => {
+    const { name } = req.body;
+
+    if (!name) {
+        return res.status(400).json({ error: 'Compose name required' });
+    }
+
+    const safeName = name.replace(/[^a-zA-Z0-9_-]/g, '');
+    const composeDir = path.join(COMPOSE_DIR, safeName);
+    const composeFile = path.join(composeDir, 'docker-compose.yml');
+
+    if (!fs.existsSync(composeFile)) {
+        return res.status(404).json({ error: 'Compose file not found' });
+    }
+
+    try {
+        logSecurityEvent('DOCKER_COMPOSE_UP', { name: safeName, user: req.user.username }, req.ip);
+
+        // Run docker-compose up -d
+        const output = execSync(`cd "${composeDir}" && docker compose up -d 2>&1`, {
+            encoding: 'utf8',
+            timeout: 300000 // 5 minutes
+        });
+
+        res.json({
+            success: true,
+            message: `Compose "${safeName}" started`,
+            output
+        });
+    } catch (e) {
+        console.error('Compose up error:', e);
+        res.status(500).json({
+            error: 'Failed to start compose',
+            details: e.message
+        });
+    }
+});
+
+// Stop docker-compose
+router.post('/compose/down', requireAuth, async (req, res) => {
+    const { name } = req.body;
+
+    if (!name) {
+        return res.status(400).json({ error: 'Compose name required' });
+    }
+
+    const safeName = name.replace(/[^a-zA-Z0-9_-]/g, '');
+    const composeDir = path.join(COMPOSE_DIR, safeName);
+    const composeFile = path.join(composeDir, 'docker-compose.yml');
+
+    if (!fs.existsSync(composeFile)) {
+        return res.status(404).json({ error: 'Compose file not found' });
+    }
+
+    try {
+        logSecurityEvent('DOCKER_COMPOSE_DOWN', { name: safeName, user: req.user.username }, req.ip);
+
+        const output = execSync(`cd "${composeDir}" && docker compose down 2>&1`, {
+            encoding: 'utf8',
+            timeout: 120000
+        });
+
+        res.json({
+            success: true,
+            message: `Compose "${safeName}" stopped`,
+            output
+        });
+    } catch (e) {
+        console.error('Compose down error:', e);
+        res.status(500).json({ error: 'Failed to stop compose' });
+    }
+});
+
+// Delete compose file
+router.delete('/compose/:name', requireAuth, async (req, res) => {
+    const safeName = req.params.name.replace(/[^a-zA-Z0-9_-]/g, '');
+    const composeDir = path.join(COMPOSE_DIR, safeName);
+
+    if (!fs.existsSync(composeDir)) {
+        return res.status(404).json({ error: 'Compose not found' });
+    }
+
+    try {
+        // Stop containers first
+        try {
+            execSync(`cd "${composeDir}" && docker compose down 2>&1`, { encoding: 'utf8', timeout: 60000 });
+        } catch (e) {
+            // Ignore errors
+        }
+
+        // Remove directory
+        fs.rmSync(composeDir, { recursive: true, force: true });
+
+        logSecurityEvent('DOCKER_COMPOSE_DELETE', { name: safeName, user: req.user.username }, req.ip);
+
+        res.json({ success: true, message: `Compose "${safeName}" deleted` });
+    } catch (e) {
+        console.error('Compose delete error:', e);
+        res.status(500).json({ error: 'Failed to delete compose' });
+    }
+});
+
+// Get compose file content
+router.get('/compose/:name', async (req, res) => {
+    const safeName = req.params.name.replace(/[^a-zA-Z0-9_-]/g, '');
+    const composeFile = path.join(COMPOSE_DIR, safeName, 'docker-compose.yml');
+
+    if (!fs.existsSync(composeFile)) {
+        return res.status(404).json({ error: 'Compose not found' });
+    }
+
+    try {
+        const content = fs.readFileSync(composeFile, 'utf8');
+        res.json({ name: safeName, content });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read compose file' });
     }
 });
 

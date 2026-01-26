@@ -1,4 +1,4 @@
-# HomePiNAS v1.5.7
+# HomePiNAS v1.5.8
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Security Hardened Edition
 
@@ -39,6 +39,13 @@ curl -fsSL https://raw.githubusercontent.com/juanlusoft/homepinas-v2/main/instal
 - SMB Share: `\\<IP>\Storage`
 
 ## Version History
+
+- **1.5.8** - Enhanced Docker Manager
+  - Import and run docker-compose files
+  - Container update detection (pull latest and compare)
+  - One-click container updates from dashboard
+  - CPU/RAM stats per container
+  - Compose stack management (run, stop, delete)
 
 - **1.5.7** - OTA updates
   - Check for updates from dashboard
