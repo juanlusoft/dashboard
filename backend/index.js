@@ -4,7 +4,6 @@ const fs = require('fs');
 const path = require('path');
 const si = require('systeminformation');
 const Docker = require('dockerode');
-const { exec } = require('child_process');
 const bcrypt = require('bcrypt');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
@@ -13,9 +12,104 @@ const { v4: uuidv4 } = require('uuid');
 const app = express();
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.5.0';
+const VERSION = '1.5.1';
 const DATA_FILE = path.join(__dirname, 'config', 'data.json');
 const SALT_ROUNDS = 12;
+
+// =============================================================================
+// SECURITY: Input Sanitization Functions
+// =============================================================================
+
+/**
+ * Sanitize username for shell commands
+ * Only allows alphanumeric, underscore, and hyphen
+ */
+function sanitizeUsername(username) {
+    if (!username || typeof username !== 'string') return null;
+    // Remove any character that isn't alphanumeric, underscore, or hyphen
+    const sanitized = username.replace(/[^a-zA-Z0-9_-]/g, '');
+    // Must be 3-32 characters
+    if (sanitized.length < 3 || sanitized.length > 32) return null;
+    // Must start with a letter
+    if (!/^[a-zA-Z]/.test(sanitized)) return null;
+    return sanitized;
+}
+
+/**
+ * Sanitize shell argument - escapes special characters
+ * For use in shell commands where the value must be quoted
+ */
+function sanitizeShellArg(arg) {
+    if (!arg || typeof arg !== 'string') return '';
+    // Escape single quotes by ending the string, adding escaped quote, and starting new string
+    return arg.replace(/'/g, "'\\''");
+}
+
+/**
+ * Sanitize path - prevent directory traversal
+ */
+function sanitizePath(inputPath) {
+    if (!inputPath || typeof inputPath !== 'string') return null;
+    // Remove null bytes
+    let sanitized = inputPath.replace(/\0/g, '');
+    // Normalize path and check for traversal
+    const normalized = path.normalize(sanitized);
+    // Block if it tries to go up directories
+    if (normalized.includes('..')) return null;
+    // Only allow alphanumeric, slash, dash, underscore, dot
+    if (!/^[a-zA-Z0-9/_.-]+$/.test(normalized)) return null;
+    return normalized;
+}
+
+/**
+ * Sanitize disk device path (e.g., /dev/sda)
+ */
+function sanitizeDiskPath(diskPath) {
+    if (!diskPath || typeof diskPath !== 'string') return null;
+    // Must match /dev/sdX, /dev/nvmeXnY, or /dev/hdX pattern
+    const validPatterns = [
+        /^\/dev\/sd[a-z]$/,
+        /^\/dev\/sd[a-z][0-9]+$/,
+        /^\/dev\/nvme[0-9]+n[0-9]+$/,
+        /^\/dev\/nvme[0-9]+n[0-9]+p[0-9]+$/,
+        /^\/dev\/hd[a-z]$/,
+        /^\/dev\/hd[a-z][0-9]+$/
+    ];
+    for (const pattern of validPatterns) {
+        if (pattern.test(diskPath)) return diskPath;
+    }
+    return null;
+}
+
+/**
+ * Execute command with sanitized arguments using execFile (safer than exec)
+ */
+const { execFile, execSync } = require('child_process');
+const util = require('util');
+const execFileAsync = util.promisify(execFile);
+
+async function safeExec(command, args = [], options = {}) {
+    // Validate command is in allowed list
+    const allowedCommands = [
+        'sudo', 'cat', 'ls', 'df', 'mount', 'umount', 'smartctl',
+        'systemctl', 'snapraid', 'mergerfs', 'smbpasswd', 'useradd',
+        'usermod', 'chown', 'chmod', 'mkfs.ext4', 'mkfs.xfs', 'parted',
+        'partprobe', 'id', 'getent', 'cp', 'tee', 'mkdir'
+    ];
+
+    const baseCommand = command.split('/').pop();
+    if (!allowedCommands.includes(baseCommand)) {
+        throw new Error(`Command not allowed: ${baseCommand}`);
+    }
+
+    return execFileAsync(command, args, {
+        timeout: options.timeout || 30000,
+        maxBuffer: 10 * 1024 * 1024,
+        ...options
+    });
+}
+
+// =============================================================================
 
 // In-memory session store (use Redis in production)
 const sessions = new Map();
@@ -1130,39 +1224,67 @@ app.post('/api/system/shutdown', requireAuth, criticalLimiter, (req, res) => {
     }, 1000);
 });
 
-// Helper function to create Samba user
+// Helper function to create Samba user (SECURE VERSION v1.5.1)
 async function createSambaUser(username, password) {
-    const { execSync } = require('child_process');
+    const { spawn, execFileSync } = require('child_process');
+
+    // SECURITY: Sanitize username to prevent command injection
+    const safeUsername = sanitizeUsername(username);
+    if (!safeUsername) {
+        console.error('Invalid username format for Samba user');
+        return false;
+    }
 
     try {
-        // Check if system user exists, create if not
+        // Check if system user exists using execFileSync (safe - no shell interpolation)
         try {
-            execSync(`id ${username}`, { encoding: 'utf8' });
+            execFileSync('id', [safeUsername], { encoding: 'utf8' });
         } catch (e) {
             // User doesn't exist, create it
-            execSync(`sudo useradd -M -s /sbin/nologin ${username}`, { encoding: 'utf8' });
+            execFileSync('sudo', ['useradd', '-M', '-s', '/sbin/nologin', safeUsername], { encoding: 'utf8' });
         }
 
         // Add user to sambashare group
-        execSync(`sudo usermod -aG sambashare ${username}`, { encoding: 'utf8' });
+        execFileSync('sudo', ['usermod', '-aG', 'sambashare', safeUsername], { encoding: 'utf8' });
 
-        // Set Samba password (using stdin to pass password)
-        execSync(`(echo "${password}"; echo "${password}") | sudo smbpasswd -a -s ${username}`, {
-            shell: '/bin/bash',
-            encoding: 'utf8'
+        // SECURITY: Set Samba password using stdin (password never visible in process list)
+        await new Promise((resolve, reject) => {
+            const smbpasswd = spawn('sudo', ['smbpasswd', '-a', '-s', safeUsername], {
+                stdio: ['pipe', 'pipe', 'pipe']
+            });
+
+            // Write password twice (new password + confirm) via stdin
+            smbpasswd.stdin.write(password + '\n');
+            smbpasswd.stdin.write(password + '\n');
+            smbpasswd.stdin.end();
+
+            let stderr = '';
+            smbpasswd.stderr.on('data', (data) => { stderr += data.toString(); });
+
+            smbpasswd.on('close', (code) => {
+                if (code === 0) resolve();
+                else reject(new Error(`smbpasswd failed: ${stderr}`));
+            });
+
+            smbpasswd.on('error', reject);
         });
 
         // Enable the Samba user
-        execSync(`sudo smbpasswd -e ${username}`, { encoding: 'utf8' });
+        execFileSync('sudo', ['smbpasswd', '-e', safeUsername], { encoding: 'utf8' });
 
-        // Set ownership of storage pool directory
-        execSync(`sudo chown -R ${username}:sambashare /mnt/storage 2>/dev/null || true`, { encoding: 'utf8' });
-        execSync(`sudo chmod -R 2775 /mnt/storage 2>/dev/null || true`, { encoding: 'utf8' });
+        // Set ownership of storage pool directory (safe with execFileSync)
+        try {
+            execFileSync('sudo', ['chown', '-R', `${safeUsername}:sambashare`, '/mnt/storage'], { encoding: 'utf8' });
+            execFileSync('sudo', ['chmod', '-R', '2775', '/mnt/storage'], { encoding: 'utf8' });
+        } catch (e) {
+            // Directory might not exist yet, that's ok
+        }
 
         // Restart Samba to apply changes
-        execSync('sudo systemctl restart smbd nmbd', { encoding: 'utf8' });
+        execFileSync('sudo', ['systemctl', 'restart', 'smbd'], { encoding: 'utf8' });
+        execFileSync('sudo', ['systemctl', 'restart', 'nmbd'], { encoding: 'utf8' });
 
-        console.log(`Samba user ${username} created successfully`);
+        console.log(`Samba user ${safeUsername} created successfully`);
         return true;
     } catch (e) {
         console.error('Failed to create Samba user:', e.message);
