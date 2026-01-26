@@ -3,7 +3,7 @@
 # HomePiNAS - Premium Dashboard for Raspberry Pi CM5
 # Professional One-Liner Installer
 # Optimized for Raspberry Pi OS (ARM64)
-# Version: 1.5.0 (Security Hardened Edition)
+# Version: 1.5.2 (Security Hardened Edition)
 
 set -e
 
@@ -432,36 +432,67 @@ usermod -aG docker $REAL_USER
 
 # Sudoers for system control, fan PWM, storage and Samba management
 cat > /etc/sudoers.d/homepinas <<EOF
-# System control
-$REAL_USER ALL=(ALL) NOPASSWD: /sbin/reboot, /sbin/shutdown
+# HomePiNAS Sudoers - SECURITY HARDENED v1.5.2
+# Only allows specific commands with restricted arguments
 
-# Fan control
-$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/class/hwmon/hwmon*/pwm*
+# System control (safe - no arguments needed)
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/reboot
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/shutdown
+
+# Fan control (restricted to specific paths)
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/class/hwmon/hwmon[0-9]/pwm[0-9]
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/class/hwmon/hwmon[0-9][0-9]/pwm[0-9]
 $REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /usr/local/bin/homepinas-fanctl.conf
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/cp /tmp/homepinas-fanctl-temp.conf /usr/local/bin/homepinas-fanctl.conf
 $REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart homepinas-fanctl
 
-# Storage management (SnapRAID + MergerFS)
+# Storage configuration (restricted to specific config files)
 $REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/snapraid.conf
 $REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/fstab
-$REAL_USER ALL=(ALL) NOPASSWD: /bin/mount
-$REAL_USER ALL=(ALL) NOPASSWD: /bin/umount
-$REAL_USER ALL=(ALL) NOPASSWD: /sbin/mkfs.ext4
-$REAL_USER ALL=(ALL) NOPASSWD: /sbin/mkfs.xfs
-$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/snapraid
-$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/mergerfs
-$REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl daemon-reload
-$REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted
-$REAL_USER ALL=(ALL) NOPASSWD: /sbin/partprobe
 
-# Samba management
-$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/useradd
-$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/usermod
-$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/smbpasswd
-$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/pdbedit
+# Mount/Umount (restricted to /mnt paths only)
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/mount /mnt/*
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/mount -a
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/umount /mnt/*
+
+# Filesystem creation (restricted to /dev/sd* and /dev/nvme* only)
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/mkfs.ext4 /dev/sd[a-z][0-9]*
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/mkfs.ext4 /dev/nvme[0-9]n[0-9]p[0-9]*
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/mkfs.xfs /dev/sd[a-z][0-9]*
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/mkfs.xfs /dev/nvme[0-9]n[0-9]p[0-9]*
+
+# SnapRAID and MergerFS
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/snapraid *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/mergerfs *
+
+# Systemctl (only specific services)
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl daemon-reload
 $REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart smbd
 $REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart nmbd
-$REAL_USER ALL=(ALL) NOPASSWD: /bin/chown
-$REAL_USER ALL=(ALL) NOPASSWD: /bin/chmod
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart homepinas
+
+# Disk management (restricted to /dev/sd* and /dev/nvme*)
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted /dev/sd[a-z] *
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted /dev/nvme[0-9]n[0-9] *
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/partprobe /dev/sd[a-z]
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/partprobe /dev/nvme[0-9]n[0-9]
+
+# Samba user management (restricted arguments)
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/useradd -M -s /sbin/nologin [a-zA-Z]*
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/usermod -aG sambashare [a-zA-Z]*
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/smbpasswd -a -s [a-zA-Z]*
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/smbpasswd -e [a-zA-Z]*
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/pdbedit -L
+
+# File permissions (RESTRICTED to /mnt/storage only)
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/chown -R *\:sambashare /mnt/storage
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/chmod -R 2775 /mnt/storage
+
+# SMART monitoring
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/smartctl -i /dev/sd[a-z]
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/smartctl -i /dev/nvme[0-9]n[0-9]
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/smartctl -A /dev/sd[a-z]
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/smartctl -A /dev/nvme[0-9]n[0-9]
 EOF
 
 # Create SnapRAID sync script

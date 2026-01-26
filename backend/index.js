@@ -12,7 +12,7 @@ const { v4: uuidv4 } = require('uuid');
 const app = express();
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 const PORT = process.env.PORT || 3001;
-const VERSION = '1.5.1';
+const VERSION = '1.5.2';
 const DATA_FILE = path.join(__dirname, 'config', 'data.json');
 const SALT_ROUNDS = 12;
 
