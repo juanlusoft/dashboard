@@ -30,6 +30,10 @@
                         <input type="password" id="new-password" required placeholder=" ">
                         <label for="new-password">New Security Key</label>
                     </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="accept-terms" required>
+                        <label for="accept-terms">Acepto los <a href="#" id="terms-link">términos y condiciones</a> de uso</label>
+                    </div>
                     <button type="submit" class="btn-primary">Initialize Gateway</button>
                 </form>
             </div>
@@ -81,12 +85,12 @@
                         <div class="stat parity"><span>Parity:</span> <span id="parity-count">0</span></div>
                         <div class="stat cache"><span>Cache:</span> <span id="cache-count">0</span></div>
                     </div>
-                    <p class="pool-note">Requires at least 1 Data + 1 Parity disk. Pool will be mounted at <code>/mnt/storage</code></p>
+                    <p class="pool-note">Requiere al menos 1 disco de datos. Paridad opcional. Pool en <code>/mnt/storage</code></p>
                 </div>
 
                 <div class="storage-footer">
                     <button id="save-storage-btn" class="btn-primary">Create Storage Pool</button>
-                    <p class="hint">⚠️ All selected disks will be FORMATTED. Parity disk should be >= largest data disk.</p>
+                    <p class="hint">⚠️ Los discos seleccionados serán FORMATEADOS. Si usas paridad, debe ser >= al disco de datos más grande.</p>
                 </div>
             </div>
         </div>

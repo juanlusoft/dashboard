@@ -515,9 +515,32 @@ if (saveStorageBtn) {
             return;
         }
 
-        if (parityDisks.length === 0) {
-            alert('Please assign at least one disk as "Parity" for SnapRAID protection.');
-            return;
+        // Parity is optional, but if selected, must be >= largest data disk
+        if (parityDisks.length > 0) {
+            // Helper function to parse disk size to bytes
+            const parseSize = (sizeStr) => {
+                if (!sizeStr) return 0;
+                const match = sizeStr.match(/^([\d.]+)\s*(TB|GB|MB|KB|B)?$/i);
+                if (!match) return 0;
+                const num = parseFloat(match[1]);
+                const unit = (match[2] || 'B').toUpperCase();
+                const multipliers = { B: 1, KB: 1024, MB: 1024**2, GB: 1024**3, TB: 1024**4 };
+                return num * (multipliers[unit] || 1);
+            };
+
+            // Get disk sizes from state
+            const getDiskSize = (diskId) => {
+                const disk = state.disks.find(d => d.id === diskId);
+                return disk ? parseSize(disk.size) : 0;
+            };
+
+            const largestDataSize = Math.max(...dataDisks.map(d => getDiskSize(d.id)));
+            const smallestParitySize = Math.min(...parityDisks.map(d => getDiskSize(d.id)));
+
+            if (smallestParitySize < largestDataSize) {
+                alert('El disco de paridad debe ser igual o mayor que el disco de datos más grande.\n\nParity disk must be equal or larger than the largest data disk.');
+                return;
+            }
         }
 
         const diskList = selections.map(s => `${s.id} (${s.role})`).join('\n');

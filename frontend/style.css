@@ -1826,3 +1826,33 @@ input:checked+.slider:before {
     background: rgba(239, 68, 68, 0.4);
     transform: scale(1.1);
 }
+
+/* Checkbox Group */
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 20px 0;
+    font-size: 0.9rem;
+    color: var(--text-dim);
+}
+
+.checkbox-group input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.checkbox-group label {
+    cursor: pointer;
+}
+
+.checkbox-group a {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.checkbox-group a:hover {
+    text-decoration: underline;
+}
