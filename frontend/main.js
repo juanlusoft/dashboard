@@ -1375,6 +1375,17 @@ function openComposeModal() {
             </div>
             <div style="margin-bottom: 15px;">
                 <label style="display: block; margin-bottom: 8px; color: var(--text-dim);">docker-compose.yml content:</label>
+                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                    <label style="
+                        flex: 1; padding: 12px; background: rgba(99, 102, 241, 0.2);
+                        border: 2px dashed rgba(99, 102, 241, 0.5); border-radius: 8px;
+                        color: #6366f1; text-align: center; cursor: pointer;
+                        transition: all 0.2s ease;
+                    ">
+                        📁 Upload .yml file
+                        <input type="file" id="compose-file-input" accept=".yml,.yaml" style="display: none;">
+                    </label>
+                </div>
                 <textarea id="compose-content" style="
                     width: 100%; height: 300px; background: rgba(0,0,0,0.3);
                     border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
@@ -1397,6 +1408,24 @@ services:
 
     document.getElementById('close-compose-modal').addEventListener('click', () => modal.remove());
     modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+    // File upload handler
+    document.getElementById("compose-file-input").addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                document.getElementById("compose-content").value = event.target.result;
+                // Auto-fill stack name from filename if empty
+                const nameInput = document.getElementById("compose-name");
+                if (!nameInput.value.trim()) {
+                    nameInput.value = file.name.replace(/.(yml|yaml)$/i, "").replace(/docker-compose[-_]?/i, "") || "stack";
+                }
+            };
+            reader.readAsText(file);
+        }
+    });
+
 
     document.getElementById('save-compose-btn').addEventListener('click', () => saveCompose(false));
     document.getElementById('save-run-compose-btn').addEventListener('click', () => saveCompose(true));
