@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HomePiNAS | Premium Control Center</title>
+    <link rel="icon" type="image/svg+xml" href="frontend/logo.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
@@ -220,6 +221,54 @@
             </form>
         </div>
     </div>
+
+    <!-- Terms and Conditions Modal -->
+    <div id="terms-modal" class="modal">
+        <div class="glass-card modal-content terms-content">
+            <header class="modal-header">
+                <h3>Términos y Condiciones de Uso</h3>
+                <button id="close-terms-modal" class="btn-close">&times;</button>
+            </header>
+            <div class="terms-body">
+                <h4>1. Aceptación de los Términos</h4>
+                <p>Al utilizar HomePiNAS, aceptas estos términos y condiciones en su totalidad. Si no estás de acuerdo con alguna parte, no debes utilizar este software.</p>
+
+                <h4>2. Descripción del Servicio</h4>
+                <p>HomePiNAS es un software de gestión de almacenamiento NAS para Raspberry Pi. El software se proporciona "tal cual" sin garantías de ningún tipo.</p>
+
+                <h4>3. Uso del Software</h4>
+                <p>El usuario es responsable de:</p>
+                <ul>
+                    <li>Mantener copias de seguridad de sus datos importantes</li>
+                    <li>La seguridad de sus credenciales de acceso</li>
+                    <li>El uso adecuado del hardware y software</li>
+                    <li>Cumplir con las leyes aplicables en su jurisdicción</li>
+                </ul>
+
+                <h4>4. Limitación de Responsabilidad</h4>
+                <p>HomePiNAS y sus desarrolladores no serán responsables de:</p>
+                <ul>
+                    <li>Pérdida de datos por cualquier motivo</li>
+                    <li>Daños al hardware</li>
+                    <li>Interrupciones del servicio</li>
+                    <li>Accesos no autorizados debido a configuraciones del usuario</li>
+                </ul>
+
+                <h4>5. Privacidad</h4>
+                <p>HomePiNAS no recopila ni envía datos personales a servidores externos. Todos los datos se almacenan localmente en tu dispositivo.</p>
+
+                <h4>6. Modificaciones</h4>
+                <p>Nos reservamos el derecho de modificar estos términos en cualquier momento. Los cambios serán efectivos inmediatamente después de su publicación.</p>
+
+                <h4>7. Contacto</h4>
+                <p>Para cualquier consulta sobre estos términos, visita <a href="https://homelabs.club" target="_blank">homelabs.club</a></p>
+            </div>
+            <div class="modal-footer">
+                <button id="accept-terms-btn" class="btn-primary">Entendido</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="frontend/main.js"></script>
 </body>
 

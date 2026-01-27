@@ -741,12 +741,25 @@ async function renderDashboard() {
     const lanIP = escapeHtml(state.network.interfaces[0]?.ip || 'Scanning...');
     const ddnsCount = (state.network.ddns || []).filter(d => d.enabled).length;
 
-    // Format uptime
+    // CPU Model - save once and reuse (CPU doesn't change)
+    if (stats.cpuModel && stats.cpuModel !== 'Unknown CPU') {
+        localStorage.setItem('cpuModel', stats.cpuModel);
+    }
+    const cpuModel = localStorage.getItem('cpuModel') || stats.cpuModel || 'Unknown CPU';
+
+    // Format uptime intelligently
     const uptimeSeconds = Number(stats.uptime) || 0;
     const days = Math.floor(uptimeSeconds / 86400);
     const hours = Math.floor((uptimeSeconds % 86400) / 3600);
     const minutes = Math.floor((uptimeSeconds % 3600) / 60);
-    const uptimeStr = days > 0 ? `${days}d ${hours}h ${minutes}m` : `${hours}h ${minutes}m`;
+    let uptimeStr;
+    if (days > 0) {
+        uptimeStr = `${days} día${days > 1 ? 's' : ''} ${hours}h`;
+    } else if (hours > 0) {
+        uptimeStr = `${hours} hora${hours > 1 ? 's' : ''} ${minutes}m`;
+    } else {
+        uptimeStr = `${minutes} minuto${minutes !== 1 ? 's' : ''}`;
+    }
 
     // Generate core loads HTML (compact version)
     let coreLoadsHtml = '';
@@ -863,7 +876,7 @@ async function renderDashboard() {
         <div class="dashboard-grid-4">
             <div class="glass-card card-compact">
                 <h3>🖥️ CPU</h3>
-                <div class="cpu-model-compact">${escapeHtml(stats.cpuModel || 'Unknown CPU')}</div>
+                <div class="cpu-model-compact">${escapeHtml(cpuModel)}</div>
                 <div class="cpu-specs-row">
                     <span>${stats.cpuPhysicalCores || 0} Cores</span>
                     <span>${stats.cpuCores || 0} Threads</span>
@@ -1985,9 +1998,54 @@ if (ddnsModal) {
     });
 }
 
+// Terms and Conditions Modal
+const termsModal = document.getElementById('terms-modal');
+const termsLink = document.getElementById('terms-link');
+const closeTermsBtn = document.getElementById('close-terms-modal');
+const acceptTermsBtn = document.getElementById('accept-terms-btn');
+
+if (termsLink) {
+    termsLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (termsModal) termsModal.style.display = 'flex';
+    });
+}
+
+if (closeTermsBtn) {
+    closeTermsBtn.addEventListener('click', () => {
+        if (termsModal) termsModal.style.display = 'none';
+    });
+}
+
+if (acceptTermsBtn) {
+    acceptTermsBtn.addEventListener('click', () => {
+        if (termsModal) termsModal.style.display = 'none';
+    });
+}
+
+if (termsModal) {
+    termsModal.addEventListener('click', (e) => {
+        if (e.target === termsModal) {
+            termsModal.style.display = 'none';
+        }
+    });
+}
+
 // System View (Real Actions)
 function renderSystemView() {
-    const uptimeHours = Math.floor((Number(state.globalStats.uptime) || 0) / 3600);
+    // Format uptime intelligently
+    const uptimeSeconds = Number(state.globalStats.uptime) || 0;
+    const days = Math.floor(uptimeSeconds / 86400);
+    const hours = Math.floor((uptimeSeconds % 86400) / 3600);
+    const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+    let uptimeStr;
+    if (days > 0) {
+        uptimeStr = `${days} día${days > 1 ? 's' : ''} ${hours}h`;
+    } else if (hours > 0) {
+        uptimeStr = `${hours} hora${hours > 1 ? 's' : ''} ${minutes}m`;
+    } else {
+        uptimeStr = `${minutes} minuto${minutes !== 1 ? 's' : ''}`;
+    }
     const hostname = escapeHtml(state.globalStats.hostname || 'raspberrypi');
 
     const container = document.createElement('div');
@@ -2036,7 +2094,7 @@ function renderSystemView() {
 
     const uptimeRow = document.createElement('div');
     uptimeRow.className = 'stat-row';
-    uptimeRow.innerHTML = `<span>Logic Uptime</span> <span>${uptimeHours} Hours</span>`;
+    uptimeRow.innerHTML = `<span>Logic Uptime</span> <span>${uptimeStr}</span>`;
 
     const hostnameRow = document.createElement('div');
     hostnameRow.className = 'stat-row';
