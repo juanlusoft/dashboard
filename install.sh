@@ -200,6 +200,9 @@ git clone $REPO_URL $TARGET_DIR
 
 cd $TARGET_DIR
 
+# Update package.json version to match installer
+sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"${VERSION}\"/" package.json
+
 # CRITICAL CHECK: Verify structure
 if [ ! -d "backend" ]; then
     echo -e "${RED}FATAL: Repository cloned but 'backend' folder is missing!${NC}"
