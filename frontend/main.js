@@ -1067,6 +1067,8 @@ async function renderStorageDashboard() {
 
 // Real Docker Logic
 async function renderDockerManager() {
+    // Show loading immediately
+    dashboardContent.innerHTML = "<div class=\"glass-card\" style=\"grid-column: 1 / -1; text-align: center; padding: 40px;\"><h3>Loading Docker Manager...</h3></div>";
     // Fetch containers and update status
     let updateStatus = { lastCheck: null, updatesAvailable: 0 };
     try {
