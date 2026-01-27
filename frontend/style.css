@@ -1732,3 +1732,65 @@ input:checked+.slider:before {
 .progress-footer.complete .btn-primary {
     display: inline-block;
 }
+/* Docker Compose Deploy Progress */
+.deploy-step {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 15px;
+    margin: 8px 0;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.03);
+    transition: all 0.3s ease;
+}
+
+.deploy-step .step-icon {
+    font-size: 1.2rem;
+    width: 24px;
+    text-align: center;
+}
+
+.deploy-step .step-text {
+    flex: 1;
+    font-size: 0.9rem;
+}
+
+.deploy-step.active {
+    background: rgba(99, 102, 241, 0.15);
+    border-left: 3px solid #6366f1;
+}
+
+.deploy-step.active .step-icon {
+    animation: pulse 1s infinite;
+}
+
+.deploy-step.done {
+    background: rgba(16, 185, 129, 0.15);
+    border-left: 3px solid #10b981;
+}
+
+.deploy-step.done .step-icon::after {
+    content: "✅";
+}
+
+.deploy-step.done .step-icon {
+    font-size: 0;
+}
+
+.deploy-step.error {
+    background: rgba(239, 68, 68, 0.15);
+    border-left: 3px solid #ef4444;
+}
+
+.deploy-step.error .step-icon::after {
+    content: "❌";
+}
+
+.deploy-step.error .step-icon {
+    font-size: 0;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}

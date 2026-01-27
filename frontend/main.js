@@ -1434,44 +1434,130 @@ services:
 }
 
 async function saveCompose(andRun) {
-    const name = document.getElementById('compose-name').value.trim();
-    const content = document.getElementById('compose-content').value;
+    const name = document.getElementById("compose-name").value.trim();
+    const content = document.getElementById("compose-content").value;
 
     if (!name) {
-        alert('Please enter a stack name');
+        alert("Please enter a stack name");
         return;
     }
     if (!content) {
-        alert('Please enter compose content');
+        alert("Please enter compose content");
         return;
     }
 
+    // Replace modal content with progress view
+    const modal = document.getElementById("compose-modal");
+    const modalContent = modal.querySelector("div");
+    modalContent.innerHTML = `
+        <h3 style="margin: 0 0 20px 0;">Deploying Stack: ${escapeHtml(name)}</h3>
+        <div id="deploy-steps">
+            <div class="deploy-step" id="step-save">
+                <span class="step-icon">⏳</span>
+                <span class="step-text">Saving compose file...</span>
+            </div>
+            ${andRun ? `<div class="deploy-step" id="step-pull">
+                <span class="step-icon">⏳</span>
+                <span class="step-text">Pulling images...</span>
+            </div>
+            <div class="deploy-step" id="step-start">
+                <span class="step-icon">⏳</span>
+                <span class="step-text">Starting containers...</span>
+            </div>` : ""}
+        </div>
+        <div style="margin: 20px 0;">
+            <div style="background: rgba(255,255,255,0.1); border-radius: 8px; height: 8px; overflow: hidden;">
+                <div id="deploy-progress" style="height: 100%; background: linear-gradient(90deg, #6366f1, #10b981); width: 0%; transition: width 0.3s ease;"></div>
+            </div>
+            <div id="deploy-status" style="margin-top: 10px; font-size: 0.9rem; color: var(--text-dim); text-align: center;">Initializing...</div>
+        </div>
+        <div id="deploy-log" style="display: none; margin: 15px 0; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px; font-family: monospace; font-size: 0.8rem; max-height: 200px; overflow-y: auto; white-space: pre-wrap;"></div>
+        <div id="deploy-actions" style="display: none; text-align: center;">
+            <button id="deploy-close-btn" class="btn-primary" style="padding: 12px 30px;">Accept</button>
+        </div>
+    `;
+
+    const updateStep = (stepId, status) => {
+        const step = document.getElementById(stepId);
+        if (!step) return;
+        step.className = "deploy-step";
+        if (status) step.classList.add(status);
+    };
+
+    const updateProgress = (percent, text) => {
+        const bar = document.getElementById("deploy-progress");
+        const status = document.getElementById("deploy-status");
+        if (bar) bar.style.width = percent + "%";
+        if (status) status.textContent = text;
+    };
+
+    const showResult = (success, message, log = "") => {
+        const actions = document.getElementById("deploy-actions");
+        const logDiv = document.getElementById("deploy-log");
+        const btn = document.getElementById("deploy-close-btn");
+        
+        if (actions) actions.style.display = "block";
+        if (!success && log && logDiv) {
+            logDiv.style.display = "block";
+            logDiv.textContent = log;
+            logDiv.style.color = "#ef4444";
+        }
+        if (btn) {
+            btn.textContent = success ? "Accept" : "Close";
+            btn.style.background = success ? "#10b981" : "#ef4444";
+            btn.onclick = () => {
+                modal.remove();
+                if (success) renderContent("docker");
+            };
+        }
+        updateProgress(100, message);
+    };
+
     try {
+        // Step 1: Save compose file
+        updateStep("step-save", "active");
+        updateProgress(10, "Saving compose file...");
+
         const res = await authFetch(`${API_BASE}/docker/compose/import`, {
-            method: 'POST',
+            method: "POST",
             body: JSON.stringify({ name, content })
         });
         const data = await res.json();
 
-        if (!res.ok) throw new Error(data.error || 'Import failed');
+        if (!res.ok) throw new Error(data.error || "Import failed");
+        
+        updateStep("step-save", "done");
+        updateProgress(andRun ? 33 : 100, andRun ? "Compose saved, starting deployment..." : "Compose saved successfully!");
 
         if (andRun) {
+            // Step 2: Pull & Start
+            updateStep("step-pull", "active");
+            updateProgress(50, "Pulling images and starting containers...");
+
             const runRes = await authFetch(`${API_BASE}/docker/compose/up`, {
-                method: 'POST',
+                method: "POST",
                 body: JSON.stringify({ name })
             });
             const runData = await runRes.json();
-            if (!runRes.ok) throw new Error(runData.error || 'Run failed');
-            alert(`Compose "${name}" saved and started!`);
+
+            if (!runRes.ok) {
+                updateStep("step-pull", "error");
+                updateStep("step-start", "error");
+                throw new Error(runData.error || runData.output || "Run failed");
+            }
+
+            updateStep("step-pull", "done");
+            updateStep("step-start", "done");
+            showResult(true, "Stack deployed successfully! ✅");
         } else {
-            alert(`Compose "${name}" saved!`);
+            showResult(true, "Compose file saved! ✅");
         }
 
-        document.getElementById('compose-modal').remove();
-        renderContent('docker');
     } catch (e) {
-        console.error('Compose save error:', e);
-        alert('Error: ' + e.message);
+        console.error("Compose deploy error:", e);
+        const currentStep = document.querySelector(".deploy-step.active");
+        if (currentStep) currentStep.classList.replace("active", "error");
+        showResult(false, "Deployment failed ❌", e.message);
     }
 }
 
