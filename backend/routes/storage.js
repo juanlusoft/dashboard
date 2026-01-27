@@ -97,9 +97,7 @@ router.post('/pool/configure', requireAuth, async (req, res) => {
         return res.status(400).json({ error: 'At least one data disk is required' });
     }
 
-    if (parityDisks.length === 0) {
-        return res.status(400).json({ error: 'At least one parity disk is required for SnapRAID' });
-    }
+    // Parity is now optional - SnapRAID will only be configured if parity disks are present
 
     try {
         const results = [];
@@ -168,31 +166,32 @@ router.post('/pool/configure', requireAuth, async (req, res) => {
             cacheNum++;
         }
 
-        // 3. Generate SnapRAID config
-        let snapraidConf = `# HomePiNAS SnapRAID Configuration
+        // 3. Generate SnapRAID config (only if parity disks are present)
+        if (parityMounts.length > 0) {
+            let snapraidConf = `# HomePiNAS SnapRAID Configuration
 # Generated: ${new Date().toISOString()}
 
 # Parity files
 `;
-        parityMounts.forEach((p, i) => {
-            if (i === 0) {
-                snapraidConf += `parity ${p.mountPoint}/snapraid.parity\n`;
-            } else {
-                snapraidConf += `${i + 1}-parity ${p.mountPoint}/snapraid.parity\n`;
-            }
-        });
+            parityMounts.forEach((p, i) => {
+                if (i === 0) {
+                    snapraidConf += `parity ${p.mountPoint}/snapraid.parity\n`;
+                } else {
+                    snapraidConf += `${i + 1}-parity ${p.mountPoint}/snapraid.parity\n`;
+                }
+            });
 
-        snapraidConf += `\n# Content files (stored on data disks)\n`;
-        dataMounts.forEach(d => {
-            snapraidConf += `content ${d.mountPoint}/.snapraid/snapraid.content\n`;
-        });
+            snapraidConf += `\n# Content files (stored on data disks)\n`;
+            dataMounts.forEach(d => {
+                snapraidConf += `content ${d.mountPoint}/.snapraid/snapraid.content\n`;
+            });
 
-        snapraidConf += `\n# Data disks\n`;
-        dataMounts.forEach(d => {
-            snapraidConf += `disk d${d.num} ${d.mountPoint}\n`;
-        });
+            snapraidConf += `\n# Data disks\n`;
+            dataMounts.forEach(d => {
+                snapraidConf += `disk d${d.num} ${d.mountPoint}\n`;
+            });
 
-        snapraidConf += `\n# Exclude files
+            snapraidConf += `\n# Exclude files
 exclude *.unrecoverable
 exclude /tmp/
 exclude /lost+found/
@@ -207,8 +206,11 @@ exclude .Trashes
 exclude .fseventsd
 `;
 
-        execSync(`echo '${snapraidConf}' | sudo tee ${SNAPRAID_CONF}`, { shell: '/bin/bash' });
-        results.push('SnapRAID configuration created');
+            execSync(`echo '${snapraidConf}' | sudo tee ${SNAPRAID_CONF}`, { shell: '/bin/bash' });
+            results.push('SnapRAID configuration created');
+        } else {
+            results.push('SnapRAID skipped (no parity disks configured)');
+        }
 
         // 4. Configure MergerFS
         const mergerfsSource = dataMounts.map(d => d.mountPoint).join(':');
