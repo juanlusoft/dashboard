@@ -1,6 +1,6 @@
 {
   "name": "homepinas",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "HomePiNAS - Secure NAS Dashboard for Raspberry Pi",
   "main": "backend/index.js",
   "scripts": {
@@ -8,7 +8,13 @@
     "dev": "nodemon backend/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["nas", "raspberry-pi", "dashboard", "snapraid", "mergerfs"],
+  "keywords": [
+    "nas",
+    "raspberry-pi",
+    "dashboard",
+    "snapraid",
+    "mergerfs"
+  ],
   "author": "juanlusoft",
   "license": "MIT",
   "type": "commonjs",
