@@ -310,7 +310,12 @@ router.get('/disks', async (req, res) => {
         const disks = blockDevices
             .filter(dev => {
                 if (dev.type !== 'disk') return false;
-                if (dev.name && dev.name.startsWith('mmcblk')) return false;
+                // Exclude virtual/system devices
+                if (dev.name && dev.name.startsWith('mmcblk')) return false;  // SD card
+                if (dev.name && dev.name.startsWith('zram')) return false;    // Compressed RAM swap
+                if (dev.name && dev.name.startsWith('loop')) return false;    // Loop devices
+                if (dev.name && dev.name.startsWith('ram')) return false;     // RAM disks
+                if (dev.name && dev.name.startsWith('dm-')) return false;     // Device mapper
                 const sizeGB = dev.size / 1024 / 1024 / 1024;
                 if (sizeGB < 1) return false;
                 return true;
