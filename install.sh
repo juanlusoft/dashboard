@@ -8,7 +8,7 @@
 set -e
 
 # Version - CHANGE THIS FOR EACH RELEASE
-VERSION="1.8.5"
+VERSION="1.8.6"
 
 # Colors
 RED='\033[0;31m'
@@ -217,13 +217,28 @@ fi
 # Configure Samba for NAS sharing
 echo -e "${BLUE}Configuring Samba...${NC}"
 
-# Backup original smb.conf
-if [ -f /etc/samba/smb.conf ] && [ ! -f /etc/samba/smb.conf.backup ]; then
-    cp /etc/samba/smb.conf /etc/samba/smb.conf.backup
+# Check if Samba is installed
+if ! command -v smbd &> /dev/null; then
+    echo -e "${YELLOW}Samba not installed, attempting to install...${NC}"
+    apt-get update
+    apt-get install -y $APT_OPTS samba samba-common-bin || {
+        echo -e "${RED}Failed to install Samba. Network sharing will not be available.${NC}"
+        echo -e "${YELLOW}You can install Samba manually later: sudo apt install samba${NC}"
+    }
 fi
 
-# Create Samba configuration
-cat > /etc/samba/smb.conf <<'SMBEOF'
+# Only configure Samba if it's installed
+if command -v smbd &> /dev/null; then
+    # Create /etc/samba directory if it doesn't exist
+    mkdir -p /etc/samba
+
+    # Backup original smb.conf
+    if [ -f /etc/samba/smb.conf ] && [ ! -f /etc/samba/smb.conf.backup ]; then
+        cp /etc/samba/smb.conf /etc/samba/smb.conf.backup
+    fi
+
+    # Create Samba configuration
+    cat > /etc/samba/smb.conf <<'SMBEOF'
 [global]
    workgroup = WORKGROUP
    server string = HomePiNAS
@@ -264,14 +279,19 @@ cat > /etc/samba/smb.conf <<'SMBEOF'
    inherit permissions = yes
 SMBEOF
 
-# Create sambashare group if it doesn't exist
-getent group sambashare > /dev/null || groupadd sambashare
+    # Create sambashare group if it doesn't exist
+    getent group sambashare > /dev/null || groupadd sambashare
 
-# Enable and start Samba services
-systemctl enable smbd nmbd
-systemctl restart smbd nmbd || true
+    # Enable and start Samba services
+    systemctl enable smbd nmbd
+    systemctl restart smbd nmbd || true
 
-echo -e "${GREEN}Samba configured${NC}"
+    echo -e "${GREEN}Samba configured${NC}"
+else
+    echo -e "${YELLOW}Skipping Samba configuration (not installed)${NC}"
+    # Still create sambashare group for later use
+    getent group sambashare > /dev/null || groupadd sambashare
+fi
 
 # Create mount directories
 echo -e "${BLUE}Creating storage directories...${NC}"
