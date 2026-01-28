@@ -7,7 +7,7 @@
 set -e
 
 # Version - CHANGE THIS FOR EACH RELEASE
-VERSION="2.0.0"
+VERSION="2.0.1"
 
 # Colors
 RED='\033[0;31m'
@@ -125,75 +125,114 @@ rm -f /etc/apt/keyrings/docker.asc 2>/dev/null || true
 configure_repositories() {
     local sources_file="/etc/apt/sources.list"
     local sources_dir="/etc/apt/sources.list.d"
+    local need_update=false
 
-    # For Raspberry Pi OS
-    if [ "$IS_RASPBERRY_PI" = true ]; then
-        echo -e "${BLUE}Configuring Raspberry Pi OS repositories...${NC}"
+    echo -e "${BLUE}Checking repository configuration...${NC}"
 
-        # Check if we need to add Debian repos
-        if ! grep -q "deb.debian.org" "$sources_file" 2>/dev/null; then
-            echo -e "${YELLOW}Adding Debian main repositories...${NC}"
+    # Check if essential packages are available (test with git)
+    if ! apt-cache show git &>/dev/null; then
+        echo -e "${YELLOW}Essential packages not available - fixing repositories...${NC}"
+        need_update=true
 
-            # Backup current sources.list
-            cp "$sources_file" "${sources_file}.backup.$(date +%Y%m%d)" 2>/dev/null || true
+        # Backup current sources.list
+        cp "$sources_file" "${sources_file}.backup.$(date +%Y%m%d)" 2>/dev/null || true
 
-            # Add Debian repos based on codename
-            case "$OS_CODENAME" in
-                trixie)
-                    cat >> "$sources_file" <<EOF
-
-# Added by HomePiNAS installer
+        # Create proper sources.list based on detected OS
+        case "$OS_CODENAME" in
+            trixie|sid)
+                echo -e "${BLUE}Configuring Debian Trixie repositories...${NC}"
+                cat > "$sources_file" <<EOF
+# Debian Trixie (Testing) - Configured by HomePiNAS
 deb http://deb.debian.org/debian trixie main contrib non-free non-free-firmware
+deb-src http://deb.debian.org/debian trixie main contrib non-free non-free-firmware
+
 deb http://deb.debian.org/debian trixie-updates main contrib non-free non-free-firmware
+deb-src http://deb.debian.org/debian trixie-updates main contrib non-free non-free-firmware
+
 deb http://deb.debian.org/debian-security trixie-security main contrib non-free-firmware
+deb-src http://deb.debian.org/debian-security trixie-security main contrib non-free-firmware
 EOF
-                    ;;
-                bookworm)
-                    cat >> "$sources_file" <<EOF
-
-# Added by HomePiNAS installer
+                ;;
+            bookworm)
+                echo -e "${BLUE}Configuring Debian Bookworm repositories...${NC}"
+                cat > "$sources_file" <<EOF
+# Debian Bookworm (Stable) - Configured by HomePiNAS
 deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
+deb-src http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
+
 deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
+deb-src http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
+
 deb http://deb.debian.org/debian-security bookworm-security main contrib non-free-firmware
+deb-src http://deb.debian.org/debian-security bookworm-security main contrib non-free-firmware
 EOF
-                    ;;
-                bullseye)
-                    cat >> "$sources_file" <<EOF
-
-# Added by HomePiNAS installer
+                ;;
+            bullseye)
+                echo -e "${BLUE}Configuring Debian Bullseye repositories...${NC}"
+                cat > "$sources_file" <<EOF
+# Debian Bullseye (Oldstable) - Configured by HomePiNAS
 deb http://deb.debian.org/debian bullseye main contrib non-free
+deb-src http://deb.debian.org/debian bullseye main contrib non-free
+
 deb http://deb.debian.org/debian bullseye-updates main contrib non-free
+deb-src http://deb.debian.org/debian bullseye-updates main contrib non-free
+
 deb http://deb.debian.org/debian-security bullseye-security main contrib non-free
+deb-src http://deb.debian.org/debian-security bullseye-security main contrib non-free
 EOF
-                    ;;
-            esac
+                ;;
+            *)
+                # For Ubuntu or unknown
+                if [ "$OS_ID" = "ubuntu" ]; then
+                    echo -e "${BLUE}Ubuntu detected, using default repos${NC}"
+                else
+                    echo -e "${YELLOW}Unknown OS codename: $OS_CODENAME${NC}"
+                fi
+                ;;
+        esac
+
+        # Keep Raspberry Pi repos if they exist
+        if [ "$IS_RASPBERRY_PI" = true ]; then
+            if ! grep -q "archive.raspberrypi" "$sources_file" 2>/dev/null; then
+                echo "" >> "$sources_file"
+                echo "# Raspberry Pi Archive" >> "$sources_file"
+                echo "deb http://archive.raspberrypi.com/debian $OS_CODENAME main" >> "$sources_file"
+            fi
         fi
     fi
 
-    # For standard Debian
-    if [ "$OS_ID" = "debian" ] && [ "$IS_RASPBERRY_PI" = false ]; then
-        echo -e "${BLUE}Verifying Debian repositories...${NC}"
-        # Debian usually has proper repos, just verify
-        if ! grep -q "main" "$sources_file" 2>/dev/null; then
-            echo -e "${YELLOW}Warning: Debian sources.list may be incomplete${NC}"
-        fi
-    fi
-
-    # For Ubuntu
+    # For Ubuntu, ensure universe is enabled
     if [ "$OS_ID" = "ubuntu" ]; then
-        echo -e "${BLUE}Verifying Ubuntu repositories...${NC}"
-        # Ubuntu usually has proper repos configured
-        # Just ensure universe is enabled for some packages
         add-apt-repository -y universe 2>/dev/null || true
+        need_update=true
+    fi
+
+    # Return whether update is needed
+    if [ "$need_update" = true ]; then
+        return 0
+    else
+        return 1
     fi
 }
 
 # Configure repositories
-configure_repositories
+if configure_repositories; then
+    echo -e "${BLUE}Repositories were updated, refreshing package lists...${NC}"
+fi
 
 # Update package lists
 echo -e "${BLUE}Updating package lists...${NC}"
 apt-get update
+
+# Verify packages are now available
+if ! apt-cache show git &>/dev/null; then
+    echo -e "${RED}ERROR: Package repositories still not working properly.${NC}"
+    echo -e "${YELLOW}Please check your internet connection and try again.${NC}"
+    echo -e "${YELLOW}Current sources.list:${NC}"
+    cat /etc/apt/sources.list
+    exit 1
+fi
+echo -e "${GREEN}Repository configuration verified${NC}"
 
 #######################################
 # PHASE 3: INSTALL PACKAGES
