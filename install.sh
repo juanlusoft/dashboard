@@ -600,7 +600,7 @@ fi
 # Install Node.js if needed
 if ! command -v node &> /dev/null; then
     echo -e "${BLUE}Installing Node.js...${NC}"
-    curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
     apt-get install -y $APT_OPTS nodejs
 else
     echo -e "${GREEN}Node.js already installed${NC}"
