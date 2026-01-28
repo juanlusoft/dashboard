@@ -8,7 +8,7 @@
 set -e
 
 # Version - CHANGE THIS FOR EACH RELEASE
-VERSION="1.8.4"
+VERSION="1.8.5"
 
 # Colors
 RED='\033[0;31m'
@@ -78,11 +78,23 @@ if [ "$DEBIAN_VERSION" = "trixie" ] || [ "$DEBIAN_VERSION" = "sid" ]; then
     for pkg in docker-doc docker-compose podman-docker; do
         apt-get purge -y $pkg 2>/dev/null || true
     done
+
+    # Remove any Docker repo files that might conflict with Trixie
     rm -f /etc/apt/sources.list.d/docker.list 2>/dev/null || true
+    rm -f /etc/apt/keyrings/docker.asc 2>/dev/null || true
+
+    # Force update package lists after repo cleanup
+    echo -e "${BLUE}Updating package lists...${NC}"
+    apt-get update
 
     # Install prerequisites
     echo -e "${BLUE}Installing prerequisites...${NC}"
-    apt-get install -y $APT_OPTS ca-certificates curl gnupg git sudo smartmontools parted samba samba-common-bin build-essential python3 pigz || true
+    apt-get install -y $APT_OPTS ca-certificates curl gnupg git sudo smartmontools parted samba samba-common-bin build-essential python3 pigz || {
+        echo -e "${YELLOW}Some packages failed to install, trying individually...${NC}"
+        for pkg in ca-certificates curl gnupg git sudo smartmontools parted samba samba-common-bin build-essential python3 pigz; do
+            apt-get install -y $APT_OPTS $pkg 2>/dev/null || echo -e "${YELLOW}Warning: $pkg not available${NC}"
+        done
+    }
 
     # Try lm-sensors
     apt-get install -y $APT_OPTS lm-sensors 2>/dev/null || echo -e "${YELLOW}Warning: lm-sensors not available${NC}"
@@ -166,10 +178,18 @@ fi
 # Install SnapRAID
 if ! command -v snapraid &> /dev/null; then
     echo -e "${BLUE}Installing SnapRAID...${NC}"
-    apt-get install -y $APT_OPTS snapraid || {
+    apt-get install -y $APT_OPTS snapraid 2>/dev/null || {
         # Build from source if not in repos
         echo -e "${YELLOW}Building SnapRAID from source...${NC}"
-        apt-get install -y $APT_OPTS build-essential autoconf automake
+
+        # Ensure we have updated package lists and build tools
+        apt-get update
+        apt-get install -y $APT_OPTS build-essential 2>/dev/null || true
+
+        # Try to install autotools (may have different names in Trixie)
+        apt-get install -y $APT_OPTS autoconf automake 2>/dev/null || \
+        apt-get install -y $APT_OPTS autotools-dev 2>/dev/null || true
+
         cd /tmp
         # Get latest snapraid version from GitHub
         SNAPRAID_VERSION=$(curl -s https://api.github.com/repos/amadvance/snapraid/releases/latest | grep -oP '"tag_name": "v\K[^"]+' || echo "12.3")
@@ -177,9 +197,16 @@ if ! command -v snapraid &> /dev/null; then
         curl -L -o snapraid.tar.gz "https://github.com/amadvance/snapraid/releases/download/v${SNAPRAID_VERSION}/snapraid-${SNAPRAID_VERSION}.tar.gz"
         tar xzf snapraid.tar.gz
         cd snapraid-${SNAPRAID_VERSION}
-        ./configure
-        make -j$(nproc)
-        make install
+
+        # SnapRAID releases include a pre-generated configure script, no need for autoconf
+        if [ -f configure ]; then
+            ./configure
+            make -j$(nproc)
+            make install
+        else
+            echo -e "${RED}SnapRAID configure script not found${NC}"
+        fi
+
         cd /tmp
         rm -rf snapraid-${SNAPRAID_VERSION} snapraid.tar.gz
     }
