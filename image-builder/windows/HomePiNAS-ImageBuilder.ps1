@@ -188,20 +188,24 @@ function Write-Log {
     $timestamp = Get-Date -Format "HH:mm:ss"
     $logMessage = "[$timestamp] $Message"
 
-    if ($script:LogTextBox) {
-        $script:LogTextBox.Invoke([Action]{
-            $color = switch ($Level) {
-                "Success" { [System.Drawing.Color]::FromArgb(39, 174, 96) }
-                "Warning" { [System.Drawing.Color]::FromArgb(243, 156, 18) }
-                "Error"   { [System.Drawing.Color]::FromArgb(231, 76, 60) }
-                default   { [System.Drawing.Color]::FromArgb(44, 62, 80) }
-            }
+    if ($script:LogTextBox -and $script:LogTextBox.IsHandleCreated) {
+        try {
+            $script:LogTextBox.Invoke([Action]{
+                $color = switch ($Level) {
+                    "Success" { [System.Drawing.Color]::FromArgb(39, 174, 96) }
+                    "Warning" { [System.Drawing.Color]::FromArgb(243, 156, 18) }
+                    "Error"   { [System.Drawing.Color]::FromArgb(231, 76, 60) }
+                    default   { [System.Drawing.Color]::FromArgb(44, 62, 80) }
+                }
 
-            $script:LogTextBox.SelectionStart = $script:LogTextBox.TextLength
-            $script:LogTextBox.SelectionColor = $color
-            $script:LogTextBox.AppendText("$logMessage`r`n")
-            $script:LogTextBox.ScrollToCaret()
-        })
+                $script:LogTextBox.SelectionStart = $script:LogTextBox.TextLength
+                $script:LogTextBox.SelectionColor = $color
+                $script:LogTextBox.AppendText("$logMessage`r`n")
+                $script:LogTextBox.ScrollToCaret()
+            })
+        } catch {
+            # Control not ready yet, ignore
+        }
     }
 }
 
@@ -211,11 +215,15 @@ function Update-Progress {
         [string]$Status
     )
 
-    if ($script:ProgressBar -and $script:StatusLabel) {
-        $script:MainForm.Invoke([Action]{
-            $script:ProgressBar.Value = [Math]::Min(100, [Math]::Max(0, $Percent))
-            $script:StatusLabel.Text = $Status
-        })
+    if ($script:ProgressBar -and $script:StatusLabel -and $script:MainForm.IsHandleCreated) {
+        try {
+            $script:MainForm.Invoke([Action]{
+                $script:ProgressBar.Value = [Math]::Min(100, [Math]::Max(0, $Percent))
+                $script:StatusLabel.Text = $Status
+            })
+        } catch {
+            # Control not ready yet, ignore
+        }
     }
 }
 
@@ -854,17 +862,19 @@ function Show-MainForm {
     $footerLabel.AutoSize = $true
     $script:MainForm.Controls.Add($footerLabel)
 
-    # Check for admin
-    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    if (-not $isAdmin) {
-        Write-Log "ADVERTENCIA: Esta aplicacion requiere permisos de Administrador" "Warning"
-        Write-Log "Reinicia como Administrador para continuar" "Warning"
-        $script:SelectButton.Enabled = $false
-        $script:ProcessButton.Enabled = $false
-    } else {
-        Write-Log "Aplicacion iniciada correctamente" "Success"
-        Write-Log "Selecciona una imagen de Raspberry Pi OS para comenzar" "Info"
-    }
+    # Form Shown event - write initial log after form is ready
+    $script:MainForm.Add_Shown({
+        $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+        if (-not $isAdmin) {
+            Write-Log "ADVERTENCIA: Esta aplicacion requiere permisos de Administrador" "Warning"
+            Write-Log "Reinicia como Administrador para continuar" "Warning"
+            $script:SelectButton.Enabled = $false
+            $script:ProcessButton.Enabled = $false
+        } else {
+            Write-Log "Aplicacion iniciada correctamente" "Success"
+            Write-Log "Selecciona una imagen de Raspberry Pi OS para comenzar" "Info"
+        }
+    })
 
     # Show form
     [void]$script:MainForm.ShowDialog()
