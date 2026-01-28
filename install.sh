@@ -8,7 +8,7 @@
 set -e
 
 # Version - CHANGE THIS FOR EACH RELEASE
-VERSION="1.8.3"
+VERSION="1.8.4"
 
 # Colors
 RED='\033[0;31m'
@@ -74,53 +74,35 @@ apt-get install -f -y $APT_OPTS
 if [ "$DEBIAN_VERSION" = "trixie" ] || [ "$DEBIAN_VERSION" = "sid" ]; then
     echo -e "${YELLOW}Debian Trixie/Sid detected${NC}"
 
-    # Remove conflicting packages
+    # Remove conflicting packages and old Docker repo if exists
     for pkg in docker-doc docker-compose podman-docker; do
         apt-get purge -y $pkg 2>/dev/null || true
     done
+    rm -f /etc/apt/sources.list.d/docker.list 2>/dev/null || true
 
-    # Install prerequisites - Trixie uses nftables, need iptables compatibility
+    # Install prerequisites
     echo -e "${BLUE}Installing prerequisites...${NC}"
-    apt-get install -y $APT_OPTS nftables || true
-    apt-get install -y $APT_OPTS iptables 2>/dev/null || apt-get install -y $APT_OPTS iptables-nft 2>/dev/null || true
-
-    # Install other prerequisites
     apt-get install -y $APT_OPTS ca-certificates curl gnupg git sudo smartmontools parted samba samba-common-bin build-essential python3 pigz || true
 
     # Try lm-sensors
     apt-get install -y $APT_OPTS lm-sensors 2>/dev/null || echo -e "${YELLOW}Warning: lm-sensors not available${NC}"
 
-    # Try to install Docker from default repos first (Raspberry Pi archive may have it)
-    echo -e "${BLUE}Attempting Docker installation from system repos...${NC}"
-    if apt-get install -y $APT_OPTS docker.io containerd runc 2>/dev/null; then
-        echo -e "${GREEN}Docker installed from system repositories${NC}"
+    # For Trixie, use Docker's official convenience script which handles edge cases better
+    echo -e "${BLUE}Installing Docker using official convenience script...${NC}"
+    if command -v docker &> /dev/null; then
+        echo -e "${GREEN}Docker already installed${NC}"
     else
-        echo -e "${YELLOW}docker.io not available, trying Docker official repository...${NC}"
-
-        # Add Docker's official GPG key
-        install -m 0755 -d /etc/apt/keyrings
-        curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
-        chmod a+r /etc/apt/keyrings/docker.asc
-
-        # Add Docker repo - use bookworm since docker doesn't have trixie packages yet
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian bookworm stable" > /etc/apt/sources.list.d/docker.list
-
-        apt-get update
-
-        # Install Docker CE with dependency resolution
-        apt-get install -y $APT_OPTS docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin || {
-            echo -e "${YELLOW}Docker CE installation failed, trying minimal install...${NC}"
-            apt-get install -f -y $APT_OPTS
-            apt-get install -y $APT_OPTS docker-ce docker-ce-cli containerd.io 2>/dev/null || {
-                echo -e "${RED}=========================================${NC}"
-                echo -e "${RED}Docker installation failed on Trixie.${NC}"
-                echo -e "${RED}This is a known issue with Debian Testing.${NC}"
-                echo -e "${YELLOW}You can install Docker manually later:${NC}"
-                echo -e "${YELLOW}  curl -fsSL https://get.docker.com | sh${NC}"
-                echo -e "${RED}=========================================${NC}"
-                echo -e "${YELLOW}Continuing installation without Docker...${NC}"
-            }
+        # The convenience script auto-detects and handles Trixie/testing
+        curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+        sh /tmp/get-docker.sh || {
+            echo -e "${RED}=========================================${NC}"
+            echo -e "${RED}Docker installation failed on Trixie.${NC}"
+            echo -e "${RED}This is a known issue with Debian Testing.${NC}"
+            echo -e "${YELLOW}HomePiNAS will work but Docker features${NC}"
+            echo -e "${YELLOW}will be unavailable until Docker is installed.${NC}"
+            echo -e "${RED}=========================================${NC}"
         }
+        rm -f /tmp/get-docker.sh
     fi
 
 else
