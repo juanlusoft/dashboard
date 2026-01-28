@@ -43,7 +43,7 @@ NREOF
 
 TARGET_DIR="/opt/homepinas"
 REPO_URL="https://github.com/juanlusoft/homepinas-v2.git"
-BRANCH="ui-redesign-homelabs"
+BRANCH="main"
 FANCTL_SCRIPT="/usr/local/bin/homepinas-fanctl.sh"
 FANCTL_CONF="/usr/local/bin/homepinas-fanctl.conf"
 CONFIG_FILE="/boot/firmware/config.txt"
