@@ -165,9 +165,8 @@ body {
 }
 
 .sidebar-logo img {
-    max-width: 100%;
+    max-width: 200px;
     height: auto;
-    max-height: 40px;
 }
 
 .nav-links {
