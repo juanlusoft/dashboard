@@ -160,13 +160,8 @@ body {
 .sidebar-logo {
     font-size: 1.5rem;
     font-weight: 600;
-    padding: 20px 30px 40px;
+    padding: 0 30px 40px;
     color: var(--primary);
-}
-
-.sidebar-logo img {
-    max-width: 100%;
-    height: auto;
 }
 
 .nav-links {
@@ -486,8 +481,17 @@ header {
     gap: 30px;
 }
 
+.interfaces-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+    width: 100%;
+}
+
 .interface-card {
     padding: 24px;
+    display: flex;
+    flex-direction: column;
 }
 
 .interface-header {
@@ -1802,11 +1806,7 @@ input:checked+.slider:before {
 
 /* User Info & Logout */
 .user-info {
-    display: flex;
-    align-items: center;
-    padding: 15px 30px;
-    margin-top: auto;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    position: relative;
 }
 
 .logout-btn {
@@ -1825,74 +1825,4 @@ input:checked+.slider:before {
 .logout-btn:hover {
     background: rgba(239, 68, 68, 0.4);
     transform: scale(1.1);
-}
-
-/* Checkbox Group */
-.checkbox-group {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin: 20px 0;
-    font-size: 0.9rem;
-    color: var(--text-dim);
-}
-
-.checkbox-group input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-    accent-color: var(--primary);
-    cursor: pointer;
-}
-
-.checkbox-group label {
-    cursor: pointer;
-}
-
-.checkbox-group a {
-    color: var(--primary);
-    text-decoration: none;
-}
-
-.checkbox-group a:hover {
-    text-decoration: underline;
-}
-
-/* Terms Modal */
-.terms-content {
-    max-width: 600px;
-    max-height: 80vh;
-}
-
-.terms-body {
-    max-height: 50vh;
-    overflow-y: auto;
-    padding: 20px 0;
-    color: var(--text-dim);
-    line-height: 1.6;
-}
-
-.terms-body h4 {
-    color: var(--text);
-    margin: 20px 0 10px;
-    font-size: 1rem;
-}
-
-.terms-body h4:first-child {
-    margin-top: 0;
-}
-
-.terms-body p {
-    margin-bottom: 10px;
-}
-
-.terms-body ul {
-    margin: 10px 0 10px 20px;
-}
-
-.terms-body li {
-    margin-bottom: 5px;
-}
-
-.terms-body a {
-    color: var(--primary);
 }
