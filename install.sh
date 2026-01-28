@@ -8,7 +8,7 @@
 set -e
 
 # Version - CHANGE THIS FOR EACH RELEASE
-VERSION="1.8.0"
+VERSION="1.8.1"
 
 # Colors
 RED='\033[0;31m'
@@ -75,7 +75,7 @@ if ! command -v mergerfs &> /dev/null; then
     # Get latest mergerfs release for arm64
     MERGERFS_VERSION=$(curl -s https://api.github.com/repos/trapexit/mergerfs/releases/latest | grep -oP '"tag_name": "\K[^"]+')
     if [ -z "$MERGERFS_VERSION" ]; then
-        MERGERFS_VERSION="2.40.2"
+        MERGERFS_VERSION="1.8.1"
     fi
     MERGERFS_DEB="mergerfs_${MERGERFS_VERSION}.debian-bookworm_arm64.deb"
     curl -L -o /tmp/mergerfs.deb "https://github.com/trapexit/mergerfs/releases/download/${MERGERFS_VERSION}/${MERGERFS_DEB}" || {
@@ -98,7 +98,7 @@ if ! command -v snapraid &> /dev/null; then
         echo -e "${YELLOW}Building SnapRAID from source...${NC}"
         apt-get install -y $APT_OPTS build-essential autoconf
         cd /tmp
-        SNAPRAID_VERSION="12.3"
+        SNAPRAID_VERSION="1.8.1"
         curl -L -o snapraid.tar.gz "https://github.com/amadvance/snapraid/releases/download/v${SNAPRAID_VERSION}/snapraid-${SNAPRAID_VERSION}.tar.gz"
         tar xzf snapraid.tar.gz
         cd snapraid-${SNAPRAID_VERSION}
