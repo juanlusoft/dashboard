@@ -8,7 +8,7 @@
 set -e
 
 # Version - CHANGE THIS FOR EACH RELEASE
-VERSION="1.8.2"
+VERSION="1.8.3"
 
 # Colors
 RED='\033[0;31m'
@@ -72,34 +72,56 @@ apt-get install -f -y $APT_OPTS
 
 # Install Docker from official repo for Trixie, or docker.io for stable releases
 if [ "$DEBIAN_VERSION" = "trixie" ] || [ "$DEBIAN_VERSION" = "sid" ]; then
-    echo -e "${YELLOW}Debian Trixie/Sid detected - using Docker official repository${NC}"
+    echo -e "${YELLOW}Debian Trixie/Sid detected${NC}"
 
     # Remove conflicting packages
-    for pkg in docker.io docker-doc docker-compose podman-docker containerd runc; do
+    for pkg in docker-doc docker-compose podman-docker; do
         apt-get purge -y $pkg 2>/dev/null || true
     done
 
-    # Install prerequisites
-    apt-get install -y $APT_OPTS ca-certificates curl gnupg
+    # Install prerequisites - Trixie uses nftables, need iptables compatibility
+    echo -e "${BLUE}Installing prerequisites...${NC}"
+    apt-get install -y $APT_OPTS nftables || true
+    apt-get install -y $APT_OPTS iptables 2>/dev/null || apt-get install -y $APT_OPTS iptables-nft 2>/dev/null || true
 
-    # Add Docker's official GPG key
-    install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
-    chmod a+r /etc/apt/keyrings/docker.asc
+    # Install other prerequisites
+    apt-get install -y $APT_OPTS ca-certificates curl gnupg git sudo smartmontools parted samba samba-common-bin build-essential python3 pigz || true
 
-    # Add Docker repo (use bookworm for trixie since docker doesn't have trixie yet)
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian bookworm stable" > /etc/apt/sources.list.d/docker.list
+    # Try lm-sensors
+    apt-get install -y $APT_OPTS lm-sensors 2>/dev/null || echo -e "${YELLOW}Warning: lm-sensors not available${NC}"
 
-    apt-get update
+    # Try to install Docker from default repos first (Raspberry Pi archive may have it)
+    echo -e "${BLUE}Attempting Docker installation from system repos...${NC}"
+    if apt-get install -y $APT_OPTS docker.io containerd runc 2>/dev/null; then
+        echo -e "${GREEN}Docker installed from system repositories${NC}"
+    else
+        echo -e "${YELLOW}docker.io not available, trying Docker official repository...${NC}"
 
-    # Install Docker CE
-    apt-get install -y $APT_OPTS docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+        # Add Docker's official GPG key
+        install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+        chmod a+r /etc/apt/keyrings/docker.asc
 
-    # Install other packages (git, sensors, etc might have different names in trixie)
-    apt-get install -y $APT_OPTS git curl sudo smartmontools parted samba samba-common-bin build-essential python3 || true
+        # Add Docker repo - use bookworm since docker doesn't have trixie packages yet
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian bookworm stable" > /etc/apt/sources.list.d/docker.list
 
-    # Try lm-sensors (might be lm-sensors or sensors package in trixie)
-    apt-get install -y $APT_OPTS lm-sensors 2>/dev/null || apt-get install -y $APT_OPTS sensors 2>/dev/null || echo -e "${YELLOW}Warning: lm-sensors not available${NC}"
+        apt-get update
+
+        # Install Docker CE with dependency resolution
+        apt-get install -y $APT_OPTS docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin || {
+            echo -e "${YELLOW}Docker CE installation failed, trying minimal install...${NC}"
+            apt-get install -f -y $APT_OPTS
+            apt-get install -y $APT_OPTS docker-ce docker-ce-cli containerd.io 2>/dev/null || {
+                echo -e "${RED}=========================================${NC}"
+                echo -e "${RED}Docker installation failed on Trixie.${NC}"
+                echo -e "${RED}This is a known issue with Debian Testing.${NC}"
+                echo -e "${YELLOW}You can install Docker manually later:${NC}"
+                echo -e "${YELLOW}  curl -fsSL https://get.docker.com | sh${NC}"
+                echo -e "${RED}=========================================${NC}"
+                echo -e "${YELLOW}Continuing installation without Docker...${NC}"
+            }
+        }
+    fi
 
 else
     # Standard Debian stable (bookworm, bullseye, etc)
