@@ -285,14 +285,14 @@ header {
     padding: 6px 12px;
     border-radius: 6px;
     font-size: 0.8rem;
-    border: 1px solid var(--glass-border);
+    border: 1px solid var(--card-border);
     background: transparent;
-    color: white;
+    color: var(--text-dark);
     cursor: pointer;
 }
 
 .btn-sm:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.06);
 }
 
 /* Granular Storage Table */
@@ -323,7 +323,7 @@ header {
 }
 
 .role-btn {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(0, 0, 0, 0.03);
     border: 1px solid var(--glass-border);
     color: var(--text-dim);
     padding: 6px 12px;
@@ -334,25 +334,25 @@ header {
 }
 
 .role-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.06);
 }
 
 .role-btn.active[data-role="data"] {
     border-color: var(--primary);
-    color: white;
-    background: rgba(99, 102, 241, 0.2);
+    color: var(--primary);
+    background: rgba(132, 204, 22, 0.15);
 }
 
 .role-btn.active[data-role="parity"] {
     border-color: #f59e0b;
-    color: white;
-    background: rgba(245, 158, 11, 0.2);
+    color: #b45309;
+    background: rgba(245, 158, 11, 0.15);
 }
 
 .role-btn.active[data-role="cache"] {
     border-color: #10b981;
-    color: white;
-    background: rgba(16, 185, 129, 0.2);
+    color: #047857;
+    background: rgba(16, 185, 129, 0.15);
 }
 
 .summary-stats {
@@ -461,7 +461,7 @@ header {
 
 .disk-usage-bar {
     height: 8px;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(0, 0, 0, 0.03);
     border-radius: 4px;
     overflow: hidden;
     margin-top: 8px;
@@ -567,7 +567,7 @@ header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(0, 0, 0, 0.03);
     padding: 10px 15px;
     border-radius: 10px;
     margin-top: 10px;
@@ -593,7 +593,7 @@ header {
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: rgba(0, 0, 0, 0.06);
     transition: .4s;
     border-radius: 24px;
 }
@@ -676,16 +676,17 @@ input:checked+.slider:before {
 
 #ddns-service-select {
     width: 100%;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--bg-white);
     border: none;
-    border-bottom: 2px solid var(--glass-border);
-    color: white;
+    border-bottom: 2px solid var(--card-border);
+    color: var(--text-dark);
     padding: 10px 0;
     outline: none;
 }
 
 #ddns-service-select option {
-    background: var(--bg-dark);
+    background: var(--bg-white);
+    color: var(--text-dark);
 }
 
 .status-dot {
@@ -757,7 +758,7 @@ input:checked+.slider:before {
     display: flex;
     align-items: center;
     gap: 10px;
-    background: rgba(255,255,255,0.05);
+    background: rgba(0, 0, 0, 0.03);
     padding: 8px 16px;
     border-radius: 20px;
     font-size: 0.85rem;
@@ -786,7 +787,7 @@ input:checked+.slider:before {
 }
 
 .cpu-specs span {
-    background: rgba(255,255,255,0.05);
+    background: rgba(0, 0, 0, 0.03);
     padding: 4px 10px;
     border-radius: 6px;
 }
@@ -801,7 +802,7 @@ input:checked+.slider:before {
 }
 
 .cpu-specs-centered span {
-    background: rgba(255,255,255,0.05);
+    background: rgba(0, 0, 0, 0.03);
     padding: 6px 14px;
     border-radius: 8px;
 }
@@ -835,7 +836,7 @@ input:checked+.slider:before {
 
 .progress-bar {
     height: 10px;
-    background: rgba(255,255,255,0.1);
+    background: rgba(0, 0, 0, 0.06);
     border-radius: 5px;
     overflow: hidden;
     margin-bottom: 15px;
@@ -869,7 +870,7 @@ input:checked+.slider:before {
 .core-progress {
     flex: 1;
     height: 6px;
-    background: rgba(255,255,255,0.1);
+    background: rgba(0, 0, 0, 0.06);
     border-radius: 3px;
     overflow: hidden;
 }
@@ -898,7 +899,7 @@ input:checked+.slider:before {
     flex-direction: column;
     align-items: center;
     padding: 20px 30px;
-    background: rgba(255,255,255,0.05);
+    background: rgba(0, 0, 0, 0.03);
     border-radius: 15px;
     min-width: 100px;
 }
@@ -954,7 +955,7 @@ input:checked+.slider:before {
     flex-direction: column;
     align-items: center;
     padding: 8px;
-    background: rgba(255,255,255,0.03);
+    background: rgba(0, 0, 0, 0.02);
     border-radius: 8px;
     font-size: 0.8rem;
 }
@@ -994,7 +995,7 @@ input:checked+.slider:before {
 
 .circle-bg {
     fill: none;
-    stroke: rgba(255,255,255,0.1);
+    stroke: rgba(0, 0, 0, 0.06);
     stroke-width: 3;
 }
 
@@ -1044,7 +1045,7 @@ input:checked+.slider:before {
     flex-direction: column;
     gap: 10px;
     padding: 15px;
-    background: rgba(255,255,255,0.03);
+    background: rgba(0, 0, 0, 0.02);
     border-radius: 10px;
 }
 
@@ -1081,7 +1082,7 @@ input:checked+.slider:before {
     -webkit-appearance: none;
     appearance: none;
     height: 6px;
-    background: rgba(255,255,255,0.1);
+    background: rgba(0, 0, 0, 0.06);
     border-radius: 3px;
     outline: none;
 }
@@ -1190,7 +1191,7 @@ input:checked+.slider:before {
 }
 
 .cpu-specs-row span {
-    background: rgba(255,255,255,0.05);
+    background: rgba(0, 0, 0, 0.03);
     padding: 4px 10px;
     border-radius: 6px;
     font-size: 0.75rem;
@@ -1233,7 +1234,7 @@ input:checked+.slider:before {
 
 .progress-bar-mini {
     height: 6px;
-    background: rgba(255,255,255,0.1);
+    background: rgba(0, 0, 0, 0.06);
     border-radius: 3px;
     overflow: hidden;
 }
@@ -1265,7 +1266,7 @@ input:checked+.slider:before {
 .core-progress-mini {
     flex: 1;
     height: 4px;
-    background: rgba(255,255,255,0.1);
+    background: rgba(0, 0, 0, 0.06);
     border-radius: 2px;
     overflow: hidden;
 }
@@ -1344,7 +1345,7 @@ input:checked+.slider:before {
     flex-direction: column;
     gap: 8px;
     padding: 12px;
-    background: rgba(255,255,255,0.03);
+    background: rgba(0, 0, 0, 0.02);
     border-radius: 8px;
 }
 
@@ -1403,8 +1404,8 @@ input:checked+.slider:before {
     align-items: center;
     gap: 4px;
     padding: 10px 8px;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(0, 0, 0, 0.02);
+    border: 1px solid rgba(0, 0, 0, 0.06);
     border-radius: 10px;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -1412,29 +1413,32 @@ input:checked+.slider:before {
 }
 
 .fan-mode-btn:hover {
-    background: rgba(255,255,255,0.08);
-    border-color: rgba(255,255,255,0.2);
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.1);
 }
 
 .fan-mode-btn.active {
-    background: rgba(99, 102, 241, 0.15);
+    background: rgba(132, 204, 22, 0.15);
     border-color: var(--primary);
-    color: white;
+    color: var(--primary);
 }
 
 .fan-mode-btn.active[data-mode="silent"] {
     background: rgba(16, 185, 129, 0.15);
     border-color: #10b981;
+    color: #047857;
 }
 
 .fan-mode-btn.active[data-mode="balanced"] {
-    background: rgba(99, 102, 241, 0.15);
+    background: rgba(132, 204, 22, 0.15);
     border-color: var(--primary);
+    color: var(--primary);
 }
 
 .fan-mode-btn.active[data-mode="performance"] {
     background: rgba(239, 68, 68, 0.15);
     border-color: #ef4444;
+    color: #dc2626;
 }
 
 .fan-mode-btn .mode-icon {
@@ -1467,7 +1471,7 @@ input:checked+.slider:before {
     align-items: center;
     font-size: 0.85rem;
     padding: 8px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.03);
 }
 
 .net-row:last-child {
@@ -1503,7 +1507,7 @@ input:checked+.slider:before {
 }
 
 .disk-role-section {
-    background: rgba(255,255,255,0.03);
+    background: rgba(0, 0, 0, 0.02);
     border-radius: 12px;
     padding: 15px;
 }
@@ -1514,7 +1518,7 @@ input:checked+.slider:before {
     align-items: center;
     margin-bottom: 12px;
     padding-bottom: 10px;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.03);
 }
 
 .disk-role-header h4 {
@@ -1532,7 +1536,7 @@ input:checked+.slider:before {
 .disk-count {
     font-size: 0.75rem;
     color: var(--text-dim);
-    background: rgba(255,255,255,0.05);
+    background: rgba(0, 0, 0, 0.03);
     padding: 3px 8px;
     border-radius: 10px;
 }
@@ -1548,7 +1552,7 @@ input:checked+.slider:before {
     justify-content: space-between;
     align-items: center;
     padding: 10px 12px;
-    background: rgba(255,255,255,0.02);
+    background: rgba(0, 0, 0, 0.02);
     border-radius: 8px;
     border-left: 3px solid transparent;
 }
@@ -1604,7 +1608,7 @@ input:checked+.slider:before {
 .storage-info-banner .info-item {
     flex: 1;
     min-width: 150px;
-    background: rgba(255,255,255,0.03);
+    background: rgba(0, 0, 0, 0.02);
     padding: 15px;
     border-radius: 10px;
     border-left: 3px solid var(--primary);
@@ -1626,7 +1630,7 @@ input:checked+.slider:before {
     display: block;
     font-size: 0.9rem;
     margin-bottom: 5px;
-    color: white;
+    color: var(--text-dark);
 }
 
 .storage-info-banner .info-item span {
@@ -1658,7 +1662,7 @@ input:checked+.slider:before {
 }
 
 .storage-progress .modal-header {
-    border-bottom: 1px solid rgba(255,255,255,0.1);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
     padding-bottom: 15px;
     margin-bottom: 20px;
 }
@@ -1674,9 +1678,9 @@ input:checked+.slider:before {
     align-items: center;
     gap: 12px;
     padding: 12px 15px;
-    background: rgba(255,255,255,0.03);
+    background: rgba(0, 0, 0, 0.02);
     border-radius: 10px;
-    border-left: 3px solid rgba(255,255,255,0.1);
+    border-left: 3px solid rgba(0, 0, 0, 0.06);
     flex-wrap: wrap;
 }
 
@@ -1725,7 +1729,7 @@ input:checked+.slider:before {
 .sync-progress-bar {
     width: 100%;
     height: 8px;
-    background: rgba(255,255,255,0.1);
+    background: rgba(0, 0, 0, 0.06);
     border-radius: 4px;
     overflow: hidden;
     margin-top: 10px;
@@ -1750,7 +1754,7 @@ input:checked+.slider:before {
 .progress-footer {
     margin-top: 20px;
     padding-top: 15px;
-    border-top: 1px solid rgba(255,255,255,0.1);
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
     text-align: center;
 }
 
@@ -1775,7 +1779,7 @@ input:checked+.slider:before {
     padding: 12px 15px;
     margin: 8px 0;
     border-radius: 8px;
-    background: rgba(255,255,255,0.03);
+    background: rgba(0, 0, 0, 0.02);
     transition: all 0.3s ease;
 }
 
