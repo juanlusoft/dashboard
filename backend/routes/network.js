@@ -23,16 +23,29 @@ router.get('/interfaces', async (req, res) => {
     try {
         const netInterfaces = await si.networkInterfaces();
 
-        // Filter and sanitize output (exclude loopback interface)
+        // Only show real physical interfaces (eth*, wlan*, enp*, ens*, wlp*)
+        // Exclude: loopback, docker, virtual bridges, veth
+        const physicalPrefixes = ['eth', 'wlan', 'enp', 'ens', 'wlp', 'end'];
+        const excludePrefixes = ['lo', 'docker', 'veth', 'br-', 'virbr', 'tun', 'tap'];
+
         const interfaces = netInterfaces
-            .filter(iface => iface.iface && iface.iface !== 'lo' && validateInterfaceName(iface.iface))
+            .filter(iface => {
+                if (!iface.iface || !validateInterfaceName(iface.iface)) return false;
+                const name = iface.iface.toLowerCase();
+                // Exclude virtual interfaces
+                if (excludePrefixes.some(prefix => name.startsWith(prefix))) return false;
+                // Include only physical interfaces
+                return physicalPrefixes.some(prefix => name.startsWith(prefix));
+            })
             .map(iface => ({
                 id: iface.iface,
                 name: iface.ifaceName || iface.iface,
                 ip: iface.ip4 || '',
                 subnet: iface.ip4subnet || '',
+                gateway: iface.ip4gateway || '',
                 dhcp: iface.dhcp === true,
-                status: iface.operstate === 'up' ? 'connected' : 'disconnected'
+                status: iface.operstate === 'up' ? 'connected' : 'disconnected',
+                mac: iface.mac || ''
             }));
 
         res.json(interfaces);

@@ -1990,8 +1990,36 @@ function renderNetForm(netForm, iface, isDhcp) {
         subnetGroup.appendChild(subnetInput);
         subnetGroup.appendChild(subnetLabel);
 
+        // Gateway Input
+        const gatewayGroup = document.createElement('div');
+        gatewayGroup.className = 'input-group';
+        const gatewayInput = document.createElement('input');
+        gatewayInput.type = 'text';
+        gatewayInput.id = `gateway-${iface.id}`;
+        gatewayInput.value = iface.gateway || '';
+        gatewayInput.placeholder = ' ';
+        const gatewayLabel = document.createElement('label');
+        gatewayLabel.textContent = 'Gateway';
+        gatewayGroup.appendChild(gatewayInput);
+        gatewayGroup.appendChild(gatewayLabel);
+
+        // DNS Input
+        const dnsGroup = document.createElement('div');
+        dnsGroup.className = 'input-group';
+        const dnsInput = document.createElement('input');
+        dnsInput.type = 'text';
+        dnsInput.id = `dns-${iface.id}`;
+        dnsInput.value = '';
+        dnsInput.placeholder = ' ';
+        const dnsLabel = document.createElement('label');
+        dnsLabel.textContent = 'DNS (ej: 8.8.8.8)';
+        dnsGroup.appendChild(dnsInput);
+        dnsGroup.appendChild(dnsLabel);
+
         netForm.appendChild(ipGroup);
         netForm.appendChild(subnetGroup);
+        netForm.appendChild(gatewayGroup);
+        netForm.appendChild(dnsGroup);
     }
 
     // Save button
@@ -2017,20 +2045,34 @@ async function applyNetwork(interfaceId) {
     if (!isDhcp) {
         const ipInput = document.getElementById(`ip-${interfaceId}`);
         const subnetInput = document.getElementById(`subnet-${interfaceId}`);
+        const gatewayInput = document.getElementById(`gateway-${interfaceId}`);
+        const dnsInput = document.getElementById(`dns-${interfaceId}`);
 
         if (ipInput) config.ip = ipInput.value.trim();
         if (subnetInput) config.subnet = subnetInput.value.trim();
+        if (gatewayInput) config.gateway = gatewayInput.value.trim();
+        if (dnsInput) config.dns = dnsInput.value.trim();
 
         // Basic validation
         const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
 
         if (config.ip && !ipRegex.test(config.ip)) {
-            alert('Invalid IP address format');
+            alert('Formato de IP inválido');
             return;
         }
 
         if (config.subnet && !ipRegex.test(config.subnet)) {
-            alert('Invalid subnet mask format');
+            alert('Formato de máscara de subred inválido');
+            return;
+        }
+
+        if (config.gateway && !ipRegex.test(config.gateway)) {
+            alert('Formato de puerta de enlace inválido');
+            return;
+        }
+
+        if (config.dns && !ipRegex.test(config.dns)) {
+            alert('Formato de DNS inválido');
             return;
         }
     }
