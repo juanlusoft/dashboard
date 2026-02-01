@@ -491,11 +491,14 @@ router.get('/snapraid/status', async (req, res) => {
 });
 
 // Storage config
+// NOTE: This endpoint allows initial config without auth (first-time setup),
+// but requires auth if storage is already configured
 router.post('/config', (req, res) => {
     try {
         const { config } = req.body;
         const data = getData();
 
+        // SECURITY: Require auth if storage already configured
         if (data.storageConfig && data.storageConfig.length > 0) {
             const sessionId = req.headers['x-session-id'];
             const session = validateSession(sessionId);
@@ -509,20 +512,16 @@ router.post('/config', (req, res) => {
             return res.status(400).json({ error: 'Invalid configuration format' });
         }
 
-        const validRoles = ['data', 'parity', 'cache', 'none'];
-        for (const item of config) {
-            if (!item.id || typeof item.id !== 'string') {
-                return res.status(400).json({ error: 'Invalid disk ID in configuration' });
-            }
-            if (!item.role || !validRoles.includes(item.role)) {
-                return res.status(400).json({ error: 'Invalid role in configuration' });
-            }
+        // SECURITY: Use validateDiskConfig from sanitize module
+        const validatedConfig = validateDiskConfig(config);
+        if (!validatedConfig) {
+            return res.status(400).json({ error: 'Invalid disk configuration. Check disk IDs and roles.' });
         }
 
-        data.storageConfig = config;
+        data.storageConfig = validatedConfig;
         saveData(data);
 
-        logSecurityEvent('STORAGE_CONFIG', { disks: config.length }, req.ip);
+        logSecurityEvent('STORAGE_CONFIG', { disks: validatedConfig.length }, req.ip);
         res.json({ success: true, message: 'Storage configuration saved' });
     } catch (e) {
         console.error('Storage config error:', e);
