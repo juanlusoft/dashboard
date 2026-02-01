@@ -7,7 +7,7 @@
 set -e
 
 # Version - CHANGE THIS FOR EACH RELEASE
-VERSION="2.0.15"
+VERSION="2.1.0"
 
 # Colors
 RED='\033[0;31m'
@@ -313,6 +313,9 @@ install_package_safe "lm-sensors" "sensors"
 install_package_safe "pigz" ""
 install_package_safe "samba" ""
 install_package_safe "samba-common-bin" ""
+install_package_safe "mc" ""
+install_package_safe "tmux" ""
+install_package_safe "htop" ""
 
 # Install Docker based on OS type
 echo -e "${BLUE}Installing Docker...${NC}"

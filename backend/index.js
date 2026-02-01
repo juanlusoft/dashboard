@@ -1,6 +1,6 @@
 /**
  * HomePiNAS - Premium NAS Dashboard for Raspberry Pi CM5
- * v1.7.0 - Security Hardening
+ * v2.1.0 - Extended Features
  *
  * Homelabs.club Edition with:
  * - Bcrypt password hashing
@@ -12,6 +12,10 @@
  * - Fan hysteresis
  * - Docker Compose management
  * - Container update detection
+ * - Web Terminal (PTY + xterm.js)
+ * - Configurable Shortcuts
+ * - Internationalization (i18n)
+ * - Enhanced Storage View
  */
 
 const express = require('express');
@@ -36,9 +40,20 @@ const authRoutes = require('./routes/auth');
 const networkRoutes = require('./routes/network');
 const powerRoutes = require('./routes/power');
 const updateRoutes = require('./routes/update');
+const terminalRoutes = require('./routes/terminal');
+const shortcutsRoutes = require('./routes/shortcuts');
+
+// Import terminal WebSocket handler
+let setupTerminalWebSocket;
+try {
+    setupTerminalWebSocket = require('./utils/terminal-ws').setupTerminalWebSocket;
+} catch (e) {
+    console.warn('[WARN] Terminal WebSocket not available - node-pty may not be installed');
+    setupTerminalWebSocket = null;
+}
 
 // Configuration
-const VERSION = '1.7.0';
+const VERSION = '2.1.0';
 const HTTPS_PORT = process.env.HTTPS_PORT || 3001;
 const HTTP_PORT = process.env.HTTP_PORT || 3000;
 const SSL_CERT_PATH = path.join(__dirname, 'certs', 'server.crt');
@@ -124,8 +139,11 @@ app.use(express.json({ limit: '10kb' }));
 app.use(express.static(path.join(__dirname, '../')));
 app.use('/frontend', express.static(path.join(__dirname, '../frontend')));
 
+// Serve i18n files
+app.use('/frontend/i18n', express.static(path.join(__dirname, '../frontend/i18n')));
+
 // SPA routes - serve index.html for frontend views
-const spaRoutes = ['/', '/dashboard', '/docker', '/storage', '/network', '/system'];
+const spaRoutes = ['/', '/dashboard', '/docker', '/storage', '/network', '/system', '/terminal', '/shortcuts'];
 spaRoutes.forEach(route => {
     app.get(route, (req, res) => {
         res.sendFile(path.join(__dirname, '../index.html'));
@@ -156,6 +174,12 @@ app.use('/api/system', powerRoutes);
 
 // Update routes (check, apply)
 app.use('/api/update', updateRoutes);
+
+// Terminal routes (PTY sessions)
+app.use('/api/terminal', terminalRoutes);
+
+// Shortcuts routes (configurable program shortcuts)
+app.use('/api/shortcuts', shortcutsRoutes);
 
 // =============================================================================
 // SERVER STARTUP
@@ -203,7 +227,28 @@ httpServer.listen(HTTP_PORT, '0.0.0.0', () => {
     console.log('        - routes/network.js   (interfaces)');
     console.log('        - routes/power.js     (reboot, shutdown)');
     console.log('        - routes/update.js    (OTA updates)');
+    console.log('        - routes/terminal.js  (web terminal)');
+    console.log('        - routes/shortcuts.js (custom shortcuts)');
     console.log('');
+    
+    // Setup Terminal WebSocket on HTTP server
+    if (setupTerminalWebSocket) {
+        try {
+            setupTerminalWebSocket(httpServer);
+            console.log('[WS]    Terminal WebSocket available at /api/terminal/ws');
+        } catch (e) {
+            console.warn('[WARN]  Terminal WebSocket setup failed:', e.message);
+        }
+    }
 });
+
+// Setup Terminal WebSocket on HTTPS server if available
+if (httpsServer && setupTerminalWebSocket) {
+    try {
+        setupTerminalWebSocket(httpsServer);
+    } catch (e) {
+        console.warn('[WARN]  Terminal WebSocket (HTTPS) setup failed:', e.message);
+    }
+}
 
 module.exports = app;
