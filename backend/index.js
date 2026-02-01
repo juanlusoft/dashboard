@@ -61,18 +61,54 @@ if (!fs.existsSync(configDir)) {
 // MIDDLEWARE
 // =============================================================================
 
-// Security headers (configured for local network)
+// Security headers (configured for local network with improved security)
 app.use(helmet({
-    contentSecurityPolicy: false,
-    hsts: false,
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'"], // Needed for some inline scripts
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com"],
+            imgSrc: ["'self'", "data:"],
+            connectSrc: ["'self'"],
+            frameAncestors: ["'none'"], // Prevent clickjacking
+        },
+    },
+    hsts: false, // Disabled for local network (self-signed certs)
     crossOriginEmbedderPolicy: false,
     crossOriginOpenerPolicy: false,
-    crossOriginResourcePolicy: false,
+    crossOriginResourcePolicy: { policy: "same-origin" },
     originAgentCluster: false,
+    xFrameOptions: { action: "deny" }, // Additional clickjacking protection
 }));
 
-// CORS - Allow all origins for local network NAS
-app.use(cors());
+// CORS - Configured for local network NAS with origin validation
+// SECURITY: Restrict to same-origin and local network patterns
+app.use(cors({
+    origin: function(origin, callback) {
+        // Allow requests with no origin (same-origin, mobile apps, curl, etc.)
+        if (!origin) return callback(null, true);
+        
+        // Allow local network IPs and localhost
+        const allowedPatterns = [
+            /^https?:\/\/localhost(:\d+)?$/,
+            /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
+            /^https?:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/,
+            /^https?:\/\/10\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/,
+            /^https?:\/\/172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}(:\d+)?$/,
+            /^https?:\/\/\[::1\](:\d+)?$/,
+        ];
+        
+        const isAllowed = allowedPatterns.some(pattern => pattern.test(origin));
+        if (isAllowed) {
+            callback(null, true);
+        } else {
+            console.warn(`CORS blocked origin: ${origin}`);
+            callback(new Error('CORS not allowed'));
+        }
+    },
+    credentials: true,
+}));
 
 // Rate limiting
 app.use(generalLimiter);

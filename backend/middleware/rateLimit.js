@@ -7,23 +7,22 @@ const rateLimit = require('express-rate-limit');
 
 /**
  * General rate limiter - relaxed for local network NAS dashboard
+ * SECURITY: Only skip specific high-frequency polling endpoints, not all GETs
  */
 const generalLimiter = rateLimit({
     windowMs: 1 * 60 * 1000, // 1 minute
-    max: 1000, // Very high limit for local network
+    max: 500, // High but not unlimited for local network
     message: { error: 'Too many requests, please try again later' },
     standardHeaders: true,
     legacyHeaders: false,
     skip: (req) => {
+        // SECURITY: Only skip specific polling endpoints that need high frequency
         const skipPaths = [
             '/api/system/stats',
-            '/api/system/disks',
-            '/api/system/status',
             '/api/system/fan/mode',
-            '/api/docker/containers',
-            '/api/network/interfaces'
+            '/api/docker/containers'
         ];
-        return skipPaths.includes(req.path) || req.method === 'GET';
+        return skipPaths.includes(req.path);
     }
 });
 

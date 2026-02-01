@@ -148,13 +148,32 @@ router.post('/login', authLimiter, async (req, res) => {
         const data = getData();
 
         if (!data.user) {
-            logSecurityEvent('LOGIN_NO_USER', { username }, req.ip);
+            // SECURITY: Still do a bcrypt compare to prevent timing attacks
+            // This ensures response time is similar whether user exists or not
+            await bcrypt.compare(password, '$2b$12$invalid.hash.placeholder.for.timing.attack.prevention');
+            logSecurityEvent('LOGIN_NO_USER', { username: '[REDACTED]' }, req.ip);
             return res.status(401).json({ success: false, message: 'Invalid credentials' });
         }
 
-        const isValid = await bcrypt.compare(password, data.user.password);
+        // SECURITY: Always compare password first to ensure constant-time response
+        const isPasswordValid = await bcrypt.compare(password, data.user.password);
 
-        if (data.user.username === username && isValid) {
+        // SECURITY: Use timing-safe comparison for username
+        const crypto = require('crypto');
+        const usernameBuffer = Buffer.from(username);
+        const storedUsernameBuffer = Buffer.from(data.user.username);
+        
+        // Pad to same length to prevent length-based timing attacks
+        const maxLen = Math.max(usernameBuffer.length, storedUsernameBuffer.length);
+        const paddedInput = Buffer.alloc(maxLen, 0);
+        const paddedStored = Buffer.alloc(maxLen, 0);
+        usernameBuffer.copy(paddedInput);
+        storedUsernameBuffer.copy(paddedStored);
+        
+        const isUsernameValid = crypto.timingSafeEqual(paddedInput, paddedStored) && 
+                                usernameBuffer.length === storedUsernameBuffer.length;
+
+        if (isUsernameValid && isPasswordValid) {
             const sessionId = createSession(username);
             logSecurityEvent('LOGIN_SUCCESS', { username }, req.ip);
             res.json({
@@ -163,7 +182,7 @@ router.post('/login', authLimiter, async (req, res) => {
                 user: { username: data.user.username }
             });
         } else {
-            logSecurityEvent('LOGIN_FAILED', { username }, req.ip);
+            logSecurityEvent('LOGIN_FAILED', { username: '[REDACTED]' }, req.ip);
             res.status(401).json({ success: false, message: 'Invalid credentials' });
         }
     } catch (e) {

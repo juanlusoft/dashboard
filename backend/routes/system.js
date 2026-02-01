@@ -14,6 +14,7 @@ const { exec, execSync } = require('child_process');
 const { requireAuth } = require('../middleware/auth');
 const { logSecurityEvent } = require('../utils/security');
 const { getData } = require('../utils/data');
+const { validateFanId, validateFanMode } = require('../utils/sanitize');
 
 // Fan mode presets configuration (v1.5.5 with hysteresis)
 const FANCTL_CONF = '/usr/local/bin/homepinas-fanctl.conf';
@@ -197,14 +198,22 @@ router.get('/stats', async (req, res) => {
 router.post('/fan', requireAuth, (req, res) => {
     const { fanId, speed } = req.body;
 
+    // Validate speed
     if (typeof speed !== 'number' || speed < 0 || speed > 100) {
         return res.status(400).json({ error: 'Invalid fan speed (0-100)' });
     }
 
+    // SECURITY: Validate fanId - must be a small positive integer
+    const validatedFanId = validateFanId(fanId);
+    if (validatedFanId === null) {
+        return res.status(400).json({ error: 'Invalid fan ID (must be 1-10)' });
+    }
+
     const pwmValue = Math.round((speed / 100) * 255);
-    const fanNum = fanId || 1;
+    const fanNum = validatedFanId;
 
     try {
+        // SECURITY: Use validated integers directly (no string interpolation from user input)
         const cmd = `
             for hwmon in /sys/class/hwmon/hwmon*; do
                 if [ -f "$hwmon/pwm${fanNum}" ]; then
@@ -227,7 +236,7 @@ router.post('/fan', requireAuth, (req, res) => {
             fi
             echo "no_pwm_found"
         `;
-        const result = execSync(cmd, { shell: '/bin/bash', encoding: 'utf8' }).trim();
+        const result = execSync(cmd, { shell: '/bin/bash', encoding: 'utf8', timeout: 10000 }).trim();
 
         if (result === 'success') {
             logSecurityEvent('FAN_CONTROL', { fanId: fanNum, speed, pwmValue }, req.ip);
@@ -277,24 +286,33 @@ router.get('/fan/mode', (req, res) => {
 router.post('/fan/mode', requireAuth, (req, res) => {
     const { mode } = req.body;
 
-    if (!mode || !FAN_PRESETS[mode]) {
+    // SECURITY: Validate mode using sanitize function
+    const validatedMode = validateFanMode(mode);
+    if (!validatedMode || !FAN_PRESETS[validatedMode]) {
         return res.status(400).json({ error: 'Invalid mode. Must be: silent, balanced, or performance' });
     }
 
     try {
-        const preset = FAN_PRESETS[mode];
+        const preset = FAN_PRESETS[validatedMode];
         const tempFile = '/tmp/homepinas-fanctl-temp.conf';
         fs.writeFileSync(tempFile, preset, 'utf8');
 
-        execSync(`sudo cp ${tempFile} ${FANCTL_CONF} && sudo chmod 644 ${FANCTL_CONF}`, { shell: '/bin/bash' });
+        // SECURITY: Use execSync with timeout to prevent hanging
+        execSync(`sudo cp ${tempFile} ${FANCTL_CONF} && sudo chmod 644 ${FANCTL_CONF}`, { 
+            shell: '/bin/bash',
+            timeout: 10000 
+        });
         fs.unlinkSync(tempFile);
 
         try {
-            execSync('sudo systemctl restart homepinas-fanctl 2>/dev/null || true', { shell: '/bin/bash' });
+            execSync('sudo systemctl restart homepinas-fanctl 2>/dev/null || true', { 
+                shell: '/bin/bash',
+                timeout: 10000 
+            });
         } catch (e) {}
 
-        logSecurityEvent('FAN_MODE_CHANGE', { mode, user: req.user.username }, req.ip);
-        res.json({ success: true, message: `Fan mode set to ${mode}`, mode });
+        logSecurityEvent('FAN_MODE_CHANGE', { mode: validatedMode, user: req.user.username }, req.ip);
+        res.json({ success: true, message: `Fan mode set to ${validatedMode}`, mode: validatedMode });
     } catch (e) {
         console.error('Fan mode set error:', e);
         res.status(500).json({ error: 'Failed to set fan mode' });

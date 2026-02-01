@@ -19,7 +19,7 @@ const { execSync, exec } = require('child_process');
 
 const { requireAuth } = require('../middleware/auth');
 const { logSecurityEvent } = require('../utils/security');
-const { validateDockerAction } = require('../utils/sanitize');
+const { validateDockerAction, validateContainerId, sanitizeComposeName, validateComposeContent } = require('../utils/sanitize');
 
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
@@ -112,8 +112,9 @@ router.get('/containers', async (req, res) => {
 router.post('/action', requireAuth, async (req, res) => {
     const { id, action } = req.body;
 
-    if (!id || typeof id !== 'string') {
-        return res.status(400).json({ error: 'Invalid container ID' });
+    // SECURITY: Validate container ID format (hex string, 12-64 chars)
+    if (!validateContainerId(id)) {
+        return res.status(400).json({ error: 'Invalid container ID format' });
     }
 
     if (!validateDockerAction(action)) {
@@ -228,8 +229,9 @@ router.get('/update-status', async (req, res) => {
 router.post('/update', requireAuth, async (req, res) => {
     const { containerId } = req.body;
 
-    if (!containerId) {
-        return res.status(400).json({ error: 'Container ID required' });
+    // SECURITY: Validate container ID format
+    if (!validateContainerId(containerId)) {
+        return res.status(400).json({ error: 'Invalid container ID format' });
     }
 
     try {
@@ -301,10 +303,16 @@ router.post('/compose/import', requireAuth, async (req, res) => {
         return res.status(400).json({ error: 'Name and content required' });
     }
 
-    // Sanitize name
-    const safeName = name.replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 50);
+    // SECURITY: Sanitize name using dedicated function
+    const safeName = sanitizeComposeName(name);
     if (!safeName) {
-        return res.status(400).json({ error: 'Invalid compose name' });
+        return res.status(400).json({ error: 'Invalid compose name (alphanumeric, dashes, underscores only)' });
+    }
+
+    // SECURITY: Validate compose content
+    const contentValidation = validateComposeContent(content);
+    if (!contentValidation.valid) {
+        return res.status(400).json({ error: contentValidation.error });
     }
 
     try {
@@ -367,9 +375,20 @@ router.post('/compose/up', requireAuth, async (req, res) => {
         return res.status(400).json({ error: 'Compose name required' });
     }
 
-    const safeName = name.replace(/[^a-zA-Z0-9_-]/g, '');
+    // SECURITY: Use dedicated sanitization function
+    const safeName = sanitizeComposeName(name);
+    if (!safeName) {
+        return res.status(400).json({ error: 'Invalid compose name' });
+    }
+
     const composeDir = path.join(COMPOSE_DIR, safeName);
     const composeFile = path.join(composeDir, 'docker-compose.yml');
+
+    // SECURITY: Verify path doesn't escape COMPOSE_DIR
+    const resolvedDir = path.resolve(composeDir);
+    if (!resolvedDir.startsWith(path.resolve(COMPOSE_DIR))) {
+        return res.status(400).json({ error: 'Invalid compose path' });
+    }
 
     if (!fs.existsSync(composeFile)) {
         return res.status(404).json({ error: 'Compose file not found' });
@@ -378,8 +397,10 @@ router.post('/compose/up', requireAuth, async (req, res) => {
     try {
         logSecurityEvent('DOCKER_COMPOSE_UP', { name: safeName, user: req.user.username }, req.ip);
 
-        // Run docker-compose up -d
-        const output = execSync(`cd "${composeDir}" && docker compose up -d 2>&1`, {
+        // SECURITY: Use execFile with explicit arguments instead of shell interpolation
+        const { execFileSync } = require('child_process');
+        const output = execFileSync('docker', ['compose', 'up', '-d'], {
+            cwd: composeDir,
             encoding: 'utf8',
             timeout: 300000 // 5 minutes
         });
@@ -393,7 +414,7 @@ router.post('/compose/up', requireAuth, async (req, res) => {
         console.error('Compose up error:', e);
         res.status(500).json({
             error: 'Failed to start compose',
-            details: e.message
+            details: e.stderr || e.message
         });
     }
 });
@@ -406,9 +427,20 @@ router.post('/compose/down', requireAuth, async (req, res) => {
         return res.status(400).json({ error: 'Compose name required' });
     }
 
-    const safeName = name.replace(/[^a-zA-Z0-9_-]/g, '');
+    // SECURITY: Use dedicated sanitization function
+    const safeName = sanitizeComposeName(name);
+    if (!safeName) {
+        return res.status(400).json({ error: 'Invalid compose name' });
+    }
+
     const composeDir = path.join(COMPOSE_DIR, safeName);
     const composeFile = path.join(composeDir, 'docker-compose.yml');
+
+    // SECURITY: Verify path doesn't escape COMPOSE_DIR
+    const resolvedDir = path.resolve(composeDir);
+    if (!resolvedDir.startsWith(path.resolve(COMPOSE_DIR))) {
+        return res.status(400).json({ error: 'Invalid compose path' });
+    }
 
     if (!fs.existsSync(composeFile)) {
         return res.status(404).json({ error: 'Compose file not found' });
@@ -417,7 +449,10 @@ router.post('/compose/down', requireAuth, async (req, res) => {
     try {
         logSecurityEvent('DOCKER_COMPOSE_DOWN', { name: safeName, user: req.user.username }, req.ip);
 
-        const output = execSync(`cd "${composeDir}" && docker compose down 2>&1`, {
+        // SECURITY: Use execFile with explicit arguments
+        const { execFileSync } = require('child_process');
+        const output = execFileSync('docker', ['compose', 'down'], {
+            cwd: composeDir,
             encoding: 'utf8',
             timeout: 120000
         });
@@ -435,8 +470,19 @@ router.post('/compose/down', requireAuth, async (req, res) => {
 
 // Delete compose file
 router.delete('/compose/:name', requireAuth, async (req, res) => {
-    const safeName = req.params.name.replace(/[^a-zA-Z0-9_-]/g, '');
+    // SECURITY: Use dedicated sanitization function
+    const safeName = sanitizeComposeName(req.params.name);
+    if (!safeName) {
+        return res.status(400).json({ error: 'Invalid compose name' });
+    }
+
     const composeDir = path.join(COMPOSE_DIR, safeName);
+
+    // SECURITY: Verify path doesn't escape COMPOSE_DIR
+    const resolvedDir = path.resolve(composeDir);
+    if (!resolvedDir.startsWith(path.resolve(COMPOSE_DIR))) {
+        return res.status(400).json({ error: 'Invalid compose path' });
+    }
 
     if (!fs.existsSync(composeDir)) {
         return res.status(404).json({ error: 'Compose not found' });
@@ -445,9 +491,14 @@ router.delete('/compose/:name', requireAuth, async (req, res) => {
     try {
         // Stop containers first
         try {
-            execSync(`cd "${composeDir}" && docker compose down 2>&1`, { encoding: 'utf8', timeout: 60000 });
+            const { execFileSync } = require('child_process');
+            execFileSync('docker', ['compose', 'down'], {
+                cwd: composeDir,
+                encoding: 'utf8',
+                timeout: 60000
+            });
         } catch (e) {
-            // Ignore errors
+            // Ignore errors - containers may not be running
         }
 
         // Remove directory
@@ -464,8 +515,19 @@ router.delete('/compose/:name', requireAuth, async (req, res) => {
 
 // Get compose file content
 router.get('/compose/:name', async (req, res) => {
-    const safeName = req.params.name.replace(/[^a-zA-Z0-9_-]/g, '');
+    // SECURITY: Use dedicated sanitization function
+    const safeName = sanitizeComposeName(req.params.name);
+    if (!safeName) {
+        return res.status(400).json({ error: 'Invalid compose name' });
+    }
+
     const composeFile = path.join(COMPOSE_DIR, safeName, 'docker-compose.yml');
+
+    // SECURITY: Verify path doesn't escape COMPOSE_DIR
+    const resolvedFile = path.resolve(composeFile);
+    if (!resolvedFile.startsWith(path.resolve(COMPOSE_DIR))) {
+        return res.status(400).json({ error: 'Invalid compose path' });
+    }
 
     if (!fs.existsSync(composeFile)) {
         return res.status(404).json({ error: 'Compose not found' });

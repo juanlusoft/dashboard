@@ -14,6 +14,7 @@ const { requireAuth } = require('../middleware/auth');
 const { logSecurityEvent } = require('../utils/security');
 const { getData, saveData } = require('../utils/data');
 const { validateSession } = require('../utils/session');
+const { sanitizeDiskId, validateDiskConfig, escapeShellArg } = require('../utils/sanitize');
 
 const STORAGE_MOUNT_BASE = '/mnt/disks';
 const POOL_MOUNT = '/mnt/storage';
@@ -89,34 +90,50 @@ router.post('/pool/configure', requireAuth, async (req, res) => {
         return res.status(400).json({ error: 'No disks provided' });
     }
 
-    const dataDisks = disks.filter(d => d.role === 'data');
-    const parityDisks = disks.filter(d => d.role === 'parity');
-    const cacheDisks = disks.filter(d => d.role === 'cache');
+    // SECURITY: Validate all disk configurations using sanitize module
+    const validatedDisks = validateDiskConfig(disks);
+    if (!validatedDisks) {
+        return res.status(400).json({ error: 'Invalid disk configuration. Check disk IDs and roles.' });
+    }
+
+    const dataDisks = validatedDisks.filter(d => d.role === 'data');
+    const parityDisks = validatedDisks.filter(d => d.role === 'parity');
+    const cacheDisks = validatedDisks.filter(d => d.role === 'cache');
 
     if (dataDisks.length === 0) {
         return res.status(400).json({ error: 'At least one data disk is required' });
     }
 
     // Parity is now optional - SnapRAID will only be configured if parity disks are present
+    const { execFileSync } = require('child_process');
 
     try {
         const results = [];
 
         // 1. Format disks that need formatting
-        for (const disk of disks) {
+        for (const disk of validatedDisks) {
             if (disk.format) {
-                results.push(`Formatting /dev/${disk.id}...`);
+                // SECURITY: disk.id is now validated by sanitizeDiskId
+                const safeDiskId = disk.id;
+                results.push(`Formatting /dev/${safeDiskId}...`);
                 try {
-                    execSync(`sudo parted -s /dev/${disk.id} mklabel gpt`, { encoding: 'utf8' });
-                    execSync(`sudo parted -s /dev/${disk.id} mkpart primary ext4 0% 100%`, { encoding: 'utf8' });
-                    execSync(`sudo partprobe /dev/${disk.id}`, { encoding: 'utf8' });
-                    execSync('sleep 2');
+                    // SECURITY: Use execFileSync with explicit arguments instead of shell interpolation
+                    execFileSync('sudo', ['parted', '-s', `/dev/${safeDiskId}`, 'mklabel', 'gpt'], { encoding: 'utf8', timeout: 30000 });
+                    execFileSync('sudo', ['parted', '-s', `/dev/${safeDiskId}`, 'mkpart', 'primary', 'ext4', '0%', '100%'], { encoding: 'utf8', timeout: 30000 });
+                    execFileSync('sudo', ['partprobe', `/dev/${safeDiskId}`], { encoding: 'utf8', timeout: 10000 });
+                    execSync('sleep 2', { timeout: 5000 });
 
-                    const partition = disk.id.includes('nvme') ? `${disk.id}p1` : `${disk.id}1`;
-                    execSync(`sudo mkfs.ext4 -F -L ${disk.role}_${disk.id} /dev/${partition}`, { encoding: 'utf8' });
-                    results.push(`Formatted /dev/${partition} as ext4`);
+                    const partition = safeDiskId.includes('nvme') ? `${safeDiskId}p1` : `${safeDiskId}1`;
+                    // SECURITY: Validate partition name too (derived from validated disk ID)
+                    const safePartition = sanitizeDiskId(partition);
+                    if (!safePartition) {
+                        throw new Error('Invalid partition derived from disk ID');
+                    }
+                    const label = `${disk.role}_${safeDiskId}`.substring(0, 16); // ext4 label max 16 chars
+                    execFileSync('sudo', ['mkfs.ext4', '-F', '-L', label, `/dev/${safePartition}`], { encoding: 'utf8', timeout: 300000 });
+                    results.push(`Formatted /dev/${safePartition} as ext4`);
                 } catch (e) {
-                    results.push(`Warning: Format failed for ${disk.id}: ${e.message}`);
+                    results.push(`Warning: Format failed for ${safeDiskId}: ${e.message}`);
                 }
             }
         }
@@ -128,41 +145,67 @@ router.post('/pool/configure', requireAuth, async (req, res) => {
         const cacheMounts = [];
 
         for (const disk of dataDisks) {
-            const partition = disk.id.includes('nvme') ? `${disk.id}p1` : `${disk.id}1`;
+            // SECURITY: disk.id already validated
+            const safeDiskId = disk.id;
+            const partition = safeDiskId.includes('nvme') ? `${safeDiskId}p1` : `${safeDiskId}1`;
+            const safePartition = sanitizeDiskId(partition);
+            if (!safePartition) continue;
+
             const mountPoint = `${STORAGE_MOUNT_BASE}/disk${diskNum}`;
 
-            execSync(`sudo mkdir -p ${mountPoint}`, { encoding: 'utf8' });
-            execSync(`sudo mount /dev/${partition} ${mountPoint} 2>/dev/null || true`, { encoding: 'utf8' });
-            execSync(`sudo mkdir -p ${mountPoint}/.snapraid`, { encoding: 'utf8' });
+            // SECURITY: Use execFileSync with explicit arguments
+            execFileSync('sudo', ['mkdir', '-p', mountPoint], { encoding: 'utf8', timeout: 10000 });
+            try {
+                execFileSync('sudo', ['mount', `/dev/${safePartition}`, mountPoint], { encoding: 'utf8', timeout: 30000 });
+            } catch (e) {
+                // Mount may fail if already mounted, continue
+            }
+            execFileSync('sudo', ['mkdir', '-p', `${mountPoint}/.snapraid`], { encoding: 'utf8', timeout: 10000 });
 
-            dataMounts.push({ disk: disk.id, partition, mountPoint, num: diskNum });
-            results.push(`Mounted /dev/${partition} at ${mountPoint}`);
+            dataMounts.push({ disk: safeDiskId, partition: safePartition, mountPoint, num: diskNum });
+            results.push(`Mounted /dev/${safePartition} at ${mountPoint}`);
             diskNum++;
         }
 
         let parityNum = 1;
         for (const disk of parityDisks) {
-            const partition = disk.id.includes('nvme') ? `${disk.id}p1` : `${disk.id}1`;
+            const safeDiskId = disk.id;
+            const partition = safeDiskId.includes('nvme') ? `${safeDiskId}p1` : `${safeDiskId}1`;
+            const safePartition = sanitizeDiskId(partition);
+            if (!safePartition) continue;
+
             const mountPoint = `/mnt/parity${parityNum}`;
 
-            execSync(`sudo mkdir -p ${mountPoint}`, { encoding: 'utf8' });
-            execSync(`sudo mount /dev/${partition} ${mountPoint} 2>/dev/null || true`, { encoding: 'utf8' });
+            execFileSync('sudo', ['mkdir', '-p', mountPoint], { encoding: 'utf8', timeout: 10000 });
+            try {
+                execFileSync('sudo', ['mount', `/dev/${safePartition}`, mountPoint], { encoding: 'utf8', timeout: 30000 });
+            } catch (e) {
+                // Mount may fail if already mounted
+            }
 
-            parityMounts.push({ disk: disk.id, partition, mountPoint, num: parityNum });
-            results.push(`Mounted /dev/${partition} at ${mountPoint} (parity)`);
+            parityMounts.push({ disk: safeDiskId, partition: safePartition, mountPoint, num: parityNum });
+            results.push(`Mounted /dev/${safePartition} at ${mountPoint} (parity)`);
             parityNum++;
         }
 
         let cacheNum = 1;
         for (const disk of cacheDisks) {
-            const partition = disk.id.includes('nvme') ? `${disk.id}p1` : `${disk.id}1`;
+            const safeDiskId = disk.id;
+            const partition = safeDiskId.includes('nvme') ? `${safeDiskId}p1` : `${safeDiskId}1`;
+            const safePartition = sanitizeDiskId(partition);
+            if (!safePartition) continue;
+
             const mountPoint = `${STORAGE_MOUNT_BASE}/cache${cacheNum}`;
 
-            execSync(`sudo mkdir -p ${mountPoint}`, { encoding: 'utf8' });
-            execSync(`sudo mount /dev/${partition} ${mountPoint} 2>/dev/null || true`, { encoding: 'utf8' });
+            execFileSync('sudo', ['mkdir', '-p', mountPoint], { encoding: 'utf8', timeout: 10000 });
+            try {
+                execFileSync('sudo', ['mount', `/dev/${safePartition}`, mountPoint], { encoding: 'utf8', timeout: 30000 });
+            } catch (e) {
+                // Mount may fail if already mounted
+            }
 
-            cacheMounts.push({ disk: disk.id, partition, mountPoint, num: cacheNum });
-            results.push(`Mounted /dev/${partition} at ${mountPoint} (cache)`);
+            cacheMounts.push({ disk: safeDiskId, partition: safePartition, mountPoint, num: cacheNum });
+            results.push(`Mounted /dev/${safePartition} at ${mountPoint} (cache)`);
             cacheNum++;
         }
 
@@ -206,7 +249,11 @@ exclude .Trashes
 exclude .fseventsd
 `;
 
-            execSync(`echo '${snapraidConf}' | sudo tee ${SNAPRAID_CONF}`, { shell: '/bin/bash' });
+            // SECURITY: Write config to temp file first, then use sudo to copy
+            const tempConfFile = '/tmp/homepinas-snapraid-temp.conf';
+            fs.writeFileSync(tempConfFile, snapraidConf, 'utf8');
+            execFileSync('sudo', ['cp', tempConfFile, SNAPRAID_CONF], { encoding: 'utf8', timeout: 10000 });
+            fs.unlinkSync(tempConfFile);
             results.push('SnapRAID configuration created');
         } else {
             results.push('SnapRAID skipped (no parity disks configured)');
@@ -214,52 +261,87 @@ exclude .fseventsd
 
         // 4. Configure MergerFS
         const mergerfsSource = dataMounts.map(d => d.mountPoint).join(':');
-        execSync(`sudo mkdir -p ${POOL_MOUNT}`, { encoding: 'utf8' });
-        execSync(`sudo umount ${POOL_MOUNT} 2>/dev/null || true`, { encoding: 'utf8' });
+        execFileSync('sudo', ['mkdir', '-p', POOL_MOUNT], { encoding: 'utf8', timeout: 10000 });
+        try {
+            execFileSync('sudo', ['umount', POOL_MOUNT], { encoding: 'utf8', timeout: 30000 });
+        } catch (e) {
+            // May not be mounted
+        }
 
         const mergerfsOpts = 'defaults,allow_other,nonempty,use_ino,cache.files=partial,dropcacheonclose=true,category.create=mfs';
-        execSync(`sudo mergerfs -o ${mergerfsOpts} ${mergerfsSource} ${POOL_MOUNT}`, { encoding: 'utf8' });
+        execFileSync('sudo', ['mergerfs', '-o', mergerfsOpts, mergerfsSource, POOL_MOUNT], { encoding: 'utf8', timeout: 60000 });
         results.push(`MergerFS pool mounted at ${POOL_MOUNT}`);
 
         // Set permissions
         try {
-            execSync(`sudo chown -R :sambashare ${POOL_MOUNT}`, { encoding: 'utf8' });
-            execSync(`sudo chmod -R 2775 ${POOL_MOUNT}`, { encoding: 'utf8' });
+            execFileSync('sudo', ['chown', '-R', ':sambashare', POOL_MOUNT], { encoding: 'utf8', timeout: 60000 });
+            execFileSync('sudo', ['chmod', '-R', '2775', POOL_MOUNT], { encoding: 'utf8', timeout: 60000 });
             results.push('Samba permissions configured');
         } catch (e) {
             results.push('Warning: Could not set Samba permissions');
         }
 
         // 5. Update /etc/fstab
+        // SECURITY: Build fstab entries with proper UUIDs fetched separately
         let fstabEntries = '\n# HomePiNAS Storage Configuration\n';
 
-        dataMounts.forEach(d => {
-            fstabEntries += `UUID=$(sudo blkid -s UUID -o value /dev/${d.partition}) ${d.mountPoint} ext4 defaults,nofail 0 2\n`;
-        });
+        for (const d of dataMounts) {
+            try {
+                const uuid = execFileSync('sudo', ['blkid', '-s', 'UUID', '-o', 'value', `/dev/${d.partition}`], 
+                    { encoding: 'utf8', timeout: 10000 }).trim();
+                if (uuid) {
+                    fstabEntries += `UUID=${uuid} ${d.mountPoint} ext4 defaults,nofail 0 2\n`;
+                }
+            } catch (e) {
+                // Skip if UUID can't be retrieved
+            }
+        }
 
-        parityMounts.forEach(p => {
-            fstabEntries += `UUID=$(sudo blkid -s UUID -o value /dev/${p.partition}) ${p.mountPoint} ext4 defaults,nofail 0 2\n`;
-        });
+        for (const p of parityMounts) {
+            try {
+                const uuid = execFileSync('sudo', ['blkid', '-s', 'UUID', '-o', 'value', `/dev/${p.partition}`],
+                    { encoding: 'utf8', timeout: 10000 }).trim();
+                if (uuid) {
+                    fstabEntries += `UUID=${uuid} ${p.mountPoint} ext4 defaults,nofail 0 2\n`;
+                }
+            } catch (e) {
+                // Skip if UUID can't be retrieved
+            }
+        }
 
-        cacheMounts.forEach(c => {
-            fstabEntries += `UUID=$(sudo blkid -s UUID -o value /dev/${c.partition}) ${c.mountPoint} ext4 defaults,nofail 0 2\n`;
-        });
+        for (const c of cacheMounts) {
+            try {
+                const uuid = execFileSync('sudo', ['blkid', '-s', 'UUID', '-o', 'value', `/dev/${c.partition}`],
+                    { encoding: 'utf8', timeout: 10000 }).trim();
+                if (uuid) {
+                    fstabEntries += `UUID=${uuid} ${c.mountPoint} ext4 defaults,nofail 0 2\n`;
+                }
+            } catch (e) {
+                // Skip if UUID can't be retrieved
+            }
+        }
 
         fstabEntries += `${mergerfsSource} ${POOL_MOUNT} fuse.mergerfs ${mergerfsOpts},nofail 0 0\n`;
 
-        execSync(`sudo sed -i '/# HomePiNAS Storage/,/^$/d' /etc/fstab`, { encoding: 'utf8' });
-        execSync(`echo '${fstabEntries}' | sudo tee -a /etc/fstab`, { shell: '/bin/bash' });
+        // SECURITY: Write to temp file, then use sudo to append
+        const tempFstabFile = '/tmp/homepinas-fstab-temp';
+        fs.writeFileSync(tempFstabFile, fstabEntries, 'utf8');
+        
+        // Remove old HomePiNAS entries and append new ones
+        execSync(`sudo sed -i '/# HomePiNAS Storage/,/^$/d' /etc/fstab`, { encoding: 'utf8', timeout: 10000 });
+        execFileSync('sudo', ['sh', '-c', `cat ${tempFstabFile} >> /etc/fstab`], { encoding: 'utf8', timeout: 10000 });
+        fs.unlinkSync(tempFstabFile);
         results.push('Updated /etc/fstab for persistence');
 
         results.push('Starting initial SnapRAID sync (this may take a while)...');
 
-        // Save storage config
+        // Save storage config (use validated disks)
         const data = getData();
-        data.storageConfig = disks.map(d => ({ id: d.id, role: d.role }));
+        data.storageConfig = validatedDisks.map(d => ({ id: d.id, role: d.role }));
         data.poolConfigured = true;
         saveData(data);
 
-        logSecurityEvent('STORAGE_CONFIGURED', { disks: disks.map(d => d.id), dataCount: dataDisks.length, parityCount: parityDisks.length }, req.ip);
+        logSecurityEvent('STORAGE_CONFIGURED', { disks: validatedDisks.map(d => d.id), dataCount: dataDisks.length, parityCount: parityDisks.length }, req.ip);
 
         res.json({
             success: true,
@@ -276,8 +358,17 @@ exclude .fseventsd
 
 // Run SnapRAID sync
 router.post('/snapraid/sync', requireAuth, async (req, res) => {
+    // SECURITY: Check for stale running state (timeout after 6 hours)
+    const MAX_SYNC_TIME = 6 * 60 * 60 * 1000; // 6 hours
     if (snapraidSyncStatus.running) {
-        return res.status(409).json({ error: 'Sync already in progress', progress: snapraidSyncStatus.progress });
+        const elapsed = Date.now() - snapraidSyncStatus.startTime;
+        if (elapsed > MAX_SYNC_TIME) {
+            // Force reset stale state
+            logSecurityEvent('SNAPRAID_SYNC_TIMEOUT_RESET', { elapsed }, '');
+            snapraidSyncStatus.running = false;
+        } else {
+            return res.status(409).json({ error: 'Sync already in progress', progress: snapraidSyncStatus.progress });
+        }
     }
 
     snapraidSyncStatus = {
@@ -288,8 +379,8 @@ router.post('/snapraid/sync', requireAuth, async (req, res) => {
         error: null
     };
 
+    // SECURITY: Use spawn without shell option
     const syncProcess = spawn('sudo', ['snapraid', 'sync', '-v'], {
-        shell: '/bin/bash',
         stdio: ['pipe', 'pipe', 'pipe']
     });
 
