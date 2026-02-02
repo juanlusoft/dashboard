@@ -7,7 +7,7 @@
 set -e
 
 # Version - CHANGE THIS FOR EACH RELEASE
-VERSION="2.2.1"
+VERSION="2.2.2"
 
 # Colors
 RED='\033[0;31m'
@@ -726,7 +726,24 @@ fi
 
 # Build application
 echo -e "${BLUE}Installing npm dependencies...${NC}"
-npm install
+
+# Ensure native module compilation dependencies
+if command -v apt-get &> /dev/null; then
+    apt-get install -y $APT_OPTS make g++ python3 2>/dev/null || true
+fi
+
+# Install with verbose logging for native modules
+npm install --no-optional 2>&1 | tee /tmp/npm-install.log
+
+# Verify node-pty compiled successfully
+if node -e "require('node-pty')" 2>/dev/null; then
+    echo -e "${GREEN}Terminal support (node-pty) installed successfully${NC}"
+else
+    echo -e "${YELLOW}Warning: node-pty compilation may have failed. Terminal features may not work.${NC}"
+    echo -e "${YELLOW}Check /tmp/npm-install.log for details.${NC}"
+    # Try to rebuild node-pty specifically
+    npm rebuild node-pty 2>&1 || true
+fi
 
 # Generate self-signed SSL certificates for HTTPS
 echo -e "${BLUE}Generating SSL certificates...${NC}"
@@ -1198,6 +1215,13 @@ echo -e "${GREEN}=========================================${NC}"
 echo -e ""
 IP_ADDR=$(hostname -I | awk '{print $1}')
 CURRENT_HOSTNAME=$(hostname)
+echo -e ""
+echo -e "${GREEN}╔═══════════════════════════════════════════════════════════╗${NC}"
+echo -e "${GREEN}║                                                           ║${NC}"
+echo -e "${GREEN}║   Web HomePiNAS: ${CYAN}https://${IP_ADDR}:3001${NC}${GREEN}                ║${NC}"
+echo -e "${GREEN}║                                                           ║${NC}"
+echo -e "${GREEN}╚═══════════════════════════════════════════════════════════╝${NC}"
+echo -e ""
 echo -e "${YELLOW}Dashboard Access:${NC}"
 echo -e "  ${CYAN}mDNS (Local):${NC}      ${GREEN}https://${CURRENT_HOSTNAME}.local:3001${NC}"
 echo -e "  HTTPS (IP):         ${GREEN}https://${IP_ADDR}:3001${NC}"

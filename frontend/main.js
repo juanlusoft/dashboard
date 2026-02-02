@@ -1462,13 +1462,41 @@ async function renderDockerManager() {
             // Notes section
             const notesDiv = document.createElement('div');
             notesDiv.className = 'docker-notes';
-            notesDiv.innerHTML = `
-                <div class="docker-notes-header">
-                    <span>📝 ${t('docker.notes', 'Notas')}</span>
-                    <button class="btn-sm" style="padding: 4px 8px; font-size: 0.7rem;" onclick="saveContainerNotes('${container.id}', this.parentElement.nextElementSibling.value).then(ok => ok && alert('${t('common.success', 'Guardado')}'))">${t('docker.saveNote', 'Guardar')}</button>
-                </div>
-                <textarea class="docker-notes-input" placeholder="${t('docker.addNote', 'Añadir notas, contraseñas, etc...')}">${escapeHtml(container.notes || '')}</textarea>
-            `;
+            
+            const notesHeader = document.createElement('div');
+            notesHeader.className = 'docker-notes-header';
+            
+            const notesLabel = document.createElement('span');
+            notesLabel.textContent = `📝 ${t('docker.notes', 'Notas')}`;
+            
+            const saveNoteBtn = document.createElement('button');
+            saveNoteBtn.className = 'btn-sm';
+            saveNoteBtn.style.cssText = 'padding: 4px 8px; font-size: 0.7rem;';
+            saveNoteBtn.textContent = t('docker.saveNote', 'Guardar');
+            
+            notesHeader.appendChild(notesLabel);
+            notesHeader.appendChild(saveNoteBtn);
+            
+            const notesTextarea = document.createElement('textarea');
+            notesTextarea.className = 'docker-notes-input';
+            notesTextarea.placeholder = t('docker.addNote', 'Añadir notas, contraseñas, etc...');
+            notesTextarea.value = container.notes || '';
+            
+            // Save button click handler
+            saveNoteBtn.addEventListener('click', async () => {
+                const ok = await saveContainerNotes(container.id, notesTextarea.value);
+                if (ok) {
+                    saveNoteBtn.textContent = '✓ ' + t('common.saved', 'Guardado');
+                    setTimeout(() => {
+                        saveNoteBtn.textContent = t('docker.saveNote', 'Guardar');
+                    }, 2000);
+                } else {
+                    alert(t('common.error', 'Error al guardar'));
+                }
+            });
+            
+            notesDiv.appendChild(notesHeader);
+            notesDiv.appendChild(notesTextarea);
             card.appendChild(notesDiv);
 
             containerGrid.appendChild(card);
@@ -1879,7 +1907,7 @@ async function openEditComposeModal(composeName) {
         <div class="glass-card modal-content" style="max-width: 700px; max-height: 80vh; overflow-y: auto;">
             <header class="modal-header">
                 <h3>✏️ ${t('docker.editCompose', 'Editar Compose')}: ${escapeHtml(composeName)}</h3>
-                <button class="btn-close" onclick="this.closest('.modal').remove()">&times;</button>
+                <button id="close-edit-compose" class="btn-close">&times;</button>
             </header>
             <div style="padding: 20px;">
                 <textarea id="edit-compose-content" style="
@@ -1889,7 +1917,7 @@ async function openEditComposeModal(composeName) {
                 ">${escapeHtml(content)}</textarea>
             </div>
             <div class="modal-footer" style="display: flex; gap: 10px; padding: 15px;">
-                <button class="btn-primary" style="background: var(--text-dim);" onclick="this.closest('.modal').remove()">
+                <button id="cancel-edit-compose" class="btn-primary" style="background: var(--text-dim);">
                     ${t('common.cancel', 'Cancelar')}
                 </button>
                 <button id="save-edit-compose" class="btn-primary">
@@ -1903,6 +1931,16 @@ async function openEditComposeModal(composeName) {
     `;
 
     document.body.appendChild(modal);
+
+    // Close handlers
+    const closeModal = () => modal.remove();
+    document.getElementById('close-edit-compose').addEventListener('click', closeModal);
+    document.getElementById('cancel-edit-compose').addEventListener('click', closeModal);
+
+    // Click outside to close
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
 
     const saveHandler = async (andRun) => {
         const newContent = document.getElementById('edit-compose-content').value;
@@ -2775,11 +2813,51 @@ async function renderTerminalView() {
     allShortcuts.forEach(shortcut => {
         const card = document.createElement('div');
         card.className = 'glass-card shortcut-card';
-        card.innerHTML = `
-            <div class="icon">${escapeHtml(shortcut.icon || '💻')}</div>
-            <div class="name">${escapeHtml(shortcut.name)}</div>
-            <div class="description">${escapeHtml(shortcut.description || shortcut.command)}</div>
-        `;
+        
+        const iconDiv = document.createElement('div');
+        iconDiv.className = 'icon';
+        iconDiv.textContent = shortcut.icon || '💻';
+        
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'name';
+        nameDiv.textContent = shortcut.name;
+        
+        const descDiv = document.createElement('div');
+        descDiv.className = 'description';
+        descDiv.textContent = shortcut.description || shortcut.command;
+        
+        card.appendChild(iconDiv);
+        card.appendChild(nameDiv);
+        card.appendChild(descDiv);
+        
+        // Add delete button for custom shortcuts
+        if (!shortcut.isDefault && shortcut.id) {
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'shortcut-delete-btn';
+            deleteBtn.innerHTML = '🗑️';
+            deleteBtn.title = t('common.delete', 'Eliminar');
+            deleteBtn.addEventListener('click', async (e) => {
+                e.stopPropagation(); // Prevent opening terminal
+                if (confirm(t('shortcuts.confirmDelete', '¿Eliminar este acceso directo?'))) {
+                    try {
+                        const res = await authFetch(`${API_BASE}/shortcuts/${shortcut.id}`, {
+                            method: 'DELETE'
+                        });
+                        if (res.ok) {
+                            renderContent('terminal');
+                        } else {
+                            const data = await res.json();
+                            alert(data.error || 'Error');
+                        }
+                    } catch (err) {
+                        console.error('Delete shortcut error:', err);
+                        alert(t('common.error', 'Error'));
+                    }
+                }
+            });
+            card.appendChild(deleteBtn);
+        }
+        
         card.addEventListener('click', () => openTerminal(shortcut.command, shortcut.name));
         grid.appendChild(card);
     });
@@ -2877,14 +2955,23 @@ function openTerminal(command = 'bash', title = 'Terminal') {
             }
         };
 
-        terminalWs.onclose = () => {
+        terminalWs.onclose = (event) => {
             statusEl.textContent = t('terminal.disconnected', 'Desconectado');
             document.querySelector('.terminal-status').classList.add('disconnected');
+            
+            // Show helpful message if connection failed immediately
+            if (event.code === 1006) {
+                terminal.write('\r\n\x1b[31m[Error: No se pudo conectar al servidor de terminal]\x1b[0m\r\n');
+                terminal.write('\x1b[33mPosibles causas:\x1b[0m\r\n');
+                terminal.write('  - El módulo node-pty no está instalado correctamente\r\n');
+                terminal.write('  - El servidor necesita reiniciarse después de la instalación\r\n');
+                terminal.write('\x1b[33mSolución: sudo systemctl restart homepinas\x1b[0m\r\n');
+            }
         };
 
         terminalWs.onerror = (err) => {
             console.error('Terminal WebSocket error:', err);
-            statusEl.textContent = 'Error de conexión';
+            statusEl.textContent = t('terminal.error', 'Error de conexión');
         };
 
         // Send input to WebSocket
@@ -2967,7 +3054,7 @@ function openAddShortcutModal() {
         <div class="glass-card modal-content" style="max-width: 500px;">
             <header class="modal-header">
                 <h3>${t('shortcuts.addShortcut', 'Añadir Acceso Directo')}</h3>
-                <button class="btn-close" onclick="this.closest('.modal').remove()">&times;</button>
+                <button id="close-shortcut-modal" class="btn-close">&times;</button>
             </header>
             <form id="shortcut-form">
                 <div class="input-group">
@@ -2988,7 +3075,7 @@ function openAddShortcutModal() {
                 </div>
                 <input type="hidden" id="shortcut-icon" value="💻">
                 <div class="modal-footer" style="display: flex; gap: 10px;">
-                    <button type="button" class="btn-primary" style="background: var(--text-dim);" onclick="this.closest('.modal').remove()">
+                    <button type="button" id="cancel-shortcut-modal" class="btn-primary" style="background: var(--text-dim);">
                         ${t('common.cancel', 'Cancelar')}
                     </button>
                     <button type="submit" class="btn-primary">${t('common.save', 'Guardar')}</button>
@@ -2998,6 +3085,14 @@ function openAddShortcutModal() {
     `;
 
     document.body.appendChild(modal);
+    
+    // Close handlers
+    const closeModal = () => modal.remove();
+    document.getElementById('close-shortcut-modal').addEventListener('click', closeModal);
+    document.getElementById('cancel-shortcut-modal').addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
 
     // Populate icon picker
     const icons = ['💻', '📊', '📁', '📝', '🐳', '📜', '💾', '🧠', '⚙️', '🔧', '📦', '🌐', '🔒', '📡', '⏱️', '🎯', '🚀', '💡', '🔍', '📈'];

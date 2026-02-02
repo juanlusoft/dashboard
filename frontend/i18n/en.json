@@ -160,7 +160,8 @@
     "connecting": "Connecting...",
     "connected": "Connected",
     "disconnected": "Disconnected",
-    "reconnect": "Reconnect"
+    "reconnect": "Reconnect",
+    "error": "Connection error"
   },
   "shortcuts": {
     "title": "Shortcuts",
@@ -191,6 +192,7 @@
     "loading": "Loading...",
     "error": "Error",
     "success": "Success",
+    "saved": "Saved",
     "save": "Save",
     "cancel": "Cancel",
     "close": "Close",

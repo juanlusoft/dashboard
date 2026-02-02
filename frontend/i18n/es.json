@@ -160,7 +160,8 @@
     "connecting": "Conectando...",
     "connected": "Conectado",
     "disconnected": "Desconectado",
-    "reconnect": "Reconectar"
+    "reconnect": "Reconectar",
+    "error": "Error de conexión"
   },
   "shortcuts": {
     "title": "Accesos Directos",
@@ -191,6 +192,7 @@
     "loading": "Cargando...",
     "error": "Error",
     "success": "Éxito",
+    "saved": "Guardado",
     "save": "Guardar",
     "cancel": "Cancelar",
     "close": "Cerrar",

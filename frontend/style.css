@@ -2146,6 +2146,33 @@ input:checked+.slider:before {
     color: var(--primary);
 }
 
+/* Shortcut delete button */
+.shortcut-card {
+    position: relative;
+}
+
+.shortcut-delete-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(239, 68, 68, 0.2);
+    border: none;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease, background 0.2s ease;
+}
+
+.shortcut-card:hover .shortcut-delete-btn {
+    opacity: 1;
+}
+
+.shortcut-delete-btn:hover {
+    background: rgba(239, 68, 68, 0.5);
+}
+
 /* Docker Enhanced Styles */
 .docker-ports {
     display: flex;
