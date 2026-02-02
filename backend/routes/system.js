@@ -351,8 +351,24 @@ router.get('/disks', async (req, res) => {
 
                 let temp = null;
                 let serial = layoutInfo.serial || null;
+                let smartModel = null;
+                let smartType = null;
+                
                 try {
                     const smartOutput = execSync(`sudo smartctl -i -A /dev/${dev.name} 2>/dev/null`, { encoding: 'utf8', timeout: 5000 });
+
+                    // Get model from smartctl (more reliable for USB adapters)
+                    const modelMatch = smartOutput.match(/(?:Device Model|Model Number|Product):\s*(.+)/i);
+                    if (modelMatch) {
+                        smartModel = modelMatch[1].trim();
+                    }
+
+                    // Detect NVMe from smartctl output
+                    if (smartOutput.includes('NVMe') || smartOutput.match(/Model Number:/i)) {
+                        smartType = 'NVMe';
+                    } else if (smartOutput.match(/Solid State|SSD/i) || smartOutput.match(/Rotation Rate:.*Solid State/i)) {
+                        smartType = 'SSD';
+                    }
 
                     const tempMatch = smartOutput.match(/Temperature.*?(\d+)\s*(Celsius|C)/i) ||
                                      smartOutput.match(/194\s+Temperature.*?\s(\d+)(\s|$)/);
@@ -371,12 +387,23 @@ router.get('/disks', async (req, res) => {
                     }
                 } catch (e) {}
 
+                // Use smartctl data if lsblk data looks wrong
+                const lsblkModel = layoutInfo.model || layoutInfo.name || '';
+                const finalModel = (smartModel && (lsblkModel.length < 3 || /^\d+$/.test(lsblkModel))) 
+                    ? smartModel 
+                    : (lsblkModel || smartModel || 'Unknown Drive');
+                
+                // Use smartctl type if detected
+                if (smartType) {
+                    diskType = smartType;
+                }
+
                 return {
                     id: dev.name,
                     device: dev.device,
                     type: diskType,
                     size: sizeGB + 'GB',
-                    model: layoutInfo.model || layoutInfo.name || 'Unknown Drive',
+                    model: finalModel,
                     serial: serial || 'N/A',
                     temp: temp || (35 + Math.floor(Math.random() * 10)),
                     usage: 0
