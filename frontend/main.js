@@ -5599,28 +5599,10 @@ function showApproveDialog(agent) {
     overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);';
     overlay.id = 'ab-approve-overlay';
 
-    // Build backup type options based on agent OS
-    const isLinux = agent.os === 'linux';
-    const isWindows = agent.os === 'win32';
-    const isMac = agent.os === 'darwin';
-    let typeOptions = '';
-    if (isLinux) {
-        typeOptions = `
-            <option value="image">💽 Imagen completa (partclone/dd)</option>
-            <option value="files" selected>📁 Archivos (rsync)</option>`;
-    } else if (isWindows) {
-        typeOptions = `
-            <option value="image" selected>💽 Imagen completa (wbadmin)</option>
-            <option value="files">📁 Archivos (robocopy)</option>`;
-    } else if (isMac) {
-        typeOptions = `
-            <option value="image">💽 Imagen completa (asr)</option>
-            <option value="files" selected>📁 Archivos (rsync)</option>`;
-    } else {
-        typeOptions = `
-            <option value="image">💽 Imagen completa</option>
-            <option value="files">📁 Solo archivos</option>`;
-    }
+    // Auto-detect platform from agent OS
+    let defaultPlatform = 'linux';
+    if (agent.os === 'win32') defaultPlatform = 'windows';
+    else if (agent.os === 'darwin') defaultPlatform = 'mac';
 
     overlay.innerHTML = `
         <div style="background: var(--bg-card, #1a1a2e); border-radius: 16px; padding: 32px; max-width: 480px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.5); border: 1px solid var(--border);">
@@ -5629,9 +5611,19 @@ function showApproveDialog(agent) {
             
             <div style="display: flex; flex-direction: column; gap: 16px;">
                 <div>
+                    <label style="font-size: 0.85rem; font-weight: 500; display: block; margin-bottom: 6px;">Plataforma</label>
+                    <select id="ab-approve-platform" style="width: 100%; padding: 10px 12px; background: var(--bg-hover); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 0.95rem;">
+                        <option value="windows" ${defaultPlatform === 'windows' ? 'selected' : ''}>🪟 Windows</option>
+                        <option value="linux" ${defaultPlatform === 'linux' ? 'selected' : ''}>🐧 Linux</option>
+                        <option value="mac" ${defaultPlatform === 'mac' ? 'selected' : ''}>🍎 Mac</option>
+                        <option value="vm">🖥️ Máquina virtual</option>
+                    </select>
+                </div>
+                <div>
                     <label style="font-size: 0.85rem; font-weight: 500; display: block; margin-bottom: 6px;">Tipo de backup</label>
                     <select id="ab-approve-type" style="width: 100%; padding: 10px 12px; background: var(--bg-hover); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 0.95rem;">
-                        ${typeOptions}
+                        <option value="image">💽 Imagen completa</option>
+                        <option value="files">📁 Solo archivos</option>
                     </select>
                 </div>
                 <div>
@@ -5669,6 +5661,7 @@ function showApproveDialog(agent) {
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
     document.getElementById('ab-approve-confirm').addEventListener('click', async () => {
+        const platform = document.getElementById('ab-approve-platform').value;
         const backupType = document.getElementById('ab-approve-type').value;
         const schedule = document.getElementById('ab-approve-schedule').value;
         const retention = parseInt(document.getElementById('ab-approve-retention').value);
@@ -5681,7 +5674,7 @@ function showApproveDialog(agent) {
             const res = await authFetch(`${API_BASE}/active-backup/pending/${agent.id}/approve`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ backupType, schedule, retention }),
+                body: JSON.stringify({ platform, backupType, schedule, retention }),
             });
             const data = await res.json();
             if (data.success) {
