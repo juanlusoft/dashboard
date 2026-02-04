@@ -52,39 +52,20 @@ class BackupManager {
   }
 
   async _windowsImageBackup(sharePath) {
-    // wbadmin requires UNC path directly, not mapped drive letters
-    // First register credentials with net use (without drive letter)
-    try {
-      await execAsync(`net use ${sharePath} /delete /y 2>nul`, { shell: 'cmd.exe' });
-    } catch (e) {}
+    // wbadmin handles its own credentials via -user/-password flags
+    const cmd = `wbadmin start backup -backupTarget:${sharePath} -user:homepinas -password:homepinas -include:C: -allCritical -vssFull -quiet`;
 
-    try {
-      await execAsync(`net use ${sharePath} /user:homepinas homepinas /persistent:no`, { shell: 'cmd.exe' });
-    } catch (e) {
-      throw new Error(`No se pudo conectar al share ${sharePath}: ${e.message}`);
-    }
+    const result = await execAsync(cmd, {
+      shell: 'cmd.exe',
+      timeout: 7200000, // 2 hours max
+      windowsHide: true,
+    });
 
-    // Run wbadmin with UNC path directly
-    const cmd = `wbadmin start backup -backupTarget:${sharePath} -include:C: -allCritical -quiet`;
-
-    try {
-      const result = await execAsync(cmd, {
-        shell: 'cmd.exe',
-        timeout: 7200000, // 2 hours max
-        windowsHide: true,
-      });
-
-      return {
-        type: 'image',
-        output: result.stdout,
-        timestamp: new Date().toISOString(),
-      };
-    } finally {
-      // Cleanup credentials
-      try {
-        await execAsync(`net use ${sharePath} /delete /y 2>nul`, { shell: 'cmd.exe' });
-      } catch (e) {}
-    }
+    return {
+      type: 'image',
+      output: result.stdout,
+      timestamp: new Date().toISOString(),
+    };
   }
 
   async _windowsFileBackup(sharePath, paths) {
