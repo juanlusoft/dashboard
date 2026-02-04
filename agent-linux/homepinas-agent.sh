@@ -428,15 +428,21 @@ report_result() {
 # ── Install / Uninstall ─────────────────────────────────────────
 install_service() {
   local script_path
-  script_path=$(readlink -f "$0")
+  script_path=$(readlink -f "$0" 2>/dev/null || echo "")
 
   # Install dependencies
   log "Instalando dependencias..."
   apt-get update -qq
   apt-get install -y -qq curl cifs-utils rsync avahi-utils >/dev/null 2>&1 || true
 
-  # Copy script
-  cp "$script_path" /usr/local/bin/homepinas-agent
+  # Copy script — if piped (stdin), download fresh; otherwise copy the file
+  if [[ -z "$script_path" || "$script_path" == *"/bash" || ! -f "$script_path" ]]; then
+    log "Descargando agente..."
+    curl -fsSL "https://raw.githubusercontent.com/juanlusoft/homepinas-v2/main/agent-linux/homepinas-agent.sh" \
+      -o /usr/local/bin/homepinas-agent
+  else
+    cp "$script_path" /usr/local/bin/homepinas-agent
+  fi
   chmod +x /usr/local/bin/homepinas-agent
 
   # Create systemd service
