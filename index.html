@@ -164,6 +164,10 @@
                         <input type="password" id="password" required placeholder=" ">
                         <label for="password" data-i18n="auth.securityKey">Clave de Seguridad</label>
                     </div>
+                    <div id="totp-input-group" class="input-group" style="display: none;">
+                        <input type="text" id="login-totp-code" maxlength="6" inputmode="numeric" pattern="[0-9]*" placeholder=" ">
+                        <label for="login-totp-code">🔐 Código 2FA</label>
+                    </div>
                     <button type="submit" class="btn-primary" data-i18n="auth.accessGateway">Acceder al Sistema</button>
                     <button type="button" id="reset-setup-btn" class="btn-link"
                         style="margin-top: 15px; color: var(--text-dim); background: none; border: none; cursor: pointer; font-size: 0.8rem;"

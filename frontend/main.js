@@ -689,16 +689,48 @@ if (saveStorageBtn) {
 
 // Authentication
 if (loginForm) {
+    // Track pending 2FA state
+    let pending2FAToken = null;
+
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const username = document.getElementById('username').value.trim();
         const password = document.getElementById('password').value;
+        const totpCode = document.getElementById('login-totp-code')?.value.trim();
         const btn = e.target.querySelector('button[type="submit"]');
+        const totpGroup = document.getElementById('totp-input-group');
 
         btn.textContent = 'Hardware Auth...';
         btn.disabled = true;
 
         try {
+            // If we have a pending 2FA token, complete 2FA verification
+            if (pending2FAToken && totpCode) {
+                const res = await fetch(`${API_BASE}/login/2fa`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pendingToken: pending2FAToken, totpCode })
+                });
+                const data = await res.json();
+
+                if (!res.ok || !data.success) {
+                    alert(data.message || 'Código 2FA incorrecto');
+                    btn.textContent = 'Verificar 2FA';
+                    btn.disabled = false;
+                    return;
+                }
+
+                // 2FA verified - save session and proceed
+                saveSession(data.sessionId, data.csrfToken);
+                state.isAuthenticated = true;
+                state.user = data.user;
+                pending2FAToken = null;
+                if (totpGroup) totpGroup.style.display = 'none';
+                switchView('dashboard');
+                return;
+            }
+
+            // Regular login
             const res = await fetch(`${API_BASE}/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -713,7 +745,19 @@ if (loginForm) {
                 return;
             }
 
-            // Save session and CSRF token
+            // Check if 2FA is required
+            if (data.requires2FA) {
+                pending2FAToken = data.pendingToken;
+                if (totpGroup) {
+                    totpGroup.style.display = 'block';
+                    document.getElementById('login-totp-code').focus();
+                }
+                btn.textContent = 'Verificar 2FA';
+                btn.disabled = false;
+                return;
+            }
+
+            // No 2FA - save session and proceed
             if (data.sessionId) {
                 saveSession(data.sessionId, data.csrfToken);
             }
