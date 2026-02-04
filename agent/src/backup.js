@@ -52,20 +52,37 @@ class BackupManager {
   }
 
   async _windowsImageBackup(sharePath) {
-    // wbadmin handles its own credentials via -user/-password flags
-    const cmd = `wbadmin start backup -backupTarget:${sharePath} -user:homepinas -password:homepinas -include:C: -allCritical -vssFull -quiet`;
+    // Authenticate to share first (wbadmin on client Windows doesn't support -user/-password)
+    try {
+      await execAsync(`net use ${sharePath} /delete /y 2>nul`, { shell: 'cmd.exe' });
+    } catch (e) {}
 
-    const result = await execAsync(cmd, {
-      shell: 'cmd.exe',
-      timeout: 7200000, // 2 hours max
-      windowsHide: true,
-    });
+    try {
+      await execAsync(`net use ${sharePath} /user:homepinas homepinas /persistent:no`, { shell: 'cmd.exe' });
+    } catch (e) {
+      throw new Error(`No se pudo conectar al share ${sharePath}: ${e.message}`);
+    }
 
-    return {
-      type: 'image',
-      output: result.stdout,
-      timestamp: new Date().toISOString(),
-    };
+    const cmd = `wbadmin start backup -backupTarget:${sharePath} -include:C: -allCritical -quiet`;
+
+    try {
+      const result = await execAsync(cmd, {
+        shell: 'cmd.exe',
+        timeout: 7200000, // 2 hours max
+        windowsHide: true,
+      });
+
+      return {
+        type: 'image',
+        output: result.stdout,
+        timestamp: new Date().toISOString(),
+      };
+    } finally {
+      // Cleanup
+      try {
+        await execAsync(`net use ${sharePath} /delete /y 2>nul`, { shell: 'cmd.exe' });
+      } catch (e) {}
+    }
   }
 
   async _windowsFileBackup(sharePath, paths) {
