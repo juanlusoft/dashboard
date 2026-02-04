@@ -26,6 +26,174 @@ if (!fs.existsSync(BACKUP_BASE)) {
   try { fs.mkdirSync(BACKUP_BASE, { recursive: true }); } catch(e) {}
 }
 
+const crypto = require('crypto');
+
+// ══════════════════════════════════════════
+// AGENT ENDPOINTS (no auth — use agentToken)
+// ══════════════════════════════════════════
+
+/**
+ * POST /agent/register - Agent announces itself to the NAS
+ * No auth required — agent just says "I exist"
+ */
+router.post('/agent/register', (req, res) => {
+  const { hostname, ip, os: agentOS, mac } = req.body;
+  if (!hostname) return res.status(400).json({ error: 'hostname is required' });
+
+  const data = getData();
+  if (!data.activeBackup) data.activeBackup = { devices: [], pendingAgents: [] };
+  if (!data.activeBackup.pendingAgents) data.activeBackup.pendingAgents = [];
+
+  // Check if agent already registered (by MAC or hostname+ip)
+  const existing = data.activeBackup.devices.find(d => d.agentMac === mac || (d.agentHostname === hostname && d.ip === ip));
+  if (existing) {
+    return res.json({
+      success: true,
+      agentId: existing.id,
+      agentToken: existing.agentToken,
+      status: existing.status || 'approved',
+    });
+  }
+
+  // Check if already pending
+  const pending = data.activeBackup.pendingAgents.find(a => a.mac === mac || (a.hostname === hostname && a.ip === ip));
+  if (pending) {
+    return res.json({
+      success: true,
+      agentId: pending.id,
+      agentToken: pending.agentToken,
+      status: 'pending',
+    });
+  }
+
+  // New agent — add to pending
+  const agentId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const agentToken = crypto.randomBytes(32).toString('hex');
+
+  const agent = {
+    id: agentId,
+    agentToken,
+    hostname,
+    ip: ip || req.ip,
+    os: agentOS || 'unknown',
+    mac: mac || null,
+    registeredAt: new Date().toISOString(),
+  };
+
+  data.activeBackup.pendingAgents.push(agent);
+  saveData(data);
+
+  console.log(`[Active Backup] New agent registered: ${hostname} (${ip || req.ip})`);
+
+  res.json({
+    success: true,
+    agentId,
+    agentToken,
+    status: 'pending',
+  });
+});
+
+/**
+ * GET /agent/poll - Agent checks for config and tasks
+ * Auth via X-Agent-Token header
+ */
+router.get('/agent/poll', (req, res) => {
+  const token = req.headers['x-agent-token'];
+  if (!token) return res.status(401).json({ error: 'Missing agent token' });
+
+  const data = getData();
+  if (!data.activeBackup) return res.status(404).json({ error: 'Not configured' });
+
+  // Check if still pending
+  const pending = (data.activeBackup.pendingAgents || []).find(a => a.agentToken === token);
+  if (pending) {
+    return res.json({ status: 'pending', message: 'Esperando aprobación del administrador' });
+  }
+
+  // Check approved device
+  const device = data.activeBackup.devices.find(d => d.agentToken === token);
+  if (!device) return res.status(404).json({ error: 'Agent not found' });
+
+  // Build response with config
+  const response = {
+    status: 'approved',
+    config: {
+      deviceId: device.id,
+      deviceName: device.name,
+      backupType: device.backupType,
+      schedule: device.schedule,
+      retention: device.retention,
+      paths: device.paths || [],
+      enabled: device.enabled,
+    },
+    lastBackup: device.lastBackup,
+    lastResult: device.lastResult,
+  };
+
+  // Include Samba credentials for image backups
+  if (device.backupType === 'image' && device.sambaShare) {
+    response.config.sambaShare = device.sambaShare;
+    response.config.sambaUser = device.sambaUser || 'homepinas';
+    response.config.sambaPass = device.sambaPass || '';
+    response.config.nasAddress = getLocalIPs()[0] || req.hostname;
+  }
+
+  // Check if there's a pending trigger (manual backup from dashboard)
+  if (device._triggerBackup) {
+    response.action = 'backup';
+    // Clear the trigger
+    device._triggerBackup = false;
+    saveData(data);
+  }
+
+  res.json(response);
+});
+
+/**
+ * POST /agent/report - Agent reports backup result
+ * Auth via X-Agent-Token header
+ */
+router.post('/agent/report', (req, res) => {
+  const token = req.headers['x-agent-token'];
+  if (!token) return res.status(401).json({ error: 'Missing agent token' });
+
+  const { status, duration, error: errorMsg, size } = req.body;
+
+  const data = getData();
+  if (!data.activeBackup) return res.status(404).json({ error: 'Not configured' });
+
+  const device = data.activeBackup.devices.find(d => d.agentToken === token);
+  if (!device) return res.status(404).json({ error: 'Agent not found' });
+
+  device.lastBackup = new Date().toISOString();
+  device.lastResult = status === 'success' ? 'success' : 'failed';
+  device.lastError = status === 'success' ? null : (errorMsg || 'Unknown error');
+  device.lastDuration = duration || null;
+
+  saveData(data);
+
+  if (status !== 'success') {
+    notifyBackupFailure(device, errorMsg || 'Unknown error');
+  }
+
+  logSecurityEvent(`active_backup_agent_${status}`, 'agent', { device: device.name, duration });
+
+  res.json({ success: true });
+});
+
+// Helper: get local IPs for NAS address
+function getLocalIPs() {
+  const nets = os.networkInterfaces();
+  const ips = [];
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === 'IPv4' && !net.internal) ips.push(net.address);
+    }
+  }
+  return ips;
+}
+
+// All remaining routes require auth
 router.use(requireAuth);
 
 // ── Helper: generate SSH key pair if not exists ──
@@ -1037,6 +1205,149 @@ router.get('/recovery/scripts', (req, res) => {
   });
 
   tar.stdout.pipe(res);
+});
+
+// ══════════════════════════════════════════
+// AGENT MANAGEMENT (admin endpoints)
+// ══════════════════════════════════════════
+
+/**
+ * GET /pending - List pending agents waiting for approval
+ */
+router.get('/pending', (req, res) => {
+  const data = getData();
+  const pending = (data.activeBackup && data.activeBackup.pendingAgents) || [];
+  res.json({ success: true, pending });
+});
+
+/**
+ * POST /pending/:id/approve - Approve a pending agent
+ * Body: { backupType, schedule, retention, paths }
+ */
+router.post('/pending/:id/approve', async (req, res) => {
+  try {
+    const { backupType, schedule, retention, paths } = req.body;
+    const data = getData();
+    if (!data.activeBackup || !data.activeBackup.pendingAgents) {
+      return res.status(404).json({ error: 'No pending agents' });
+    }
+
+    const idx = data.activeBackup.pendingAgents.findIndex(a => a.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Pending agent not found' });
+
+    const agent = data.activeBackup.pendingAgents[idx];
+    const isImage = backupType === 'image';
+    const deviceId = agent.id;
+
+    // Generate Samba credentials for image backup
+    const sambaPass = crypto.randomBytes(16).toString('hex');
+
+    const device = {
+      id: deviceId,
+      name: agent.hostname,
+      ip: agent.ip,
+      agentHostname: agent.hostname,
+      agentMac: agent.mac,
+      agentToken: agent.agentToken,
+      backupType: isImage ? 'image' : 'files',
+      os: agent.os === 'win32' ? 'windows' : (agent.os === 'darwin' ? 'macos' : agent.os),
+      sshUser: '',
+      sshPort: 22,
+      paths: paths || (isImage ? [] : []),
+      excludes: ['.cache', '*.tmp', 'node_modules', '.Trash*', '.local/share/Trash'],
+      schedule: schedule || '0 3 * * *',
+      retention: parseInt(retention) || 3,
+      enabled: true,
+      status: 'approved',
+      registeredAt: agent.registeredAt,
+      approvedAt: new Date().toISOString(),
+      approvedBy: req.user.username,
+      lastBackup: null,
+      lastResult: null,
+      lastError: null,
+      lastDuration: null,
+      sambaShare: isImage ? `backup-${deviceId.slice(0, 8)}` : null,
+      sambaUser: null,
+      sambaPass: null,
+    };
+
+    // For image backups: setup Samba
+    if (isImage) {
+      const sambaUser = `backup-${deviceId.slice(0, 8)}`;
+      device.sambaUser = sambaUser;
+      device.sambaPass = sambaPass;
+
+      // Create system user for this device
+      try { await execFileAsync('sudo', ['useradd', '-r', '-s', '/usr/sbin/nologin', sambaUser]); } catch(e) {}
+      // Add to sambashare group
+      try { await execFileAsync('sudo', ['usermod', '-aG', 'sambashare', sambaUser]); } catch(e) {}
+      // Set Samba password
+      await new Promise((resolve, reject) => {
+        const proc = spawn('sudo', ['smbpasswd', '-a', sambaUser, '-s'], { stdio: ['pipe', 'pipe', 'pipe'] });
+        proc.on('error', reject);
+        proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`smbpasswd exited ${code}`)));
+        proc.stdin.write(`${sambaPass}\n${sambaPass}\n`);
+        proc.stdin.end();
+      });
+      await execFileAsync('sudo', ['smbpasswd', '-e', sambaUser]);
+
+      // Create share
+      await createImageBackupShare(device, sambaUser);
+    }
+
+    // Remove from pending, add to devices
+    data.activeBackup.pendingAgents.splice(idx, 1);
+    if (!data.activeBackup.devices) data.activeBackup.devices = [];
+    data.activeBackup.devices.push(device);
+    saveData(data);
+
+    logSecurityEvent('active_backup_agent_approved', req.user.username, { device: agent.hostname, ip: agent.ip });
+
+    res.json({ success: true, device });
+  } catch (err) {
+    console.error('Approve agent error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /pending/:id/reject - Reject a pending agent
+ */
+router.post('/pending/:id/reject', (req, res) => {
+  const data = getData();
+  if (!data.activeBackup || !data.activeBackup.pendingAgents) {
+    return res.status(404).json({ error: 'No pending agents' });
+  }
+
+  const idx = data.activeBackup.pendingAgents.findIndex(a => a.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Pending agent not found' });
+
+  const agent = data.activeBackup.pendingAgents[idx];
+  data.activeBackup.pendingAgents.splice(idx, 1);
+  saveData(data);
+
+  logSecurityEvent('active_backup_agent_rejected', req.user.username, { hostname: agent.hostname });
+  res.json({ success: true, message: `Agent "${agent.hostname}" rejected` });
+});
+
+/**
+ * POST /devices/:id/trigger - Trigger an immediate backup on an agent
+ */
+router.post('/devices/:id/trigger', (req, res) => {
+  const data = getData();
+  if (!data.activeBackup) return res.status(404).json({ error: 'Not configured' });
+
+  const device = data.activeBackup.devices.find(d => d.id === req.params.id);
+  if (!device) return res.status(404).json({ error: 'Device not found' });
+
+  if (!device.agentToken) {
+    return res.status(400).json({ error: 'Device is not agent-managed' });
+  }
+
+  device._triggerBackup = true;
+  saveData(data);
+
+  res.json({ success: true, message: `Backup triggered for "${device.name}". Agent will start on next poll.` });
 });
 
 module.exports = router;

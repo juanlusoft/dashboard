@@ -1,15 +1,14 @@
 /**
  * Backup Manager - Execute backups on Windows/Mac
  * Windows: wbadmin (image) or robocopy (files)
- * Mac: tmutil (image) or rsync (files)
+ * Mac: asr (image) or rsync (files)
  */
 
-const { execFile, exec } = require('child_process');
+const { exec } = require('child_process');
 const { promisify } = require('util');
 const os = require('os');
 const path = require('path');
 
-const execFileAsync = promisify(execFile);
 const execAsync = promisify(exec);
 
 class BackupManager {
@@ -28,7 +27,7 @@ class BackupManager {
       } else if (this.platform === 'darwin') {
         return await this._runMacBackup(config);
       } else {
-        throw new Error(`Unsupported platform: ${this.platform}`);
+        throw new Error(`Plataforma no soportada: ${this.platform}`);
       }
     } finally {
       this.running = false;
@@ -40,10 +39,10 @@ class BackupManager {
   // ══════════════════════════════════════
 
   async _runWindowsBackup(config) {
-    const { nasAddress, nasPort, username, password, backupType, sambaShare } = config;
+    const { nasAddress, backupType, sambaShare, sambaUser, sambaPass } = config;
     const shareName = sambaShare || 'active-backup';
     const sharePath = `\\\\${nasAddress}\\${shareName}`;
-    const creds = { user: username || 'homepinas', pass: password || 'homepinas' };
+    const creds = { user: sambaUser || 'homepinas', pass: sambaPass || 'homepinas' };
 
     if (backupType === 'image') {
       return this._windowsImageBackup(sharePath, creds);
@@ -53,10 +52,8 @@ class BackupManager {
   }
 
   async _windowsImageBackup(sharePath, creds) {
-    // Authenticate to share first (wbadmin on client Windows doesn't support -user/-password)
-    try {
-      await execAsync(`net use ${sharePath} /delete /y 2>nul`, { shell: 'cmd.exe' });
-    } catch (e) {}
+    // Authenticate to share (wbadmin on client Windows doesn't support -user/-password)
+    try { await execAsync(`net use ${sharePath} /delete /y 2>nul`, { shell: 'cmd.exe' }); } catch (e) {}
 
     try {
       await execAsync(`net use ${sharePath} /user:${creds.user} ${creds.pass} /persistent:no`, { shell: 'cmd.exe' });
@@ -69,32 +66,19 @@ class BackupManager {
     try {
       const result = await execAsync(cmd, {
         shell: 'cmd.exe',
-        timeout: 7200000, // 2 hours max
+        timeout: 7200000, // 2 hours
         windowsHide: true,
       });
-
-      return {
-        type: 'image',
-        output: result.stdout,
-        timestamp: new Date().toISOString(),
-      };
+      return { type: 'image', output: result.stdout, timestamp: new Date().toISOString() };
     } finally {
-      // Cleanup
-      try {
-        await execAsync(`net use ${sharePath} /delete /y 2>nul`, { shell: 'cmd.exe' });
-      } catch (e) {}
+      try { await execAsync(`net use ${sharePath} /delete /y 2>nul`, { shell: 'cmd.exe' }); } catch (e) {}
     }
   }
 
   async _windowsFileBackup(sharePath, paths, creds) {
-    if (!paths || paths.length === 0) {
-      throw new Error('No backup paths configured');
-    }
+    if (!paths || paths.length === 0) throw new Error('No hay carpetas configuradas para respaldar');
 
-    // Map network drive with user credentials
-    try {
-      await execAsync(`net use Z: /delete /y 2>nul`, { shell: 'cmd.exe' });
-    } catch (e) {}
+    try { await execAsync(`net use Z: /delete /y 2>nul`, { shell: 'cmd.exe' }); } catch (e) {}
     try {
       await execAsync(`net use Z: ${sharePath} /user:${creds.user} ${creds.pass} /persistent:no`, { shell: 'cmd.exe' });
     } catch (e) {
@@ -108,40 +92,24 @@ class BackupManager {
     for (const srcPath of paths) {
       const folderName = path.basename(srcPath) || 'root';
       const dest = `${destBase}\\${folderName}`;
-
       try {
-        // robocopy: mirror mode, retry 2 times, wait 5 sec
         const cmd = `robocopy "${srcPath}" "${dest}" /MIR /R:2 /W:5 /NP /NFL /NDL /MT:8`;
-        const result = await execAsync(cmd, {
-          shell: 'cmd.exe',
-          timeout: 3600000,
-          windowsHide: true,
-        });
-
-        // robocopy exit codes: 0-7 = success, 8+ = error
-        results.push({ path: srcPath, success: true, output: result.stdout });
+        const result = await execAsync(cmd, { shell: 'cmd.exe', timeout: 3600000, windowsHide: true });
+        results.push({ path: srcPath, success: true });
       } catch (err) {
-        // robocopy returns non-zero for "files copied" which is success
         const exitCode = err.code || 0;
         if (exitCode < 8) {
-          results.push({ path: srcPath, success: true, output: err.stdout });
+          results.push({ path: srcPath, success: true });
         } else {
           results.push({ path: srcPath, success: false, error: err.message });
         }
       }
     }
 
-    const failed = results.filter(r => !r.success);
-    if (failed.length > 0) {
-      // Cleanup drive mapping on error too
-      try { await execAsync('net use Z: /delete /y 2>nul', { shell: 'cmd.exe' }); } catch (e) {}
-      throw new Error(`${failed.length} paths failed: ${failed.map(f => f.path).join(', ')}`);
-    }
+    try { await execAsync('net use Z: /delete /y 2>nul', { shell: 'cmd.exe' }); } catch (e) {}
 
-    // Cleanup drive mapping
-    try {
-      await execAsync('net use Z: /delete /y 2>nul', { shell: 'cmd.exe' });
-    } catch (e) {}
+    const failed = results.filter(r => !r.success);
+    if (failed.length > 0) throw new Error(`${failed.length} carpetas fallaron: ${failed.map(f => f.path).join(', ')}`);
 
     return { type: 'files', results, timestamp: new Date().toISOString() };
   }
@@ -151,52 +119,45 @@ class BackupManager {
   // ══════════════════════════════════════
 
   async _runMacBackup(config) {
-    const { nasAddress, backupType, backupPaths } = config;
-    const sharePath = `smb://${nasAddress}/active-backup`;
+    const { nasAddress, backupType, backupPaths, sambaShare, sambaUser, sambaPass } = config;
+    const shareName = sambaShare || 'active-backup';
+    const creds = { user: sambaUser || 'homepinas', pass: sambaPass || 'homepinas' };
 
     if (backupType === 'image') {
-      return this._macImageBackup(nasAddress);
+      return this._macImageBackup(nasAddress, shareName, creds);
     } else {
-      return this._macFileBackup(nasAddress, backupPaths);
+      return this._macFileBackup(nasAddress, shareName, creds, backupPaths);
     }
   }
 
-  async _macImageBackup(nasAddress) {
-    // Mount SMB share
+  async _macImageBackup(nasAddress, shareName, creds) {
     const mountPoint = '/Volumes/homepinas-backup';
-    try {
-      await execAsync(`mkdir -p "${mountPoint}"`);
-      await execAsync(`mount -t smbfs //guest@${nasAddress}/active-backup "${mountPoint}"`);
-    } catch (e) {}
+    try { await execAsync(`mkdir -p "${mountPoint}"`); } catch(e) {}
+    try { await execAsync(`mount -t smbfs //${creds.user}:${creds.pass}@${nasAddress}/${shareName} "${mountPoint}"`); } catch (e) {
+      throw new Error(`No se pudo montar el share: ${e.message}`);
+    }
 
-    // Use Time Machine CLI or asr
     const hostname = os.hostname();
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const destPath = `${mountPoint}/ImageBackup/${hostname}/${timestamp}`;
 
     try {
       await execAsync(`mkdir -p "${destPath}"`);
-      
-      // Create a compressed disk image of the system
-      const cmd = `sudo asr create --source / --target "${destPath}/system.dmg" --erase --noprompt`;
-      await execAsync(cmd, { timeout: 7200000 });
-
+      await execAsync(`sudo asr create --source / --target "${destPath}/system.dmg" --erase --noprompt`, { timeout: 7200000 });
       return { type: 'image', timestamp: new Date().toISOString() };
     } finally {
       try { await execAsync(`umount "${mountPoint}"`); } catch (e) {}
     }
   }
 
-  async _macFileBackup(nasAddress, paths) {
-    if (!paths || paths.length === 0) {
-      throw new Error('No backup paths configured');
-    }
+  async _macFileBackup(nasAddress, shareName, creds, paths) {
+    if (!paths || paths.length === 0) throw new Error('No hay carpetas configuradas para respaldar');
 
     const mountPoint = '/Volumes/homepinas-backup';
-    try {
-      await execAsync(`mkdir -p "${mountPoint}"`);
-      await execAsync(`mount -t smbfs //guest@${nasAddress}/active-backup "${mountPoint}"`);
-    } catch (e) {}
+    try { await execAsync(`mkdir -p "${mountPoint}"`); } catch(e) {}
+    try { await execAsync(`mount -t smbfs //${creds.user}:${creds.pass}@${nasAddress}/${shareName} "${mountPoint}"`); } catch (e) {
+      throw new Error(`No se pudo montar el share: ${e.message}`);
+    }
 
     const hostname = os.hostname();
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -206,7 +167,6 @@ class BackupManager {
       for (const srcPath of paths) {
         const folderName = path.basename(srcPath) || 'root';
         const dest = `${mountPoint}/FileBackup/${hostname}/${timestamp}/${folderName}`;
-        
         try {
           await execAsync(`mkdir -p "${dest}"`);
           await execAsync(`rsync -az --delete "${srcPath}/" "${dest}/"`, { timeout: 3600000 });
@@ -220,56 +180,6 @@ class BackupManager {
     }
 
     return { type: 'files', results, timestamp: new Date().toISOString() };
-  }
-
-  // ══════════════════════════════════════
-  // UTILS
-  // ══════════════════════════════════════
-
-  getDrives() {
-    if (this.platform === 'win32') {
-      return this._getWindowsDrives();
-    } else {
-      return this._getMacDrives();
-    }
-  }
-
-  _getWindowsDrives() {
-    try {
-      const { execSync } = require('child_process');
-      const output = execSync(
-        'Get-PSDrive -PSProvider FileSystem | Select-Object Name,Used,Free,Root | ConvertTo-Json',
-        { shell: 'powershell.exe', encoding: 'utf8', timeout: 10000 }
-      );
-      const drives = JSON.parse(output);
-      return (Array.isArray(drives) ? drives : [drives]).map(d => ({
-        letter: d.Name,
-        root: d.Root,
-        used: d.Used,
-        free: d.Free,
-      }));
-    } catch (e) {
-      return [{ letter: 'C', root: 'C:\\', used: 0, free: 0 }];
-    }
-  }
-
-  _getMacDrives() {
-    try {
-      const { execSync } = require('child_process');
-      const output = execSync('df -h / /Volumes/* 2>/dev/null', { encoding: 'utf8', timeout: 10000 });
-      const lines = output.trim().split('\n').slice(1);
-      return lines.map(line => {
-        const parts = line.split(/\s+/);
-        return {
-          mount: parts[parts.length - 1],
-          size: parts[1],
-          used: parts[2],
-          free: parts[3],
-        };
-      });
-    } catch (e) {
-      return [{ mount: '/', size: '?', used: '?', free: '?' }];
-    }
   }
 }
 
