@@ -183,6 +183,7 @@ async function runBackupNow() {
       nasAddress: nasAddr,
       nasPort,
       username: store.get('username'),
+      password: store.get('password'),
       sessionId: store.get('sessionId'),
       deviceId: store.get('deviceId'),
       backupType: store.get('backupType'),
@@ -265,6 +266,7 @@ function setupIPC() {
       store.set('nasAddress', address);
       store.set('nasPort', port);
       store.set('username', username);
+      store.set('password', password);  // Needed for Samba auth during backups
       store.set('sessionId', session.sessionId);
       return { success: true, session };
     } catch (err) {
@@ -283,6 +285,7 @@ function setupIPC() {
         backupType: backupType,
         paths: paths || [],
         agent: true,
+        password: store.get('password'),  // Pass password so backend can set up Samba
       };
 
       const result = await api.registerDevice(

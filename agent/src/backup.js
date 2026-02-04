@@ -40,25 +40,26 @@ class BackupManager {
   // ══════════════════════════════════════
 
   async _runWindowsBackup(config) {
-    const { nasAddress, nasPort, username, backupType, sambaShare } = config;
+    const { nasAddress, nasPort, username, password, backupType, sambaShare } = config;
     const shareName = sambaShare || 'active-backup';
     const sharePath = `\\\\${nasAddress}\\${shareName}`;
+    const creds = { user: username || 'homepinas', pass: password || 'homepinas' };
 
     if (backupType === 'image') {
-      return this._windowsImageBackup(sharePath);
+      return this._windowsImageBackup(sharePath, creds);
     } else {
-      return this._windowsFileBackup(sharePath, config.backupPaths);
+      return this._windowsFileBackup(sharePath, config.backupPaths, creds);
     }
   }
 
-  async _windowsImageBackup(sharePath) {
+  async _windowsImageBackup(sharePath, creds) {
     // Authenticate to share first (wbadmin on client Windows doesn't support -user/-password)
     try {
       await execAsync(`net use ${sharePath} /delete /y 2>nul`, { shell: 'cmd.exe' });
     } catch (e) {}
 
     try {
-      await execAsync(`net use ${sharePath} /user:homepinas homepinas /persistent:no`, { shell: 'cmd.exe' });
+      await execAsync(`net use ${sharePath} /user:${creds.user} ${creds.pass} /persistent:no`, { shell: 'cmd.exe' });
     } catch (e) {
       throw new Error(`No se pudo conectar al share ${sharePath}: ${e.message}`);
     }
@@ -85,17 +86,17 @@ class BackupManager {
     }
   }
 
-  async _windowsFileBackup(sharePath, paths) {
+  async _windowsFileBackup(sharePath, paths, creds) {
     if (!paths || paths.length === 0) {
       throw new Error('No backup paths configured');
     }
 
-    // Map network drive with credentials
+    // Map network drive with user credentials
     try {
       await execAsync(`net use Z: /delete /y 2>nul`, { shell: 'cmd.exe' });
     } catch (e) {}
     try {
-      await execAsync(`net use Z: ${sharePath} /user:homepinas homepinas /persistent:no`, { shell: 'cmd.exe' });
+      await execAsync(`net use Z: ${sharePath} /user:${creds.user} ${creds.pass} /persistent:no`, { shell: 'cmd.exe' });
     } catch (e) {
       throw new Error(`No se pudo conectar al share ${sharePath}: ${e.message}`);
     }

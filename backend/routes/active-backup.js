@@ -140,58 +140,45 @@ async function notifyBackupFailure(device, error) {
 }
 
 // ── Helper: create Samba share for image backup device ──
-async function ensureSambaBackupUser() {
-  // Ensure system user 'homepinas' exists for Samba backup shares
-  try {
-    await execFileAsync('id', ['homepinas']);
-  } catch (e) {
-    // User doesn't exist, create it
-    try {
-      await execFileAsync('sudo', ['useradd', '-r', '-s', '/usr/sbin/nologin', 'homepinas']);
-    } catch (e2) {
-      // May already exist as system user
-    }
-  }
-  // Ensure Samba password is set
+async function ensureSambaUser(username, password) {
+  // Ensure the NAS user has a Samba password set for backup share access
   try {
     const { stdout } = await execFileAsync('sudo', ['pdbedit', '-L']);
-    if (!stdout.includes('homepinas:')) {
-      // Set Samba password via spawn (needs stdin)
+    if (!stdout.includes(`${username}:`)) {
+      // Add user to Samba with the same password as their NAS account
       await new Promise((resolve, reject) => {
-        const proc = spawn('sudo', ['smbpasswd', '-a', 'homepinas', '-s'], { stdio: ['pipe', 'pipe', 'pipe'] });
+        const proc = spawn('sudo', ['smbpasswd', '-a', username, '-s'], { stdio: ['pipe', 'pipe', 'pipe'] });
         proc.on('error', reject);
         proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`smbpasswd exited ${code}`)));
-        proc.stdin.write('homepinas\nhomepinas\n');
+        proc.stdin.write(`${password}\n${password}\n`);
         proc.stdin.end();
       });
-      await execFileAsync('sudo', ['smbpasswd', '-e', 'homepinas']);
+      await execFileAsync('sudo', ['smbpasswd', '-e', username]);
     }
   } catch (e) {
     console.error('Samba user setup warning:', e.message);
   }
 }
 
-async function createImageBackupShare(device) {
+async function createImageBackupShare(device, username) {
   const shareName = device.sambaShare;
   const sharePath = deviceDir(device.id);
+  const sambaUser = username || 'homepinas';
   
-  // Ensure Samba backup user exists
-  await ensureSambaBackupUser();
-
   // Ensure directory exists with right permissions
   if (!fs.existsSync(sharePath)) fs.mkdirSync(sharePath, { recursive: true });
 
-  // Set ownership so Samba user can write
+  // Set ownership so the user can write
   try {
-    await execFileAsync('sudo', ['chown', '-R', 'homepinas:sambashare', sharePath]);
+    await execFileAsync('sudo', ['chown', '-R', `${sambaUser}:sambashare`, sharePath]);
     await execFileAsync('sudo', ['chmod', '-R', '775', sharePath]);
   } catch (e) {
     console.error('Permission setup warning:', e.message);
   }
 
-  // Add share to smb.conf
+  // Add share to smb.conf with the actual user
   const smbConfPath = '/etc/samba/smb.conf';
-  const shareBlock = `\n[${shareName}]\n   path = ${sharePath}\n   browseable = no\n   writable = yes\n   guest ok = no\n   valid users = homepinas\n   create mask = 0660\n   directory mask = 0770\n   comment = HomePiNAS Image Backup - ${device.name}\n`;
+  const shareBlock = `\n[${shareName}]\n   path = ${sharePath}\n   browseable = no\n   writable = yes\n   guest ok = no\n   valid users = ${sambaUser}\n   create mask = 0660\n   directory mask = 0770\n   comment = HomePiNAS Image Backup - ${device.name}\n`;
 
   try {
     const currentConf = fs.readFileSync(smbConfPath, 'utf8');
@@ -406,7 +393,7 @@ router.get('/devices/:id/instructions', async (req, res) => {
  */
 router.post('/devices', async (req, res) => {
   try {
-    const { name, ip, sshUser, sshPort, paths, excludes, schedule, retention, backupType, os: deviceOS } = req.body;
+    const { name, ip, sshUser, sshPort, paths, excludes, schedule, retention, backupType, os: deviceOS, password } = req.body;
 
     const isImage = backupType === 'image';
 
@@ -461,14 +448,18 @@ router.post('/devices', async (req, res) => {
     let sambaSetup = null;
     if (isImage) {
       try {
-        await createImageBackupShare(device);
+        // Ensure the user has Samba access with their NAS password
+        if (password) {
+          await ensureSambaUser(req.user.username, password);
+        }
+        await createImageBackupShare(device, req.user.username);
         const nasHostname = os.hostname();
         const shareName = device.sambaShare;
         const uncPath = `\\\\${device.ip === '127.0.0.1' ? 'localhost' : nasHostname}\\${shareName}`;
         
         sambaSetup = {
           sharePath: uncPath,
-          shareUser: 'homepinas',
+          shareUser: req.user.username,
           instructions: getImageBackupInstructions(device, uncPath, nasHostname),
         };
       } catch (sambaErr) {
