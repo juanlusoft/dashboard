@@ -99,12 +99,13 @@ get_mac() {
 
 # ── NAS Discovery ────────────────────────────────────────────────
 discover_nas() {
-  log "Buscando HomePiNAS en la red..."
+  # All log output goes to stderr so stdout is clean for the result
+  log "Buscando HomePiNAS en la red..." >&2
   local found=""
 
   # Method 1: mDNS / Avahi
   if command -v avahi-browse &>/dev/null; then
-    log "  → Buscando via mDNS..."
+    log "  → Buscando via mDNS..." >&2
     local mdns_result
     mdns_result=$(avahi-browse -tpk _https._tcp 2>/dev/null | grep -i homepinas | head -1 || true)
     if [[ -n "$mdns_result" ]]; then
@@ -118,8 +119,8 @@ discover_nas() {
 
   # Method 2: Common hostnames
   if [[ -z "$found" ]]; then
-    log "  → Probando hostnames conocidos..."
-    for host in homepinas.local homepinas nas.local; do
+    log "  → Probando hostnames conocidos..." >&2
+    for host in homepinas.local homepinas nas.local PiNas.local PiNas; do
       found=$(check_nas "$host" 3001)
       [[ -n "$found" ]] && break
     done
@@ -127,7 +128,7 @@ discover_nas() {
 
   # Method 3: Subnet scan
   if [[ -z "$found" ]]; then
-    log "  → Escaneando subred..."
+    log "  → Escaneando subred..." >&2
     local local_ip subnet
     local_ip=$(get_local_ip)
     if [[ -n "$local_ip" ]]; then
