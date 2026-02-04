@@ -52,8 +52,19 @@ class BackupManager {
   }
 
   async _windowsImageBackup(sharePath, creds) {
-    // Authenticate to share (wbadmin on client Windows doesn't support -user/-password)
+    // Clean ALL connections to this server first (error 1219 workaround)
+    const server = sharePath.split('\\').filter(Boolean)[0];
+    try { await execAsync(`net use \\\\${server} /delete /y 2>nul`, { shell: 'cmd.exe' }); } catch (e) {}
     try { await execAsync(`net use ${sharePath} /delete /y 2>nul`, { shell: 'cmd.exe' }); } catch (e) {}
+    // Also clean any mapped drives to this server
+    try {
+      const { stdout } = await execAsync('net use', { shell: 'cmd.exe' });
+      const lines = stdout.split('\n').filter(l => l.includes(server));
+      for (const line of lines) {
+        const match = line.match(/([A-Z]:)\s/);
+        if (match) try { await execAsync(`net use ${match[1]} /delete /y 2>nul`, { shell: 'cmd.exe' }); } catch(e) {}
+      }
+    } catch(e) {}
 
     try {
       await execAsync(`net use ${sharePath} /user:${creds.user} ${creds.pass} /persistent:no`, { shell: 'cmd.exe' });
