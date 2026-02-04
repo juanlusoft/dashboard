@@ -154,7 +154,14 @@ async function createImageBackupShare(device) {
   try {
     const currentConf = fs.readFileSync(smbConfPath, 'utf8');
     if (!currentConf.includes(`[${shareName}]`)) {
-      await execFileAsync('sudo', ['tee', '-a', smbConfPath], { input: shareBlock });
+      // Use spawn to pipe shareBlock to stdin (execFile doesn't support input option)
+      await new Promise((resolve, reject) => {
+        const proc = spawn('sudo', ['tee', '-a', smbConfPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+        proc.on('error', reject);
+        proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`tee exited ${code}`)));
+        proc.stdin.write(shareBlock);
+        proc.stdin.end();
+      });
       await execFileAsync('sudo', ['systemctl', 'reload', 'smbd']);
     }
   } catch(e) {
