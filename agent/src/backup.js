@@ -40,43 +40,50 @@ class BackupManager {
   // ══════════════════════════════════════
 
   async _runWindowsBackup(config) {
-    const { nasAddress, nasPort, username, backupType } = config;
-    const sharePath = `\\\\${nasAddress}\\active-backup`;
+    const { nasAddress, nasPort, username, backupType, sambaShare } = config;
+    const shareName = sambaShare || 'active-backup';
+    const sharePath = `\\\\${nasAddress}\\${shareName}`;
 
     if (backupType === 'image') {
-      return this._windowsImageBackup(sharePath, username);
+      return this._windowsImageBackup(sharePath);
     } else {
       return this._windowsFileBackup(sharePath, config.backupPaths);
     }
   }
 
-  async _windowsImageBackup(sharePath, username) {
-    // Map network drive if not already mapped
+  async _windowsImageBackup(sharePath) {
+    // Map network drive with Samba credentials
     try {
-      await execAsync(`net use B: ${sharePath} /persistent:no 2>nul`, { shell: 'cmd.exe' });
+      await execAsync(`net use B: /delete /y 2>nul`, { shell: 'cmd.exe' });
+    } catch (e) {}
+    
+    try {
+      await execAsync(`net use B: ${sharePath} /user:homepinas homepinas /persistent:no`, { shell: 'cmd.exe' });
     } catch (e) {
-      // May already be mapped
+      throw new Error(`No se pudo conectar al share ${sharePath}: ${e.message}`);
     }
 
-    // Run wbadmin for full system image
-    const cmd = `wbadmin start backup -backupTarget:${sharePath} -include:C: -allCritical -quiet`;
+    // Run wbadmin for full system image using mapped drive
+    const cmd = `wbadmin start backup -backupTarget:B: -include:C: -allCritical -quiet`;
     
-    const result = await execAsync(cmd, {
-      shell: 'cmd.exe',
-      timeout: 7200000, // 2 hours max
-      windowsHide: true,
-    });
-
-    // Cleanup drive mapping
     try {
-      await execAsync('net use B: /delete /y 2>nul', { shell: 'cmd.exe' });
-    } catch (e) {}
+      const result = await execAsync(cmd, {
+        shell: 'cmd.exe',
+        timeout: 7200000, // 2 hours max
+        windowsHide: true,
+      });
 
-    return {
-      type: 'image',
-      output: result.stdout,
-      timestamp: new Date().toISOString(),
-    };
+      return {
+        type: 'image',
+        output: result.stdout,
+        timestamp: new Date().toISOString(),
+      };
+    } finally {
+      // Cleanup drive mapping
+      try {
+        await execAsync('net use B: /delete /y 2>nul', { shell: 'cmd.exe' });
+      } catch (e) {}
+    }
   }
 
   async _windowsFileBackup(sharePath, paths) {
@@ -84,9 +91,19 @@ class BackupManager {
       throw new Error('No backup paths configured');
     }
 
+    // Map network drive with credentials
+    try {
+      await execAsync(`net use Z: /delete /y 2>nul`, { shell: 'cmd.exe' });
+    } catch (e) {}
+    try {
+      await execAsync(`net use Z: ${sharePath} /user:homepinas homepinas /persistent:no`, { shell: 'cmd.exe' });
+    } catch (e) {
+      throw new Error(`No se pudo conectar al share ${sharePath}: ${e.message}`);
+    }
+
     const results = [];
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const destBase = `${sharePath}\\FileBackup\\${os.hostname()}\\${timestamp}`;
+    const destBase = `Z:\\FileBackup\\${os.hostname()}\\${timestamp}`;
 
     for (const srcPath of paths) {
       const folderName = path.basename(srcPath) || 'root';
@@ -116,8 +133,15 @@ class BackupManager {
 
     const failed = results.filter(r => !r.success);
     if (failed.length > 0) {
+      // Cleanup drive mapping on error too
+      try { await execAsync('net use Z: /delete /y 2>nul', { shell: 'cmd.exe' }); } catch (e) {}
       throw new Error(`${failed.length} paths failed: ${failed.map(f => f.path).join(', ')}`);
     }
+
+    // Cleanup drive mapping
+    try {
+      await execAsync('net use Z: /delete /y 2>nul', { shell: 'cmd.exe' });
+    } catch (e) {}
 
     return { type: 'files', results, timestamp: new Date().toISOString() };
   }

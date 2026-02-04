@@ -185,6 +185,7 @@ async function runBackupNow() {
       deviceId: store.get('deviceId'),
       backupType: store.get('backupType'),
       backupPaths: store.get('backupPaths'),
+      sambaShare: store.get('sambaShare'),
     });
 
     store.set('lastBackup', new Date().toISOString());
@@ -293,6 +294,10 @@ function setupIPC() {
       store.set('deviceName', name || os.hostname());
       store.set('backupType', backupType);
       if (paths) store.set('backupPaths', paths);
+      // Store the Samba share name for image backups
+      if (result.device && result.device.sambaShare) {
+        store.set('sambaShare', result.device.sambaShare);
+      }
 
       return { success: true, device: result };
     } catch (err) {
