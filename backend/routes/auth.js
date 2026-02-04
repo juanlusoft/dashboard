@@ -16,8 +16,34 @@ const { getData, saveData } = require('../utils/data');
 const { createSession, destroySession } = require('../utils/session');
 const { validateUsername, validatePassword, sanitizeUsername } = require('../utils/sanitize');
 const { getCsrfToken, clearCsrfToken } = require('../middleware/csrf');
+const { TOTP, Secret } = require('otpauth');
 
 const SALT_ROUNDS = 12;
+
+// Pending 2FA sessions (temporary tokens awaiting TOTP verification)
+const pending2FASessions = new Map();
+const PENDING_2FA_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Generate a secure random token for pending 2FA
+ */
+function generatePendingToken() {
+    return require('crypto').randomBytes(32).toString('hex');
+}
+
+/**
+ * Validate TOTP code against user's secret
+ */
+function validateTOTP(secret, token) {
+    const totp = new TOTP({
+        issuer: 'HomePiNAS',
+        algorithm: 'SHA1',
+        digits: 6,
+        period: 30,
+        secret: Secret.fromBase32(secret)
+    });
+    return totp.validate({ token, window: 1 }) !== null;
+}
 
 /**
  * Create Samba user with same credentials (SECURE VERSION)
@@ -177,6 +203,28 @@ router.post('/login', authLimiter, async (req, res) => {
                                 usernameBuffer.length === storedUsernameBuffer.length;
 
         if (isUsernameValid && isPasswordValid) {
+            // Check if 2FA is enabled for this user
+            if (data.user.totpEnabled && data.user.totpSecret) {
+                // Generate pending 2FA token
+                const pendingToken = generatePendingToken();
+                pending2FASessions.set(pendingToken, {
+                    username: data.user.username,
+                    createdAt: Date.now()
+                });
+                
+                // Clean up expired pending sessions
+                setTimeout(() => pending2FASessions.delete(pendingToken), PENDING_2FA_TIMEOUT);
+                
+                logSecurityEvent('LOGIN_PENDING_2FA', { username }, req.ip);
+                return res.json({
+                    success: true,
+                    requires2FA: true,
+                    pendingToken,
+                    user: { username: data.user.username }
+                });
+            }
+            
+            // No 2FA - create full session
             const sessionId = createSession(username);
             const csrfToken = getCsrfToken(sessionId);
             logSecurityEvent('LOGIN_SUCCESS', { username }, req.ip);
@@ -193,6 +241,67 @@ router.post('/login', authLimiter, async (req, res) => {
     } catch (e) {
         console.error('Login error:', e);
         res.status(500).json({ success: false, message: 'Login failed' });
+    }
+});
+
+// Complete login with 2FA code
+router.post('/login/2fa', authLimiter, async (req, res) => {
+    try {
+        const { pendingToken, totpCode } = req.body;
+
+        if (!pendingToken || !totpCode) {
+            return res.status(400).json({ success: false, message: 'Pending token and TOTP code required' });
+        }
+
+        // Validate TOTP code format
+        const cleanCode = totpCode.trim();
+        if (!/^\d{6}$/.test(cleanCode)) {
+            return res.status(400).json({ success: false, message: 'TOTP code must be 6 digits' });
+        }
+
+        // Check pending session
+        const pending = pending2FASessions.get(pendingToken);
+        if (!pending) {
+            logSecurityEvent('2FA_INVALID_TOKEN', {}, req.ip);
+            return res.status(401).json({ success: false, message: 'Invalid or expired 2FA session. Please login again.' });
+        }
+
+        // Check if pending session expired
+        if (Date.now() - pending.createdAt > PENDING_2FA_TIMEOUT) {
+            pending2FASessions.delete(pendingToken);
+            return res.status(401).json({ success: false, message: '2FA session expired. Please login again.' });
+        }
+
+        // Get user data
+        const data = getData();
+        if (!data.user || data.user.username !== pending.username) {
+            pending2FASessions.delete(pendingToken);
+            return res.status(401).json({ success: false, message: 'User not found' });
+        }
+
+        // Validate TOTP code
+        if (!validateTOTP(data.user.totpSecret, cleanCode)) {
+            logSecurityEvent('2FA_INVALID_CODE', { username: pending.username }, req.ip);
+            return res.status(401).json({ success: false, message: 'Invalid 2FA code' });
+        }
+
+        // Success - clean up pending session and create real session
+        pending2FASessions.delete(pendingToken);
+        
+        const sessionId = createSession(pending.username);
+        const csrfToken = getCsrfToken(sessionId);
+        
+        logSecurityEvent('LOGIN_2FA_SUCCESS', { username: pending.username }, req.ip);
+        
+        res.json({
+            success: true,
+            sessionId,
+            csrfToken,
+            user: { username: data.user.username }
+        });
+    } catch (e) {
+        console.error('2FA verification error:', e);
+        res.status(500).json({ success: false, message: '2FA verification failed' });
     }
 });
 
