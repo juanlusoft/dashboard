@@ -277,7 +277,7 @@ function setupIPC() {
         name: name || os.hostname(),
         ip: getLocalIP(),
         os: process.platform === 'win32' ? 'windows' : 'macos',
-        type: backupType,
+        backupType: backupType,
         paths: paths || [],
         agent: true,
       };
