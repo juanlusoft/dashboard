@@ -1020,9 +1020,8 @@ if (saveStorageBtn) {
             }
         }
 
-        const diskList = selections.map(s => `${s.id} (${s.role})`).join('\n');
-        const confirmed = confirm(`⚠️ WARNING: This will FORMAT the following disks:\n\n${diskList}\n\nAll data will be ERASED!\n\nDo you want to continue?`);
-
+        const diskList = selections.map(s => `${s.id} (${s.role})`).join(', ');
+        const confirmed = await showConfirmModal('Formatear discos', `Se formatearán: ${diskList}\n\n¡Todos los datos serán BORRADOS!`);
         if (!confirmed) return;
 
         saveStorageBtn.disabled = true;
@@ -3034,9 +3033,9 @@ function renderSystemView() {
 }
 
 async function systemAction(action) {
-    const actionLabel = action === 'reboot' ? 'restart' : 'shut down';
-
-    if (!confirm(`Are you sure you want to ${actionLabel} the NAS?`)) return;
+    const actionLabel = action === 'reboot' ? 'reiniciar' : 'apagar';
+    const confirmed = await showConfirmModal('Acción del sistema', `¿Seguro que quieres ${actionLabel} el NAS?`);
+    if (!confirmed) return;
 
     try {
         const res = await authFetch(`${API_BASE}/system/${action}`, { method: 'POST' });
@@ -3101,9 +3100,8 @@ async function checkForUpdates() {
 }
 
 async function applyUpdate() {
-    if (!confirm('Install the update now? The service will restart and you may lose connection for ~30 seconds.')) {
-        return;
-    }
+    const confirmed = await showConfirmModal('Instalar actualización', '¿Instalar la actualización ahora? El servicio se reiniciará y puede perder conexión ~30 segundos.');
+    if (!confirmed) return;
 
     const statusEl = document.getElementById('update-status');
     const applyBtn = document.getElementById('apply-update-btn');
@@ -3179,7 +3177,8 @@ function getRoleColor(role) {
 
 if (resetBtn) {
     resetBtn.addEventListener('click', async () => {
-        if (!confirm('Are you sure you want to RESET the entire NAS? This will delete all configuration and require a new setup.')) return;
+        const confirmed = await showConfirmModal('RESETEAR NAS', '¿Seguro que quieres RESETEAR todo el NAS? Se borrará toda la configuración y será necesario configurarlo de nuevo.');
+        if (!confirmed) return;
 
         resetBtn.textContent = 'Resetting Node...';
         resetBtn.disabled = true;
@@ -3210,8 +3209,9 @@ if (resetBtn) {
 // Logout handler
 const logoutBtn = document.getElementById("logout-btn");
 if (logoutBtn) {
-    logoutBtn.addEventListener("click", () => {
-        if (confirm(t('common.confirmLogout', "Are you sure you want to logout?"))) {
+    logoutBtn.addEventListener("click", async () => {
+        const confirmed = await showConfirmModal('Cerrar sesión', '¿Seguro que quieres cerrar sesión?');
+        if (confirmed) {
             clearSession();
             state.isAuthenticated = false;
             state.user = null;
@@ -3287,7 +3287,8 @@ async function renderTerminalView() {
             deleteBtn.title = t('common.delete', 'Eliminar');
             deleteBtn.addEventListener('click', async (e) => {
                 e.stopPropagation(); // Prevent opening terminal
-                if (confirm(t('shortcuts.confirmDelete', '¿Eliminar este acceso directo?'))) {
+                const confirmed = await showConfirmModal('Eliminar acceso directo', '¿Eliminar este acceso directo?');
+                if (confirmed) {
                     try {
                         const res = await authFetch(`${API_BASE}/shortcuts/${shortcut.id}`, {
                             method: 'DELETE'
@@ -4409,7 +4410,8 @@ window.fmClearSelection = fmClearSelection;
 // ── Bulk actions ──
 async function fmBulkDelete() {
     if (fmSelectedFiles.size === 0) return;
-    if (!confirm(`¿Eliminar ${fmSelectedFiles.size} elemento(s)?`)) return;
+    const confirmed = await showConfirmModal('Eliminar archivos', `¿Eliminar ${fmSelectedFiles.size} elemento(s)?`);
+    if (!confirmed) return;
     for (const fp of fmSelectedFiles) {
         try {
             await authFetch(`${API_BASE}/files/delete`, { method: 'POST', body: JSON.stringify({ path: fp }) });
@@ -4480,7 +4482,8 @@ async function downloadFile(filePath) {
 }
 
 async function deleteFile(filePath, name) {
-    if (!confirm(`¿Eliminar "${name}"?`)) return;
+    const confirmed = await showConfirmModal('Eliminar archivo', `¿Eliminar "${name}"?`);
+    if (!confirmed) return;
     try {
         const res = await authFetch(`${API_BASE}/files/delete`, {
             method: 'POST',
@@ -4812,7 +4815,8 @@ function showUserForm(editUser = null) {
 }
 
 async function deleteUser(username) {
-    if (!confirm(`¿Eliminar usuario "${username}"?`)) return;
+    const confirmed = await showConfirmModal('Eliminar usuario', `¿Eliminar usuario "${username}"?`);
+    if (!confirmed) return;
     try {
         const res = await authFetch(`${API_BASE}/users/${encodeURIComponent(username)}`, { method: 'DELETE' });
         if (!res.ok) throw new Error('Failed');
@@ -5126,7 +5130,8 @@ async function runBackupJob(id) {
 }
 
 async function deleteBackupJob(id) {
-    if (!confirm('¿Eliminar este trabajo de backup?')) return;
+    const confirmed = await showConfirmModal('Eliminar backup', '¿Eliminar este trabajo de backup?');
+    if (!confirmed) return;
     try {
         await authFetch(`${API_BASE}/backup/jobs/${id}`, { method: 'DELETE' });
         await loadBackupJobs();
@@ -5278,7 +5283,8 @@ async function runTask(id) {
 }
 
 async function deleteTask(id) {
-    if (!confirm('¿Eliminar esta tarea?')) return;
+    const confirmed = await showConfirmModal('Eliminar tarea', '¿Eliminar esta tarea programada?');
+    if (!confirmed) return;
     try {
         await authFetch(`${API_BASE}/scheduler/tasks/${id}`, { method: 'DELETE' });
         await loadSchedulerTasks();
@@ -5577,7 +5583,8 @@ function showSambaForm() {
 }
 
 async function deleteSambaShare(name) {
-    if (!confirm(`¿Eliminar compartición "${name}"?`)) return;
+    const confirmed = await showConfirmModal('Eliminar compartición', `¿Eliminar compartición "${name}"?`);
+    if (!confirmed) return;
     try {
         await authFetch(`${API_BASE}/samba/shares/${encodeURIComponent(name)}`, { method: 'DELETE' });
         await loadSambaShares();
@@ -5893,7 +5900,8 @@ async function loadDDNSServices() {
             delBtn.style.cssText = 'padding: 4px 10px; font-size: 0.8rem; background: #ef4444; border: none; color: white; border-radius: 6px; cursor: pointer;';
             delBtn.textContent = '🗑';
             delBtn.addEventListener('click', async () => {
-                if (!confirm('¿Eliminar este servicio DDNS?')) return;
+                const confirmed = await showConfirmModal('Eliminar DDNS', '¿Eliminar este servicio DDNS?');
+                if (!confirmed) return;
                 try {
                     await authFetch(`${API_BASE}/ddns/services/${svc.id}`, { method: 'DELETE' });
                     await loadDDNSServices();
@@ -6252,7 +6260,8 @@ function showApproveDialog(agent) {
 }
 
 async function rejectPendingAgent(agent) {
-    if (!confirm(`¿Rechazar "${agent.hostname}" (${agent.ip})?`)) return;
+    const confirmed = await showConfirmModal('Rechazar agente', `¿Rechazar "${agent.hostname}" (${agent.ip})?`);
+    if (!confirmed) return;
     try {
         const res = await authFetch(`${API_BASE}/active-backup/pending/${agent.id}/reject`, { method: 'POST' });
         const data = await res.json();
@@ -6734,7 +6743,8 @@ async function openABImageBrowse(device) {
 }
 
 async function deleteABDevice(device) {
-    if (!confirm(`¿Eliminar "${device.name}" y todos sus backups?`)) return;
+    const confirmed = await showConfirmModal('Eliminar dispositivo', `¿Eliminar "${device.name}" y todos sus backups?`);
+    if (!confirmed) return;
     try {
         const res = await authFetch(`${API_BASE}/active-backup/devices/${device.id}?deleteData=true`, { method: 'DELETE' });
         if (!res.ok) throw new Error('Failed');
@@ -7011,7 +7021,8 @@ async function loadRecoveryStatus() {
 }
 
 async function buildRecoveryISO() {
-    if (!confirm('Generar la ISO de recuperación puede tardar 10-20 minutos y requiere ~2GB de espacio. ¿Continuar?')) return;
+    const confirmed = await showConfirmModal('Generar ISO', 'Generar la ISO de recuperación puede tardar 10-20 minutos y requiere ~2GB de espacio. ¿Continuar?');
+    if (!confirmed) return;
 
     try {
         const res = await authFetch(`${API_BASE}/active-backup/recovery/build`, { method: 'POST' });
