@@ -55,6 +55,23 @@ async function authFetch(url, options = {}) {
 
     const response = await fetch(url, { ...options, headers });
 
+    // Handle CSRF errors (token expired after server restart)
+    if (response.status === 403) {
+        const cloned = response.clone();
+        try {
+            const data = await cloned.json();
+            if (data.code === 'CSRF_INVALID' || (data.error && data.error.includes('CSRF'))) {
+                clearSession();
+                showNotification('Sesión expirada. Por favor, inicia sesión de nuevo.', 'warning');
+                setTimeout(() => location.reload(), 1500);
+                throw new Error('CSRF_EXPIRED');
+            }
+        } catch (e) {
+            if (e.message === 'CSRF_EXPIRED') throw e;
+            // Not a JSON response or not CSRF error, continue
+        }
+    }
+
     // Handle session expiration
     if (response.status === 401 && state.isAuthenticated) {
         state.isAuthenticated = false;
