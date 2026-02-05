@@ -388,7 +388,7 @@ function showDiskNotification(disks) {
             }
             .disk-notif-btn:hover { transform: scale(1.05); }
         </style>
-        <button class="disk-notif-close" onclick="hideDiskNotification()">×</button>
+        <button class="disk-notif-close">×</button>
         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
             <span style="font-size: 24px;">🆕</span>
             <div>
@@ -407,12 +407,17 @@ function showDiskNotification(disks) {
             `).join('')}
         </div>
         <div class="disk-notif-actions">
-            <button class="disk-notif-btn primary" onclick="showDiskActionModal()">Configurar</button>
-            <button class="disk-notif-btn secondary" onclick="ignoreDiskNotification()">Ignorar</button>
+            <button class="disk-notif-btn primary" id="disk-notif-configure">Configurar</button>
+            <button class="disk-notif-btn secondary" id="disk-notif-ignore">Ignorar</button>
         </div>
     `;
     
     document.body.appendChild(notification);
+    
+    // Add event listeners (CSP blocks inline onclick)
+    document.getElementById('disk-notif-configure').addEventListener('click', showDiskActionModal);
+    document.getElementById('disk-notif-ignore').addEventListener('click', ignoreDiskNotification);
+    notification.querySelector('.disk-notif-close').addEventListener('click', hideDiskNotification);
 }
 
 function hideDiskNotification() {
@@ -466,7 +471,7 @@ function showDiskActionModal() {
         ">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h3 style="color: #4ecdc4; margin: 0;">🆕 Configurar Nuevo Disco</h3>
-                <button onclick="closeDiskActionModal()" style="background: none; border: none; color: #888; font-size: 24px; cursor: pointer;">×</button>
+                <button id="disk-modal-close" style="background: none; border: none; color: #888; font-size: 24px; cursor: pointer;">×</button>
             </div>
             
             <div id="disk-action-list">
@@ -532,7 +537,7 @@ function showDiskActionModal() {
             </div>
             
             <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
-                <button onclick="closeDiskActionModal()" style="
+                <button id="disk-modal-cancel" style="
                     padding: 10px 20px;
                     border-radius: 8px;
                     background: rgba(255,255,255,0.1);
@@ -540,7 +545,7 @@ function showDiskActionModal() {
                     color: #fff;
                     cursor: pointer;
                 ">Cancelar</button>
-                <button onclick="applyDiskActions()" style="
+                <button id="disk-modal-apply" style="
                     padding: 10px 20px;
                     border-radius: 8px;
                     background: #4ecdc4;
@@ -554,6 +559,11 @@ function showDiskActionModal() {
     `;
     
     document.body.appendChild(modal);
+    
+    // Add event listeners (CSP blocks inline onclick)
+    document.getElementById('disk-modal-close').addEventListener('click', closeDiskActionModal);
+    document.getElementById('disk-modal-cancel').addEventListener('click', closeDiskActionModal);
+    document.getElementById('disk-modal-apply').addEventListener('click', applyDiskActions);
     
     // Add event listeners for action changes
     detectedNewDisks.forEach(d => {
