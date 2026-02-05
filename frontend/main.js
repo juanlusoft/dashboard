@@ -364,7 +364,7 @@ function showDiskNotification(disks) {
         border: 1px solid #4ecdc4;
         border-radius: 12px;
         padding: 16px 20px;
-        z-index: 10000;
+        z-index: 99999;
         box-shadow: 0 8px 32px rgba(78, 205, 196, 0.3);
         max-width: 400px;
         animation: slideIn 0.3s ease-out;
@@ -473,6 +473,10 @@ document.head.appendChild(styleSheet);
 function showDiskActionModal() {
     hideDiskNotification();
     
+    // Remove any existing modal first
+    const existingModal = document.getElementById('disk-action-modal');
+    if (existingModal) existingModal.remove();
+    
     const modal = document.createElement('div');
     modal.id = 'disk-action-modal';
     modal.style.cssText = `
@@ -481,11 +485,11 @@ function showDiskActionModal() {
         left: 0;
         width: 100%;
         height: 100%;
-        background: rgba(0,0,0,0.7);
+        background: rgba(0,0,0,0.8);
         display: flex;
         align-items: center;
         justify-content: center;
-        z-index: 10001;
+        z-index: 99999;
     `;
     
     modal.innerHTML = `
@@ -566,7 +570,15 @@ function showDiskActionModal() {
                 `).join('')}
             </div>
             
-            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
+            <!-- Progress Section (hidden initially) -->
+            <div id="disk-progress-section" style="display: none;">
+                <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px; margin-top: 16px;">
+                    <h4 style="color: #4ecdc4; margin: 0 0 12px 0; font-size: 14px;">📊 Progreso</h4>
+                    <div id="disk-progress-steps"></div>
+                </div>
+            </div>
+            
+            <div id="disk-modal-buttons" style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
                 <button id="disk-modal-cancel" style="
                     padding: 10px 20px;
                     border-radius: 8px;
@@ -585,24 +597,75 @@ function showDiskActionModal() {
                     cursor: pointer;
                 ">Aplicar</button>
             </div>
+            
+            <!-- Close button after completion (hidden initially) -->
+            <div id="disk-modal-done" style="display: none; margin-top: 20px; text-align: center;">
+                <button id="disk-modal-close-done" style="
+                    padding: 12px 32px;
+                    border-radius: 8px;
+                    background: #10b981;
+                    border: none;
+                    color: #fff;
+                    font-weight: 600;
+                    cursor: pointer;
+                    font-size: 14px;
+                ">✓ Cerrar</button>
+            </div>
         </div>
     `;
     
     document.body.appendChild(modal);
     
-    // Add event listeners (CSP blocks inline onclick)
-    document.getElementById('disk-modal-close').addEventListener('click', closeDiskActionModal);
-    document.getElementById('disk-modal-cancel').addEventListener('click', closeDiskActionModal);
-    document.getElementById('disk-modal-apply').addEventListener('click', applyDiskActions);
+    // Use event delegation on the modal for all button clicks
+    modal.addEventListener('click', (e) => {
+        const target = e.target;
+        
+        // Close button (X)
+        if (target.id === 'disk-modal-close' || target.closest('#disk-modal-close')) {
+            e.preventDefault();
+            closeDiskActionModal();
+            return;
+        }
+        
+        // Cancel button
+        if (target.id === 'disk-modal-cancel' || target.closest('#disk-modal-cancel')) {
+            e.preventDefault();
+            closeDiskActionModal();
+            return;
+        }
+        
+        // Apply button
+        if (target.id === 'disk-modal-apply' || target.closest('#disk-modal-apply')) {
+            e.preventDefault();
+            console.log('Apply button clicked!');
+            applyDiskActions();
+            return;
+        }
+        
+        // Close done button (after completion)
+        if (target.id === 'disk-modal-close-done' || target.closest('#disk-modal-close-done')) {
+            e.preventDefault();
+            closeDiskActionModal();
+            // Refresh storage view
+            if (state.currentView === 'storage') {
+                renderContent('storage');
+            }
+            return;
+        }
+    });
     
-    // Add event listeners for action changes
+    // Add event listeners for action changes (select dropdowns)
     detectedNewDisks.forEach(d => {
         const select = document.getElementById(`disk-action-${d.id}`);
         const standaloneDiv = document.getElementById(`standalone-name-${d.id}`);
-        select.addEventListener('change', () => {
-            standaloneDiv.style.display = select.value === 'standalone' ? 'block' : 'none';
-        });
+        if (select && standaloneDiv) {
+            select.addEventListener('change', () => {
+                standaloneDiv.style.display = select.value === 'standalone' ? 'block' : 'none';
+            });
+        }
     });
+    
+    console.log('Disk action modal opened for disks:', detectedNewDisks.map(d => d.id));
 }
 
 function closeDiskActionModal() {
@@ -610,19 +673,102 @@ function closeDiskActionModal() {
     if (modal) modal.remove();
 }
 
+// Helper to update progress step UI
+function updateDiskProgressStep(diskId, step, status, message) {
+    const stepEl = document.getElementById(`progress-${diskId}-${step}`);
+    if (!stepEl) return;
+    
+    const icons = { pending: '⏳', running: '🔄', done: '✅', error: '❌' };
+    const colors = { pending: '#888', running: '#f59e0b', done: '#10b981', error: '#ef4444' };
+    
+    stepEl.innerHTML = `
+        <span style="margin-right: 8px;">${icons[status]}</span>
+        <span style="color: ${colors[status]};">${message}</span>
+    `;
+}
+
 // Apply the selected actions for each disk
 async function applyDiskActions() {
-    const results = [];
+    console.log('applyDiskActions called, disks:', detectedNewDisks);
     
+    if (!detectedNewDisks || detectedNewDisks.length === 0) {
+        showNotification('No hay discos para configurar', 'error');
+        closeDiskActionModal();
+        return;
+    }
+    
+    // Hide action list and buttons, show progress
+    const actionList = document.getElementById('disk-action-list');
+    const buttons = document.getElementById('disk-modal-buttons');
+    const progressSection = document.getElementById('disk-progress-section');
+    const progressSteps = document.getElementById('disk-progress-steps');
+    const doneSection = document.getElementById('disk-modal-done');
+    const closeBtn = document.getElementById('disk-modal-close');
+    
+    if (actionList) actionList.style.display = 'none';
+    if (buttons) buttons.style.display = 'none';
+    if (closeBtn) closeBtn.style.display = 'none';
+    if (progressSection) progressSection.style.display = 'block';
+    
+    // Build progress UI for each disk
+    const diskConfigs = [];
     for (const disk of detectedNewDisks) {
         const action = document.getElementById(`disk-action-${disk.id}`)?.value;
         const format = document.getElementById(`disk-format-${disk.id}`)?.checked;
         const name = document.getElementById(`disk-name-${disk.id}`)?.value || disk.id;
         
+        if (action === 'ignore') continue;
+        
+        diskConfigs.push({ disk, action, format, name });
+        
+        // Create progress steps for this disk
+        const diskProgress = document.createElement('div');
+        diskProgress.style.cssText = 'background: rgba(0,0,0,0.2); border-radius: 8px; padding: 12px; margin-bottom: 12px;';
+        diskProgress.innerHTML = `
+            <div style="color: #fff; font-weight: 600; margin-bottom: 8px;">💾 ${disk.model || disk.id} (${disk.sizeFormatted})</div>
+            <div id="progress-${disk.id}-format" style="font-size: 13px; margin: 4px 0; display: ${format ? 'block' : 'none'};">
+                <span style="margin-right: 8px;">⏳</span>
+                <span style="color: #888;">Formatear disco...</span>
+            </div>
+            <div id="progress-${disk.id}-mount" style="font-size: 13px; margin: 4px 0;">
+                <span style="margin-right: 8px;">⏳</span>
+                <span style="color: #888;">Montar disco...</span>
+            </div>
+            <div id="progress-${disk.id}-pool" style="font-size: 13px; margin: 4px 0; display: ${action.startsWith('pool') ? 'block' : 'none'};">
+                <span style="margin-right: 8px;">⏳</span>
+                <span style="color: #888;">Añadir al pool...</span>
+            </div>
+            <div id="progress-${disk.id}-result" style="font-size: 13px; margin: 8px 0 0 0; display: none;"></div>
+        `;
+        progressSteps.appendChild(diskProgress);
+    }
+    
+    if (diskConfigs.length === 0) {
+        showNotification('Todos los discos marcados como ignorar', 'info');
+        closeDiskActionModal();
+        return;
+    }
+    
+    // Process each disk
+    const results = [];
+    
+    for (const { disk, action, format, name } of diskConfigs) {
+        console.log(`Processing disk ${disk.id}: action=${action}, format=${format}`);
+        
         if (!action) continue;
         
         try {
             let res;
+            
+            // Update UI: formatting
+            if (format) {
+                updateDiskProgressStep(disk.id, 'format', 'running', 'Formateando disco (puede tardar unos minutos)...');
+            }
+            updateDiskProgressStep(disk.id, 'mount', 'pending', 'Montar disco...');
+            if (action.startsWith('pool')) {
+                updateDiskProgressStep(disk.id, 'pool', 'pending', 'Añadir al pool...');
+            }
+            
             if (action === 'pool-data' || action === 'pool-cache') {
                 res = await authFetch(`${API_BASE}/storage/disks/add-to-pool`, {
                     method: 'POST',
@@ -651,36 +797,64 @@ async function applyDiskActions() {
             if (res && res.ok) {
                 const data = await res.json();
                 results.push({ disk: disk.id, success: true, message: data.message });
+                
+                // Update UI: success
+                if (format) updateDiskProgressStep(disk.id, 'format', 'done', 'Disco formateado');
+                updateDiskProgressStep(disk.id, 'mount', 'done', 'Disco montado');
+                if (action.startsWith('pool')) {
+                    updateDiskProgressStep(disk.id, 'pool', 'done', 'Añadido al pool');
+                }
+                
+                // Show result
+                const resultEl = document.getElementById(`progress-${disk.id}-result`);
+                if (resultEl) {
+                    resultEl.style.display = 'block';
+                    resultEl.innerHTML = `<span style="color: #10b981; font-weight: 600;">✅ ${data.message || 'Completado'}</span>`;
+                }
             } else if (res) {
-                const err = await res.json();
+                const err = await res.json().catch(() => ({ error: 'Error desconocido' }));
                 results.push({ disk: disk.id, success: false, message: err.error });
+                
+                // Update UI: error
+                if (format) updateDiskProgressStep(disk.id, 'format', 'error', 'Error al formatear');
+                updateDiskProgressStep(disk.id, 'mount', 'error', 'Error');
+                
+                // Show error
+                const resultEl = document.getElementById(`progress-${disk.id}-result`);
+                if (resultEl) {
+                    resultEl.style.display = 'block';
+                    resultEl.innerHTML = `<span style="color: #ef4444; font-weight: 600;">❌ ${err.error}</span>`;
+                }
             }
         } catch (e) {
             results.push({ disk: disk.id, success: false, message: e.message });
+            
+            // Update UI: error
+            updateDiskProgressStep(disk.id, 'format', 'error', 'Error');
+            const resultEl = document.getElementById(`progress-${disk.id}-result`);
+            if (resultEl) {
+                resultEl.style.display = 'block';
+                resultEl.innerHTML = `<span style="color: #ef4444; font-weight: 600;">❌ ${e.message}</span>`;
+            }
         }
     }
     
-    closeDiskActionModal();
+    // Show done button, hide progress spinner
+    if (doneSection) doneSection.style.display = 'block';
     
-    // Show results
+    // Show summary notification
     const successCount = results.filter(r => r.success).length;
     const failCount = results.filter(r => !r.success).length;
     
-    if (failCount === 0) {
-        alert(`✅ ${successCount} disco(s) configurado(s) correctamente`);
-    } else {
-        const errors = results.filter(r => !r.success).map(r => `${r.disk}: ${r.message}`).join('\n');
-        alert(`⚠️ ${failCount} error(es):\n${errors}`);
+    if (failCount === 0 && successCount > 0) {
+        showNotification(`✅ ${successCount} disco(s) configurado(s) correctamente`, 'success');
+    } else if (failCount > 0) {
+        showNotification(`⚠️ ${failCount} error(es) al configurar discos`, 'error');
     }
     
     // Reset detection state
     detectedNewDisks = [];
     diskNotificationShown = false;
-    
-    // Refresh storage view if active
-    if (state.currentView === 'storage') {
-        renderContent('storage');
-    }
 }
 
 // Ignore all detected disks
@@ -7828,7 +8002,7 @@ async function loadDevicesList() {
 function showRenameDeviceModal(deviceId, currentName) {
     const modal = document.createElement('div');
     modal.id = 'rename-device-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 99999;';
     modal.innerHTML = `
         <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 400px;">
             <h3 style="color: #22d3ee; margin-bottom: 20px;">✏️ Renombrar Dispositivo</h3>
@@ -7951,7 +8125,7 @@ async function stopSyncthing() {
 function showAddFolderModal() {
     const modal = document.createElement('div');
     modal.id = 'add-folder-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 99999;';
     modal.innerHTML = `
         <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 500px;">
             <h3 style="color: #a78bfa; margin-bottom: 20px;">📁 Añadir Carpeta Sincronizada</h3>
@@ -8014,35 +8188,46 @@ async function addFolder() {
 // Custom confirm modal (replaces native confirm() which has issues in some contexts)
 function showConfirmModal(title, message) {
     return new Promise((resolve) => {
+        // Remove any existing confirm modal
+        const existing = document.getElementById('confirm-modal');
+        if (existing) existing.remove();
+        
         const modal = document.createElement('div');
         modal.id = 'confirm-modal';
-        modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 99999;';
         modal.innerHTML = `
-            <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 400px; text-align: center;">
+            <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 400px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
                 <h3 style="color: #ef4444; margin-bottom: 15px;">⚠️ ${escapeHtml(title)}</h3>
                 <p style="color: #ccc; margin-bottom: 25px;">${escapeHtml(message)}</p>
                 <div style="display: flex; gap: 15px; justify-content: center;">
-                    <button id="confirm-cancel-btn" style="padding: 12px 24px; background: #666; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem;">
+                    <button id="confirm-cancel-btn" style="padding: 12px 24px; background: #4b5563; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem;">
                         Cancelar
                     </button>
                     <button id="confirm-ok-btn" style="padding: 12px 24px; background: #ef4444; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: 600;">
-                        Eliminar
+                        Confirmar
                     </button>
                 </div>
             </div>
         `;
         document.body.appendChild(modal);
         
-        document.getElementById('confirm-cancel-btn').addEventListener('click', () => {
+        const cancelBtn = document.getElementById('confirm-cancel-btn');
+        const okBtn = document.getElementById('confirm-ok-btn');
+        
+        cancelBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             modal.remove();
             resolve(false);
         });
-        document.getElementById('confirm-ok-btn').addEventListener('click', () => {
+        okBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             modal.remove();
             resolve(true);
         });
         
-        // Close on backdrop click
+        // Close on backdrop click (click on modal background, not content)
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
                 modal.remove();
@@ -8116,7 +8301,7 @@ async function showShareFolderModal(folderId, folderLabel) {
     
     const modal = document.createElement('div');
     modal.id = 'share-folder-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 99999;';
     modal.innerHTML = `
         <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 450px;">
             <h3 style="color: #22d3ee; margin-bottom: 20px;">📤 Compartir "${escapeHtml(folderLabel)}"</h3>
@@ -8192,7 +8377,7 @@ async function showShareFolderModal(folderId, folderLabel) {
 function showAddDeviceModal() {
     const modal = document.createElement('div');
     modal.id = 'add-device-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 99999;';
     modal.innerHTML = `
         <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 500px;">
             <h3 style="color: #22d3ee; margin-bottom: 20px;">📱 Añadir Dispositivo</h3>
