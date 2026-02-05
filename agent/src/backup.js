@@ -75,12 +75,51 @@ class BackupManager {
     const cmd = `wbadmin start backup -backupTarget:${sharePath} -include:C: -allCritical -quiet`;
 
     try {
-      const result = await execAsync(cmd, {
-        shell: 'cmd.exe',
-        timeout: 7200000, // 2 hours
-        windowsHide: true,
-      });
-      return { type: 'image', output: result.stdout, timestamp: new Date().toISOString() };
+      // Run wbadmin and capture output regardless of exit code
+      let stdout = '', stderr = '';
+      try {
+        const result = await execAsync(cmd, {
+          shell: 'cmd.exe',
+          timeout: 7200000, // 2 hours
+          windowsHide: true,
+        });
+        stdout = result.stdout || '';
+        stderr = result.stderr || '';
+      } catch (execErr) {
+        // wbadmin may exit non-zero even on success (warnings, etc.)
+        stdout = execErr.stdout || '';
+        stderr = execErr.stderr || '';
+        
+        // Check if backup actually succeeded by parsing output
+        const output = (stdout + stderr).toLowerCase();
+        const successIndicators = [
+          'completed successfully',
+          'successfully completed',
+          'the backup operation completed',
+          'backup completed',
+        ];
+        const failureIndicators = [
+          'the backup operation failed',
+          'backup failed',
+          'error:',
+          'access is denied',
+          'cannot find the path',
+        ];
+        
+        const hasSuccess = successIndicators.some(s => output.includes(s));
+        const hasFailure = failureIndicators.some(f => output.includes(f));
+        
+        // If we see success indicators and no failure indicators, it worked
+        if (hasSuccess && !hasFailure) {
+          console.log('[wbadmin] Backup completed despite non-zero exit code');
+        } else if (hasFailure || !hasSuccess) {
+          // Real failure - rethrow with better message
+          const errorMsg = stderr || stdout || execErr.message;
+          throw new Error(`wbadmin falló: ${errorMsg.substring(0, 500)}`);
+        }
+      }
+      
+      return { type: 'image', output: stdout, timestamp: new Date().toISOString() };
     } finally {
       try { await execAsync(`net use ${sharePath} /delete /y 2>nul`, { shell: 'cmd.exe' }); } catch (e) {}
     }
