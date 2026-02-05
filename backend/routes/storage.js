@@ -1008,9 +1008,9 @@ async function addDiskToMergerFS(mountPoint, role) {
         const hasCache = newSources.includes('cache') || role === 'cache';
         const policy = hasCache ? 'lfs' : 'mfs';
         
-        // Mount MergerFS
+        // Mount MergerFS (nofail is only for fstab, not mount command)
         execSync(
-            `sudo mergerfs -o defaults,allow_other,nonempty,use_ino,cache.files=partial,dropcacheonclose=true,category.create=${policy},moveonenospc=true,nofail ${escapeShellArg(newSources)} ${POOL_MOUNT}`,
+            `sudo mergerfs -o defaults,allow_other,nonempty,use_ino,cache.files=partial,dropcacheonclose=true,category.create=${policy},moveonenospc=true ${escapeShellArg(newSources)} ${POOL_MOUNT}`,
             { encoding: 'utf8' }
         );
 
