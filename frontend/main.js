@@ -7576,7 +7576,7 @@ async function showShareFolderModal(folderId, folderLabel) {
                 <button id="share-cancel-btn" style="flex: 1; padding: 12px; background: #666; color: #fff; border: none; border-radius: 8px; cursor: pointer;">
                     Cancelar
                 </button>
-                <button id="share-save-btn" style="flex: 1; padding: 12px; background: var(--secondary); color: #000; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                <button id="share-save-btn" style="flex: 1; padding: 12px; background: #22c55e; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                     💾 Guardar
                 </button>
             </div>
