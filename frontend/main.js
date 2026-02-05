@@ -1700,6 +1700,19 @@ async function renderStorageDashboard() {
 
             telemetryRow.appendChild(tempIndicator);
 
+            // Add configure button for unconfigured disks
+            if (role === 'none') {
+                const configBtn = document.createElement('button');
+                configBtn.className = 'btn-primary';
+                configBtn.style.cssText = 'margin-top: 12px; width: 100%; background: #4ecdc4;';
+                configBtn.textContent = '⚙️ Configurar disco';
+                configBtn.addEventListener('click', () => {
+                    detectedNewDisks = [disk];
+                    showDiskActionModal();
+                });
+                telemetryRow.appendChild(configBtn);
+            }
+
             card.appendChild(header);
             card.appendChild(progressContainer);
             card.appendChild(telemetryRow);
