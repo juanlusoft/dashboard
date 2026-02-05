@@ -338,29 +338,51 @@ run_image_backup() {
 
   mkdir -p "$dest"
 
-  # Find root device
-  local root_dev
+  # Find root device and filesystem type
+  local root_dev root_fs
   root_dev=$(findmnt -n -o SOURCE / | head -1)
+  root_fs=$(findmnt -n -o FSTYPE / | head -1)
   if [[ -z "$root_dev" ]]; then
     err "No se pudo determinar el dispositivo raíz"
     return 1
   fi
 
-  log "  Creando imagen de $root_dev..."
+  log "  Dispositivo: $root_dev (${root_fs})"
 
-  if command -v partclone.ext4 &>/dev/null; then
-    # Prefer partclone (space-efficient)
-    partclone.ext4 -c -s "$root_dev" -o "${dest}/root.img" 2>/dev/null || {
-      # Fallback: try generic partclone
-      partclone.dd -s "$root_dev" -o "${dest}/root.img" 2>/dev/null || {
-        err "partclone falló"
-        return 1
-      }
+  # Choose compressor: pigz (parallel) > gzip
+  local compressor="gzip"
+  command -v pigz &>/dev/null && compressor="pigz"
+
+  # Determine partclone variant based on filesystem
+  local partclone_cmd=""
+  case "$root_fs" in
+    ext4) command -v partclone.ext4 &>/dev/null && partclone_cmd="partclone.ext4" ;;
+    ext3) command -v partclone.ext3 &>/dev/null && partclone_cmd="partclone.ext3" ;;
+    ext2) command -v partclone.ext2 &>/dev/null && partclone_cmd="partclone.ext2" ;;
+    btrfs) command -v partclone.btrfs &>/dev/null && partclone_cmd="partclone.btrfs" ;;
+    xfs) command -v partclone.xfs &>/dev/null && partclone_cmd="partclone.xfs" ;;
+    ntfs) command -v partclone.ntfs &>/dev/null && partclone_cmd="partclone.ntfs" ;;
+    *) command -v partclone.dd &>/dev/null && partclone_cmd="partclone.dd" ;;
+  esac
+
+  # Fallback to generic partclone.dd if specific not found
+  [[ -z "$partclone_cmd" ]] && command -v partclone.dd &>/dev/null && partclone_cmd="partclone.dd"
+
+  log "  Creando imagen sparse comprimida de $root_dev..."
+
+  if [[ -n "$partclone_cmd" ]]; then
+    # Use partclone with compression — only copies used blocks!
+    log "  Usando $partclone_cmd + $compressor (solo bloques usados)"
+    $partclone_cmd -c -s "$root_dev" 2>/dev/null | $compressor > "${dest}/root.img.gz" || {
+      err "partclone + compresión falló"
+      return 1
     }
   elif command -v dd &>/dev/null; then
-    # Fallback to dd
-    dd if="$root_dev" of="${dest}/root.img" bs=4M status=progress 2>/dev/null || {
-      err "dd falló"
+    # Fallback to dd with compression and sparse reading
+    log "  ⚠️ partclone no disponible, usando dd + $compressor (menos eficiente)"
+    log "  💡 Instala partclone para backups más pequeños: apt install partclone"
+    dd if="$root_dev" bs=4M status=progress conv=sparse 2>/dev/null | $compressor > "${dest}/root.img.gz" || {
+      err "dd + compresión falló"
       return 1
     }
   else
@@ -368,12 +390,17 @@ run_image_backup() {
     return 1
   fi
 
-  # Save partition info
+  # Save partition info for restore
   fdisk -l "$root_dev" > "${dest}/partition-info.txt" 2>/dev/null || true
   blkid "$root_dev" > "${dest}/blkid.txt" 2>/dev/null || true
   lsblk -f > "${dest}/lsblk.txt" 2>/dev/null || true
+  echo "$root_fs" > "${dest}/filesystem.txt"
+  echo "$partclone_cmd" > "${dest}/backup-method.txt" 2>/dev/null || echo "dd" > "${dest}/backup-method.txt"
 
-  log "  Imagen guardada en ${dest}/"
+  # Show final size
+  local final_size
+  final_size=$(du -h "${dest}/root.img.gz" 2>/dev/null | cut -f1)
+  log "  ✅ Imagen guardada: ${dest}/root.img.gz ($final_size)"
 }
 
 run_file_backup() {
