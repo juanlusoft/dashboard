@@ -663,6 +663,12 @@ async function ignoreDiskNotification() {
     detectedNewDisks = [];
 }
 
+// Expose disk functions globally for onclick handlers
+window.showDiskActionModal = showDiskActionModal;
+window.closeDiskActionModal = closeDiskActionModal;
+window.applyDiskActions = applyDiskActions;
+window.ignoreDiskNotification = ignoreDiskNotification;
+
 // Start disk detection polling (check every 30 seconds)
 function startDiskDetectionPolling() {
     // Initial check after 5 seconds (give time for page to load)
