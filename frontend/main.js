@@ -7272,7 +7272,7 @@ async function loadDevicesList() {
         const devices = await res.json();
         
         if (devices.length === 0) {
-            listDiv.innerHTML = '<p style="color: var(--text-dim);">No hay dispositivos vinculados. Añade el Device ID de tu PC o móvil.</p>';
+            listDiv.innerHTML = '<p style="color: #9ca3af;">No hay dispositivos vinculados. Añade el Device ID de tu PC o móvil.</p>';
             return;
         }
         
