@@ -168,9 +168,11 @@ router.get('/containers', async (req, res) => {
                     const cpuPercent = (cpuDelta / systemDelta) * stats.cpu_stats.online_cpus * 100;
                     cpu = cpuPercent.toFixed(1) + '%';
 
-                    // Calculate memory usage
-                    const memUsage = stats.memory_stats.usage / 1024 / 1024;
-                    ram = memUsage.toFixed(0) + 'MB';
+                    // Calculate memory usage (check for undefined to avoid NaN)
+                    if (stats.memory_stats?.usage) {
+                        const memUsage = stats.memory_stats.usage / 1024 / 1024;
+                        ram = memUsage.toFixed(0) + 'MB';
+                    }
                 } catch (e) {
                     // Stats not available
                 }
