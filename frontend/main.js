@@ -7486,7 +7486,7 @@ async function renderCloudSyncContent(status) {
         <div class="card" style="margin-bottom: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <h3 style="color: var(--secondary);">📁 Carpetas Sincronizadas</h3>
-                <button id="add-folder-btn" style="padding: 8px 16px; background: var(--primary); color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                <button id="add-folder-btn" style="padding: 8px 16px; background: #a78bfa; color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
                     + Añadir Carpeta
                 </button>
             </div>
@@ -7499,7 +7499,7 @@ async function renderCloudSyncContent(status) {
         <div class="card" style="margin-bottom: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <h3 style="color: var(--secondary);">📱 Dispositivos</h3>
-                <button id="add-device-btn" style="padding: 8px 16px; background: var(--secondary); color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                <button id="add-device-btn" style="padding: 8px 16px; background: #22d3ee; color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
                     + Añadir Dispositivo
                 </button>
             </div>
