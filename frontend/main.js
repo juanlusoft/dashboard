@@ -252,7 +252,7 @@ function startGlobalPolling() {
     // Polling System Stats (CPU/RAM/Temp)
     state.pollingIntervals.stats = setInterval(async () => {
         try {
-            const res = await fetch(`${API_BASE}/system/stats`);
+            const res = await authFetch(`${API_BASE}/system/stats`);
             if (res.ok) {
                 state.globalStats = await res.json();
 
@@ -260,6 +260,11 @@ function startGlobalPolling() {
                 if (state.currentView === "dashboard") renderDashboard();
             }
         } catch (e) {
+            // Session expired - authFetch handles redirect, stop polling
+            if (e.message === 'Session expired' || e.message === 'CSRF_EXPIRED') {
+                stopGlobalPolling();
+                return;
+            }
             console.error('Stats polling error:', e);
         }
     }, 2000);
@@ -270,6 +275,21 @@ function startGlobalPolling() {
     
     // Start disk detection polling
     startDiskDetectionPolling();
+}
+
+function stopGlobalPolling() {
+    if (state.pollingIntervals.stats) {
+        clearInterval(state.pollingIntervals.stats);
+        state.pollingIntervals.stats = null;
+    }
+    if (state.pollingIntervals.publicIP) {
+        clearInterval(state.pollingIntervals.publicIP);
+        state.pollingIntervals.publicIP = null;
+    }
+    if (state.pollingIntervals.diskDetection) {
+        clearInterval(state.pollingIntervals.diskDetection);
+        state.pollingIntervals.diskDetection = null;
+    }
 }
 
 // Public IP Tracker
