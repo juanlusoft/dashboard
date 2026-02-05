@@ -1720,7 +1720,17 @@ async function renderStorageDashboard() {
                 configBtn.style.cssText = 'margin-top: 12px; width: 100%; background: #4ecdc4;';
                 configBtn.textContent = '⚙️ Configurar disco';
                 configBtn.addEventListener('click', () => {
-                    detectedNewDisks = [disk];
+                    // Normalize disk object for showDiskActionModal (same format as /disks/detect)
+                    detectedNewDisks = [{
+                        id: disk.id,
+                        model: disk.model || 'Disco',
+                        size: disk.size,
+                        sizeFormatted: disk.size || 'N/A',
+                        transport: disk.type || 'unknown', // SSD/HDD -> treat as transport hint
+                        serial: disk.serial,
+                        hasData: true, // Assume existing disk has data (safer default)
+                        partitions: []
+                    }];
                     showDiskActionModal();
                 });
                 telemetryRow.appendChild(configBtn);
