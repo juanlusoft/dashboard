@@ -264,12 +264,28 @@ if (fs.existsSync(SSL_CERT_PATH) && fs.existsSync(SSL_KEY_PATH)) {
     }
 }
 
-// Always start HTTP server
-const httpServer = http.createServer(app);
+// HTTP server - redirect to HTTPS if available, otherwise serve app
+let httpApp;
+if (httpsServer) {
+    // Create a simple redirect app for HTTP
+    httpApp = express();
+    httpApp.use((req, res) => {
+        // Redirect to HTTPS with same host but different port
+        const host = req.headers.host?.split(':')[0] || req.hostname;
+        const httpsUrl = `https://${host}:${HTTPS_PORT}${req.url}`;
+        res.redirect(301, httpsUrl);
+    });
+    console.log(`[HTTP]  Will redirect all traffic to HTTPS`);
+} else {
+    // No HTTPS, serve app on HTTP
+    httpApp = app;
+}
+
+const httpServer = http.createServer(httpApp);
 httpServer.listen(HTTP_PORT, '0.0.0.0', () => {
     console.log(`[HTTP]  Server running on http://0.0.0.0:${HTTP_PORT}`);
     if (httpsServer) {
-        console.log('\n[INFO]  Recommended: Use HTTPS on port ' + HTTPS_PORT + ' for secure access');
+        console.log('[HTTP]  → Redirecting to HTTPS on port ' + HTTPS_PORT);
     } else {
         console.log('\n[WARN]  HTTPS not configured. Run install.sh to generate SSL certificates.');
     }
