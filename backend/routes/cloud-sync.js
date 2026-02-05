@@ -57,7 +57,8 @@ async function syncthingApi(endpoint, method = 'GET', body = null) {
             method,
             headers: {
                 'X-API-Key': apiKey,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Origin': SYNCTHING_API_URL  // Required to avoid CSRF error
             }
         };
         
