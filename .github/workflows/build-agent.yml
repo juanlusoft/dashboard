@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'agent/**'
+      - 'agent-linux/**'
       - '.github/workflows/build-agent.yml'
     branches: [develop, main]
   workflow_dispatch:
@@ -65,4 +66,26 @@ jobs:
           name: HomePiNAS-Backup-Mac
           path: |
             agent/build/dist/*.dmg
+          retention-days: 30
+
+  package-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package Linux agent
+        run: |
+          mkdir -p dist
+          cp agent-linux/homepinas-agent.sh dist/
+          cp agent-linux/README.md dist/
+          chmod +x dist/homepinas-agent.sh
+
+      - name: Upload Linux agent
+        uses: actions/upload-artifact@v4
+        with:
+          name: HomePiNAS-Backup-Linux
+          path: |
+            dist/homepinas-agent.sh
+            dist/README.md
           retention-days: 30
