@@ -4002,6 +4002,11 @@ function renderFolderTree(container, node, level) {
             // Navigate to folder
             currentFilePath = node.path;
             fmExpandedFolders.add(node.path);
+            // Load children if not yet loaded
+            if (node.children === null) {
+                const childData = await buildFolderTree(node.path);
+                node.children = childData.children || [];
+            }
             await renderFilesView();
         }
     });
@@ -4049,7 +4054,7 @@ function renderFolderTree(container, node, level) {
     container.appendChild(item);
     
     // Render children if expanded AND loaded
-    if (hasChildren && isExpanded && node.children) {
+    if (hasChildren && isExpanded && Array.isArray(node.children) && node.children.length > 0) {
         const childrenContainer = document.createElement('div');
         childrenContainer.className = 'fm-tree-children';
         node.children.forEach(child => {
