@@ -7778,19 +7778,19 @@ function showRenameDeviceModal(deviceId, currentName) {
     modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10000;';
     modal.innerHTML = `
         <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 400px;">
-            <h3 style="color: var(--secondary); margin-bottom: 20px;">✏️ Renombrar Dispositivo</h3>
+            <h3 style="color: #22d3ee; margin-bottom: 20px;">✏️ Renombrar Dispositivo</h3>
             <div style="margin-bottom: 20px;">
-                <label style="color: var(--text-dim); font-size: 0.9rem;">Nombre:</label>
+                <label style="color: #9ca3af; font-size: 0.9rem;">Nombre:</label>
                 <input type="text" id="device-new-name" value="${escapeHtml(currentName)}"
-                    style="width: 100%; padding: 12px; margin-top: 5px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: var(--text);">
+                    style="width: 100%; padding: 12px; margin-top: 5px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff;">
             </div>
             <div style="display: flex; gap: 10px; justify-content: flex-end;">
                 <button id="rename-cancel-btn"
-                    style="padding: 10px 20px; background: #666; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
+                    style="padding: 10px 20px; background: #4b5563; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
                     Cancelar
                 </button>
                 <button id="rename-save-btn"
-                    style="padding: 10px 20px; background: var(--primary); color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                    style="padding: 10px 20px; background: #a78bfa; color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
                     Guardar
                 </button>
             </div>
@@ -7901,24 +7901,24 @@ function showAddFolderModal() {
     modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10000;';
     modal.innerHTML = `
         <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 500px;">
-            <h3 style="color: var(--primary); margin-bottom: 20px;">📁 Añadir Carpeta Sincronizada</h3>
+            <h3 style="color: #a78bfa; margin-bottom: 20px;">📁 Añadir Carpeta Sincronizada</h3>
             <div style="margin-bottom: 15px;">
-                <label style="color: var(--text-dim); font-size: 0.9rem;">Ruta (relativa a /mnt/storage):</label>
+                <label style="color: #9ca3af; font-size: 0.9rem;">Ruta (relativa a /mnt/storage):</label>
                 <input type="text" id="folder-path" placeholder="ej: Documents, Photos, Backup" 
-                    style="width: 100%; padding: 12px; margin-top: 5px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: var(--text);">
+                    style="width: 100%; padding: 12px; margin-top: 5px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff;">
             </div>
             <div style="margin-bottom: 20px;">
-                <label style="color: var(--text-dim); font-size: 0.9rem;">Nombre (opcional):</label>
+                <label style="color: #9ca3af; font-size: 0.9rem;">Nombre (opcional):</label>
                 <input type="text" id="folder-label" placeholder="Nombre para mostrar"
-                    style="width: 100%; padding: 12px; margin-top: 5px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: var(--text);">
+                    style="width: 100%; padding: 12px; margin-top: 5px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff;">
             </div>
             <div style="display: flex; gap: 10px; justify-content: flex-end;">
                 <button id="cancel-folder-btn"
-                    style="padding: 10px 20px; background: #666; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
+                    style="padding: 10px 20px; background: #4b5563; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
                     Cancelar
                 </button>
                 <button id="add-folder-confirm-btn"
-                    style="padding: 10px 20px; background: var(--primary); color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                    style="padding: 10px 20px; background: #a78bfa; color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
                     Añadir
                 </button>
             </div>
@@ -8066,8 +8066,8 @@ async function showShareFolderModal(folderId, folderLabel) {
     modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10000;';
     modal.innerHTML = `
         <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 450px;">
-            <h3 style="color: var(--secondary); margin-bottom: 20px;">📤 Compartir "${escapeHtml(folderLabel)}"</h3>
-            <p style="color: var(--text-dim); margin-bottom: 15px; font-size: 0.9rem;">
+            <h3 style="color: #22d3ee; margin-bottom: 20px;">📤 Compartir "${escapeHtml(folderLabel)}"</h3>
+            <p style="color: #9ca3af; margin-bottom: 15px; font-size: 0.9rem;">
                 Selecciona los dispositivos con los que quieres sincronizar esta carpeta:
             </p>
             <div id="share-devices-list" style="max-height: 300px; overflow-y: auto;">
@@ -8077,14 +8077,14 @@ async function showShareFolderModal(folderId, folderLabel) {
                             ${folderDevices.includes(d.id) ? 'checked' : ''}
                             style="width: 18px; height: 18px; cursor: pointer;">
                         <div>
-                            <div style="color: var(--text); font-weight: 500;">${d.connected ? '🟢' : '⚪'} ${escapeHtml(d.name)}</div>
-                            <div style="color: var(--text-dim); font-size: 0.8rem;">${escapeHtml(d.id.substring(0, 15))}...</div>
+                            <div style="color: #e5e7eb; font-weight: 500;">${d.connected ? '🟢' : '⚪'} ${escapeHtml(d.name)}</div>
+                            <div style="color: #9ca3af; font-size: 0.8rem;">${escapeHtml(d.id.substring(0, 15))}...</div>
                         </div>
                     </label>
                 `).join('')}
             </div>
             <div style="display: flex; gap: 12px; margin-top: 20px;">
-                <button id="share-cancel-btn" style="flex: 1; padding: 12px; background: #666; color: #fff; border: none; border-radius: 8px; cursor: pointer;">
+                <button id="share-cancel-btn" style="flex: 1; padding: 12px; background: #4b5563; color: #fff; border: none; border-radius: 8px; cursor: pointer;">
                     Cancelar
                 </button>
                 <button id="share-save-btn" style="flex: 1; padding: 12px; background: #22c55e; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
@@ -8142,27 +8142,27 @@ function showAddDeviceModal() {
     modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10000;';
     modal.innerHTML = `
         <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 500px;">
-            <h3 style="color: var(--secondary); margin-bottom: 20px;">📱 Añadir Dispositivo</h3>
-            <p style="color: var(--text-dim); margin-bottom: 15px; font-size: 0.9rem;">
+            <h3 style="color: #22d3ee; margin-bottom: 20px;">📱 Añadir Dispositivo</h3>
+            <p style="color: #9ca3af; margin-bottom: 15px; font-size: 0.9rem;">
                 Copia el Device ID de Syncthing desde tu PC o móvil (Ajustes → Mostrar ID).
             </p>
             <div style="margin-bottom: 15px;">
-                <label style="color: var(--text-dim); font-size: 0.9rem;">Device ID:</label>
+                <label style="color: #9ca3af; font-size: 0.9rem;">Device ID:</label>
                 <input type="text" id="device-id" placeholder="XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX"
-                    style="width: 100%; padding: 12px; margin-top: 5px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: var(--text); font-family: monospace; font-size: 0.8rem;">
+                    style="width: 100%; padding: 12px; margin-top: 5px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff; font-family: monospace; font-size: 0.8rem;">
             </div>
             <div style="margin-bottom: 20px;">
-                <label style="color: var(--text-dim); font-size: 0.9rem;">Nombre:</label>
+                <label style="color: #9ca3af; font-size: 0.9rem;">Nombre:</label>
                 <input type="text" id="device-name" placeholder="Mi PC, iPhone, etc."
-                    style="width: 100%; padding: 12px; margin-top: 5px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: var(--text);">
+                    style="width: 100%; padding: 12px; margin-top: 5px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff;">
             </div>
             <div style="display: flex; gap: 10px; justify-content: flex-end;">
                 <button id="cancel-device-btn"
-                    style="padding: 10px 20px; background: #666; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
+                    style="padding: 10px 20px; background: #4b5563; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
                     Cancelar
                 </button>
                 <button id="add-device-confirm-btn"
-                    style="padding: 10px 20px; background: var(--secondary); color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                    style="padding: 10px 20px; background: #22d3ee; color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
                     Añadir
                 </button>
             </div>
