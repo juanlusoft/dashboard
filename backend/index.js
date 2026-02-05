@@ -144,6 +144,9 @@ app.use(generalLimiter);
 // Body parsing
 app.use(express.json({ limit: '10kb' }));
 
+// Cloud Sync routes (before CSRF - uses session auth only)
+app.use('/api/cloud-sync', cloudSyncRoutes);
+
 // CSRF protection for state-changing requests
 app.use(csrfProtection);
 
@@ -230,8 +233,7 @@ app.use('/api/ddns', ddnsRoutes);
 // Active Backup for Business
 app.use('/api/active-backup', activeBackupRoutes);
 
-// Cloud Sync (Syncthing integration)
-app.use('/api/cloud-sync', cloudSyncRoutes);
+// Cloud Sync routes registered before CSRF middleware
 
 // =============================================================================
 // SERVER STARTUP
