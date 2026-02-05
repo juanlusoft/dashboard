@@ -4392,6 +4392,7 @@ async function handleFileUpload(e) {
                 const xhr = new XMLHttpRequest();
                 xhr.open('POST', `${API_BASE}/files/upload`);
                 xhr.setRequestHeader('X-Session-Id', state.sessionId);
+                if (state.csrfToken) xhr.setRequestHeader('X-CSRF-Token', state.csrfToken);
 
                 xhr.upload.addEventListener('progress', (ev) => {
                     if (ev.lengthComputable) {
