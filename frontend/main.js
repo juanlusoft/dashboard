@@ -250,6 +250,9 @@ function startGlobalPolling() {
     // Polling Public IP
     updatePublicIP();
     state.pollingIntervals.publicIP = setInterval(updatePublicIP, 1000 * 60 * 10);
+    
+    // Start disk detection polling
+    startDiskDetectionPolling();
 }
 
 // Public IP Tracker
@@ -261,6 +264,394 @@ async function updatePublicIP() {
 
     const activeNav = document.querySelector('.nav-links li.active');
     if (activeNav && activeNav.dataset.view === 'network') renderNetworkManager();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HYBRID DISK DETECTION - Notify user when new disks are detected
+// ═══════════════════════════════════════════════════════════════════════════
+
+let detectedNewDisks = [];
+let diskNotificationShown = false;
+
+// Check for new unconfigured disks
+async function checkForNewDisks() {
+    try {
+        const res = await fetch(`${API_BASE}/storage/disks/detect`);
+        if (!res.ok) return;
+        
+        const { unconfigured } = await res.json();
+        
+        // Get ignored disks
+        const ignoredRes = await fetch(`${API_BASE}/storage/disks/ignored`);
+        const { ignored } = ignoredRes.ok ? await ignoredRes.json() : { ignored: [] };
+        
+        // Filter out ignored disks
+        const newDisks = unconfigured.filter(d => !ignored.includes(d.id));
+        
+        if (newDisks.length > 0 && !diskNotificationShown) {
+            detectedNewDisks = newDisks;
+            showDiskNotification(newDisks);
+        } else if (newDisks.length === 0) {
+            hideDiskNotification();
+        }
+    } catch (e) {
+        console.error('Disk detection error:', e);
+    }
+}
+
+// Show notification banner for new disks
+function showDiskNotification(disks) {
+    diskNotificationShown = true;
+    
+    // Remove existing notification if any
+    const existing = document.getElementById('disk-notification');
+    if (existing) existing.remove();
+    
+    const notification = document.createElement('div');
+    notification.id = 'disk-notification';
+    notification.style.cssText = `
+        position: fixed;
+        top: 70px;
+        right: 20px;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        border: 1px solid #4ecdc4;
+        border-radius: 12px;
+        padding: 16px 20px;
+        z-index: 10000;
+        box-shadow: 0 8px 32px rgba(78, 205, 196, 0.3);
+        max-width: 400px;
+        animation: slideIn 0.3s ease-out;
+    `;
+    
+    notification.innerHTML = `
+        <style>
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            .disk-notif-close {
+                position: absolute;
+                top: 8px;
+                right: 12px;
+                background: none;
+                border: none;
+                color: #888;
+                font-size: 18px;
+                cursor: pointer;
+            }
+            .disk-notif-close:hover { color: #fff; }
+            .disk-notif-item {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 8px 0;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+            }
+            .disk-notif-item:last-child { border-bottom: none; }
+            .disk-notif-actions {
+                display: flex;
+                gap: 8px;
+                margin-top: 12px;
+            }
+            .disk-notif-btn {
+                padding: 6px 12px;
+                border-radius: 6px;
+                border: none;
+                cursor: pointer;
+                font-size: 12px;
+                transition: all 0.2s;
+            }
+            .disk-notif-btn.primary {
+                background: #4ecdc4;
+                color: #1a1a2e;
+            }
+            .disk-notif-btn.secondary {
+                background: rgba(255,255,255,0.1);
+                color: #fff;
+            }
+            .disk-notif-btn:hover { transform: scale(1.05); }
+        </style>
+        <button class="disk-notif-close" onclick="hideDiskNotification()">×</button>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+            <span style="font-size: 24px;">🆕</span>
+            <div>
+                <div style="color: #4ecdc4; font-weight: 600;">Nuevo disco detectado</div>
+                <div style="color: #888; font-size: 12px;">${disks.length} disco(s) disponible(s)</div>
+            </div>
+        </div>
+        <div id="disk-notif-list">
+            ${disks.map(d => `
+                <div class="disk-notif-item">
+                    <div>
+                        <div style="color: #fff; font-weight: 500;">${d.model || d.id}</div>
+                        <div style="color: #888; font-size: 11px;">${d.sizeFormatted} • ${d.id}</div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+        <div class="disk-notif-actions">
+            <button class="disk-notif-btn primary" onclick="showDiskActionModal()">Configurar</button>
+            <button class="disk-notif-btn secondary" onclick="ignoreDiskNotification()">Ignorar</button>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+}
+
+function hideDiskNotification() {
+    diskNotificationShown = false;
+    const notification = document.getElementById('disk-notification');
+    if (notification) {
+        notification.style.animation = 'slideOut 0.3s ease-in forwards';
+        setTimeout(() => notification.remove(), 300);
+    }
+}
+
+// Add slideOut animation
+const styleSheet = document.createElement('style');
+styleSheet.textContent = `
+    @keyframes slideOut {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+    }
+`;
+document.head.appendChild(styleSheet);
+
+// Show modal to configure detected disk(s)
+function showDiskActionModal() {
+    hideDiskNotification();
+    
+    const modal = document.createElement('div');
+    modal.id = 'disk-action-modal';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10001;
+    `;
+    
+    modal.innerHTML = `
+        <div style="
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border: 1px solid rgba(78, 205, 196, 0.3);
+            border-radius: 16px;
+            padding: 24px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+        ">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="color: #4ecdc4; margin: 0;">🆕 Configurar Nuevo Disco</h3>
+                <button onclick="closeDiskActionModal()" style="background: none; border: none; color: #888; font-size: 24px; cursor: pointer;">×</button>
+            </div>
+            
+            <div id="disk-action-list">
+                ${detectedNewDisks.map((d, i) => `
+                    <div class="disk-config-card" style="
+                        background: rgba(255,255,255,0.05);
+                        border-radius: 12px;
+                        padding: 16px;
+                        margin-bottom: 16px;
+                    ">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                            <div>
+                                <div style="color: #fff; font-weight: 600; font-size: 16px;">${d.model || 'Disco'}</div>
+                                <div style="color: #888; font-size: 12px;">${d.sizeFormatted} • /dev/${d.id}</div>
+                                ${d.hasData ? '<div style="color: #f39c12; font-size: 11px; margin-top: 4px;">⚠️ Contiene datos</div>' : ''}
+                            </div>
+                            <div style="background: rgba(78,205,196,0.2); padding: 4px 8px; border-radius: 4px; font-size: 11px; color: #4ecdc4;">
+                                ${d.transport?.toUpperCase() || 'N/A'}
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 12px;">
+                            <label style="color: #888; font-size: 12px; display: block; margin-bottom: 6px;">¿Qué hacer con este disco?</label>
+                            <select id="disk-action-${d.id}" style="
+                                width: 100%;
+                                padding: 10px;
+                                border-radius: 8px;
+                                background: rgba(0,0,0,0.3);
+                                border: 1px solid rgba(255,255,255,0.1);
+                                color: #fff;
+                                font-size: 14px;
+                            ">
+                                <option value="pool-data">📦 Añadir al pool (datos)</option>
+                                <option value="pool-cache">⚡ Añadir al pool (caché)</option>
+                                <option value="standalone">💾 Volumen independiente</option>
+                                <option value="ignore">🔕 Ignorar</option>
+                            </select>
+                        </div>
+                        
+                        <div id="disk-options-${d.id}">
+                            <div style="margin-bottom: 8px;">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="disk-format-${d.id}" ${d.hasData ? '' : 'checked'} style="accent-color: #4ecdc4;">
+                                    <span style="color: #ccc; font-size: 13px;">Formatear disco (ext4)</span>
+                                </label>
+                                ${d.hasData ? '<div style="color: #e74c3c; font-size: 11px; margin-left: 24px;">⚠️ Esto borrará todos los datos</div>' : ''}
+                            </div>
+                            
+                            <div id="standalone-name-${d.id}" style="display: none; margin-top: 8px;">
+                                <label style="color: #888; font-size: 12px; display: block; margin-bottom: 4px;">Nombre del volumen:</label>
+                                <input type="text" id="disk-name-${d.id}" placeholder="ej: backups" value="${d.id}" style="
+                                    width: 100%;
+                                    padding: 8px;
+                                    border-radius: 6px;
+                                    background: rgba(0,0,0,0.3);
+                                    border: 1px solid rgba(255,255,255,0.1);
+                                    color: #fff;
+                                ">
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
+                <button onclick="closeDiskActionModal()" style="
+                    padding: 10px 20px;
+                    border-radius: 8px;
+                    background: rgba(255,255,255,0.1);
+                    border: none;
+                    color: #fff;
+                    cursor: pointer;
+                ">Cancelar</button>
+                <button onclick="applyDiskActions()" style="
+                    padding: 10px 20px;
+                    border-radius: 8px;
+                    background: #4ecdc4;
+                    border: none;
+                    color: #1a1a2e;
+                    font-weight: 600;
+                    cursor: pointer;
+                ">Aplicar</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Add event listeners for action changes
+    detectedNewDisks.forEach(d => {
+        const select = document.getElementById(`disk-action-${d.id}`);
+        const standaloneDiv = document.getElementById(`standalone-name-${d.id}`);
+        select.addEventListener('change', () => {
+            standaloneDiv.style.display = select.value === 'standalone' ? 'block' : 'none';
+        });
+    });
+}
+
+function closeDiskActionModal() {
+    const modal = document.getElementById('disk-action-modal');
+    if (modal) modal.remove();
+}
+
+// Apply the selected actions for each disk
+async function applyDiskActions() {
+    const results = [];
+    
+    for (const disk of detectedNewDisks) {
+        const action = document.getElementById(`disk-action-${disk.id}`)?.value;
+        const format = document.getElementById(`disk-format-${disk.id}`)?.checked;
+        const name = document.getElementById(`disk-name-${disk.id}`)?.value || disk.id;
+        
+        if (!action) continue;
+        
+        try {
+            let res;
+            if (action === 'pool-data' || action === 'pool-cache') {
+                res = await fetch(`${API_BASE}/storage/disks/add-to-pool`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        diskId: disk.id,
+                        format: format,
+                        role: action === 'pool-cache' ? 'cache' : 'data'
+                    })
+                });
+            } else if (action === 'standalone') {
+                res = await fetch(`${API_BASE}/storage/disks/mount-standalone`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        diskId: disk.id,
+                        format: format,
+                        name: name
+                    })
+                });
+            } else if (action === 'ignore') {
+                res = await fetch(`${API_BASE}/storage/disks/ignore`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ diskId: disk.id })
+                });
+            }
+            
+            if (res && res.ok) {
+                const data = await res.json();
+                results.push({ disk: disk.id, success: true, message: data.message });
+            } else if (res) {
+                const err = await res.json();
+                results.push({ disk: disk.id, success: false, message: err.error });
+            }
+        } catch (e) {
+            results.push({ disk: disk.id, success: false, message: e.message });
+        }
+    }
+    
+    closeDiskActionModal();
+    
+    // Show results
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+    
+    if (failCount === 0) {
+        showNotification(`✅ ${successCount} disco(s) configurado(s) correctamente`, 'success');
+    } else {
+        const errors = results.filter(r => !r.success).map(r => `${r.disk}: ${r.message}`).join('\n');
+        showNotification(`⚠️ ${failCount} error(es):\n${errors}`, 'error');
+    }
+    
+    // Reset detection state
+    detectedNewDisks = [];
+    diskNotificationShown = false;
+    
+    // Refresh storage view if active
+    if (state.currentView === 'storage') {
+        renderContent('storage');
+    }
+}
+
+// Ignore all detected disks
+async function ignoreDiskNotification() {
+    for (const disk of detectedNewDisks) {
+        try {
+            await fetch(`${API_BASE}/storage/disks/ignore`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ diskId: disk.id })
+            });
+        } catch (e) {
+            console.error('Failed to ignore disk:', e);
+        }
+    }
+    hideDiskNotification();
+    detectedNewDisks = [];
+}
+
+// Start disk detection polling (check every 30 seconds)
+function startDiskDetectionPolling() {
+    // Initial check after 5 seconds (give time for page to load)
+    setTimeout(checkForNewDisks, 5000);
+    // Then check every 30 seconds
+    state.pollingIntervals.diskDetection = setInterval(checkForNewDisks, 30000);
 }
 
 // Router / View Switcher

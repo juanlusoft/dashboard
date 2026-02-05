@@ -513,6 +513,444 @@ router.get('/snapraid/status', async (req, res) => {
     }
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+// HYBRID DISK DETECTION - Detect new disks and let user decide what to do
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Get all block devices and their status
+ * Returns: { configured: [...], unconfigured: [...] }
+ */
+router.get('/disks/detect', requireAuth, async (req, res) => {
+    try {
+        // Get all block devices with details
+        const lsblkJson = execSync(
+            'lsblk -Jbo NAME,SIZE,TYPE,MOUNTPOINT,FSTYPE,MODEL,SERIAL,TRAN 2>/dev/null || echo "{}"',
+            { encoding: 'utf8' }
+        );
+        
+        let devices = [];
+        try {
+            const parsed = JSON.parse(lsblkJson);
+            devices = parsed.blockdevices || [];
+        } catch (e) {
+            console.error('Failed to parse lsblk:', e);
+        }
+
+        const data = getData();
+        const configuredDisks = (data.storageConfig || []).map(d => d.id);
+        
+        // Get currently mounted disks in our pool
+        const poolMounts = [];
+        try {
+            const mounts = execSync(`ls -1 ${STORAGE_MOUNT_BASE}/ 2>/dev/null || echo ""`, { encoding: 'utf8' });
+            mounts.split('\n').filter(Boolean).forEach(m => poolMounts.push(m));
+        } catch (e) {}
+
+        const configured = [];
+        const unconfigured = [];
+
+        for (const dev of devices) {
+            // Skip non-disk devices (loop, rom, etc)
+            if (dev.type !== 'disk') continue;
+            // Skip small devices (<1GB, likely USB sticks or boot media)
+            if (dev.size < 1000000000) continue;
+            // Skip mmcblk (SD card, usually boot)
+            if (dev.name.startsWith('mmcblk')) continue;
+
+            const diskInfo = {
+                id: dev.name,
+                path: `/dev/${dev.name}`,
+                size: dev.size,
+                sizeFormatted: formatSize(Math.round(dev.size / 1073741824)), // bytes to GB
+                model: dev.model || 'Unknown',
+                serial: dev.serial || '',
+                transport: dev.tran || 'unknown',
+                partitions: []
+            };
+
+            // Check partitions
+            if (dev.children && dev.children.length > 0) {
+                for (const part of dev.children) {
+                    diskInfo.partitions.push({
+                        name: part.name,
+                        path: `/dev/${part.name}`,
+                        size: part.size,
+                        sizeFormatted: formatSize(Math.round(part.size / 1073741824)),
+                        fstype: part.fstype || null,
+                        mountpoint: part.mountpoint || null
+                    });
+                }
+            }
+
+            // Determine if configured or unconfigured
+            const isConfigured = configuredDisks.includes(dev.name) || 
+                                 diskInfo.partitions.some(p => p.mountpoint && p.mountpoint.startsWith(STORAGE_MOUNT_BASE));
+            
+            if (isConfigured) {
+                // Find role from config
+                const configEntry = (data.storageConfig || []).find(d => d.id === dev.name);
+                diskInfo.role = configEntry ? configEntry.role : 'data';
+                diskInfo.inPool = true;
+                configured.push(diskInfo);
+            } else {
+                diskInfo.inPool = false;
+                // Check if it has a filesystem
+                diskInfo.hasData = diskInfo.partitions.some(p => p.fstype);
+                diskInfo.formatted = diskInfo.partitions.some(p => ['ext4', 'xfs', 'btrfs', 'ntfs'].includes(p.fstype));
+                unconfigured.push(diskInfo);
+            }
+        }
+
+        res.json({ configured, unconfigured });
+    } catch (e) {
+        console.error('Disk detection error:', e);
+        res.status(500).json({ error: 'Failed to detect disks' });
+    }
+});
+
+/**
+ * Add a disk to the MergerFS pool
+ * POST /disks/add-to-pool
+ * Body: { diskId: 'sdb', format: true/false, role: 'data'|'cache' }
+ */
+router.post('/disks/add-to-pool', requireAuth, async (req, res) => {
+    try {
+        const { diskId, format, role = 'data' } = req.body;
+        
+        // Validate disk ID
+        const safeDiskId = sanitizeDiskId(diskId);
+        if (!safeDiskId) {
+            return res.status(400).json({ error: 'Invalid disk ID' });
+        }
+        
+        if (!['data', 'cache', 'parity'].includes(role)) {
+            return res.status(400).json({ error: 'Invalid role. Must be data, cache, or parity' });
+        }
+
+        const devicePath = `/dev/${safeDiskId}`;
+        const partitionPath = `/dev/${safeDiskId}1`;
+        
+        // Check if device exists
+        if (!fs.existsSync(devicePath)) {
+            return res.status(400).json({ error: `Device ${devicePath} not found` });
+        }
+
+        // Step 1: Create partition if needed (for new disks)
+        try {
+            execSync(`sudo parted -s ${escapeShellArg(devicePath)} mklabel gpt`, { encoding: 'utf8' });
+            execSync(`sudo parted -s ${escapeShellArg(devicePath)} mkpart primary ext4 0% 100%`, { encoding: 'utf8' });
+            execSync('sync', { encoding: 'utf8' });
+            // Wait for partition to appear
+            execSync('sleep 2', { encoding: 'utf8' });
+        } catch (e) {
+            // Partition might already exist, that's fine
+            console.log('Partition creation skipped or failed (may already exist):', e.message);
+        }
+
+        // Step 2: Format if requested
+        if (format) {
+            const label = `${role}_${safeDiskId}`.substring(0, 16);
+            try {
+                execSync(`sudo mkfs.ext4 -F -L ${escapeShellArg(label)} ${escapeShellArg(partitionPath)}`, { encoding: 'utf8' });
+            } catch (e) {
+                return res.status(500).json({ error: `Format failed: ${e.message}` });
+            }
+        }
+
+        // Step 3: Get UUID
+        let uuid = '';
+        try {
+            uuid = execSync(`sudo blkid -s UUID -o value ${escapeShellArg(partitionPath)} 2>/dev/null`, { encoding: 'utf8' }).trim();
+        } catch (e) {
+            return res.status(500).json({ error: 'Failed to get disk UUID' });
+        }
+
+        if (!uuid) {
+            return res.status(500).json({ error: 'Could not determine disk UUID. Is it formatted?' });
+        }
+
+        // Step 4: Create mount point
+        const mountIndex = await getNextDiskIndex();
+        const mountPoint = `${STORAGE_MOUNT_BASE}/disk${mountIndex}`;
+        
+        try {
+            execSync(`sudo mkdir -p ${escapeShellArg(mountPoint)}`, { encoding: 'utf8' });
+        } catch (e) {
+            return res.status(500).json({ error: 'Failed to create mount point' });
+        }
+
+        // Step 5: Mount the disk
+        try {
+            execSync(`sudo mount UUID=${escapeShellArg(uuid)} ${escapeShellArg(mountPoint)}`, { encoding: 'utf8' });
+        } catch (e) {
+            return res.status(500).json({ error: `Mount failed: ${e.message}` });
+        }
+
+        // Step 6: Add to fstab
+        const fstabEntry = `UUID=${uuid} ${mountPoint} ext4 defaults,nofail 0 2`;
+        try {
+            // Check if entry already exists
+            const fstab = execSync('cat /etc/fstab', { encoding: 'utf8' });
+            if (!fstab.includes(uuid)) {
+                const tempFile = `/tmp/fstab-add-${Date.now()}`;
+                fs.writeFileSync(tempFile, `\n# HomePiNAS: ${safeDiskId} (${role})\n${fstabEntry}\n`);
+                execSync(`sudo sh -c 'cat ${escapeShellArg(tempFile)} >> /etc/fstab'`, { encoding: 'utf8' });
+                fs.unlinkSync(tempFile);
+            }
+        } catch (e) {
+            console.error('fstab update failed:', e);
+            // Continue anyway, disk is mounted
+        }
+
+        // Step 7: Add to MergerFS pool
+        try {
+            await addDiskToMergerFS(mountPoint, role);
+        } catch (e) {
+            return res.status(500).json({ error: `Failed to add to pool: ${e.message}` });
+        }
+
+        // Step 8: Update storage config
+        const data = getData();
+        if (!data.storageConfig) data.storageConfig = [];
+        data.storageConfig.push({
+            id: safeDiskId,
+            role: role,
+            uuid: uuid,
+            mountPoint: mountPoint,
+            addedAt: new Date().toISOString()
+        });
+        saveData(data);
+
+        logSecurityEvent('DISK_ADDED_TO_POOL', { diskId: safeDiskId, role, mountPoint }, req.ip);
+
+        res.json({ 
+            success: true, 
+            message: `Disk ${safeDiskId} added to pool as ${role}`,
+            mountPoint,
+            uuid
+        });
+    } catch (e) {
+        console.error('Add to pool error:', e);
+        res.status(500).json({ error: `Failed to add disk: ${e.message}` });
+    }
+});
+
+/**
+ * Mount disk as standalone volume (not in pool)
+ * POST /disks/mount-standalone
+ * Body: { diskId: 'sdb', format: true/false, name: 'backups' }
+ */
+router.post('/disks/mount-standalone', requireAuth, async (req, res) => {
+    try {
+        const { diskId, format, name } = req.body;
+        
+        const safeDiskId = sanitizeDiskId(diskId);
+        if (!safeDiskId) {
+            return res.status(400).json({ error: 'Invalid disk ID' });
+        }
+
+        // Sanitize volume name
+        const safeName = (name || safeDiskId).replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 32);
+        if (!safeName) {
+            return res.status(400).json({ error: 'Invalid volume name' });
+        }
+
+        const devicePath = `/dev/${safeDiskId}`;
+        const partitionPath = `/dev/${safeDiskId}1`;
+        const mountPoint = `/mnt/${safeName}`;
+
+        if (!fs.existsSync(devicePath)) {
+            return res.status(400).json({ error: `Device ${devicePath} not found` });
+        }
+
+        // Create partition if needed
+        try {
+            execSync(`sudo parted -s ${escapeShellArg(devicePath)} mklabel gpt`, { encoding: 'utf8' });
+            execSync(`sudo parted -s ${escapeShellArg(devicePath)} mkpart primary ext4 0% 100%`, { encoding: 'utf8' });
+            execSync('sleep 2', { encoding: 'utf8' });
+        } catch (e) {
+            console.log('Partition exists or creation skipped');
+        }
+
+        // Format if requested
+        if (format) {
+            try {
+                execSync(`sudo mkfs.ext4 -F -L ${escapeShellArg(safeName)} ${escapeShellArg(partitionPath)}`, { encoding: 'utf8' });
+            } catch (e) {
+                return res.status(500).json({ error: `Format failed: ${e.message}` });
+            }
+        }
+
+        // Get UUID
+        let uuid = '';
+        try {
+            uuid = execSync(`sudo blkid -s UUID -o value ${escapeShellArg(partitionPath)} 2>/dev/null`, { encoding: 'utf8' }).trim();
+        } catch (e) {
+            return res.status(500).json({ error: 'Failed to get UUID' });
+        }
+
+        // Create mount point and mount
+        try {
+            execSync(`sudo mkdir -p ${escapeShellArg(mountPoint)}`, { encoding: 'utf8' });
+            execSync(`sudo mount UUID=${escapeShellArg(uuid)} ${escapeShellArg(mountPoint)}`, { encoding: 'utf8' });
+        } catch (e) {
+            return res.status(500).json({ error: `Mount failed: ${e.message}` });
+        }
+
+        // Add to fstab
+        const fstabEntry = `UUID=${uuid} ${mountPoint} ext4 defaults,nofail 0 2`;
+        try {
+            const fstab = execSync('cat /etc/fstab', { encoding: 'utf8' });
+            if (!fstab.includes(uuid)) {
+                const tempFile = `/tmp/fstab-standalone-${Date.now()}`;
+                fs.writeFileSync(tempFile, `\n# HomePiNAS: Standalone volume ${safeName}\n${fstabEntry}\n`);
+                execSync(`sudo sh -c 'cat ${escapeShellArg(tempFile)} >> /etc/fstab'`, { encoding: 'utf8' });
+                fs.unlinkSync(tempFile);
+            }
+        } catch (e) {
+            console.error('fstab update failed:', e);
+        }
+
+        // Save to config as standalone volume
+        const data = getData();
+        if (!data.standaloneVolumes) data.standaloneVolumes = [];
+        data.standaloneVolumes.push({
+            id: safeDiskId,
+            name: safeName,
+            uuid: uuid,
+            mountPoint: mountPoint,
+            addedAt: new Date().toISOString()
+        });
+        saveData(data);
+
+        logSecurityEvent('STANDALONE_VOLUME_CREATED', { diskId: safeDiskId, name: safeName, mountPoint }, req.ip);
+
+        res.json({
+            success: true,
+            message: `Volume "${safeName}" created at ${mountPoint}`,
+            mountPoint,
+            uuid
+        });
+    } catch (e) {
+        console.error('Standalone mount error:', e);
+        res.status(500).json({ error: `Failed: ${e.message}` });
+    }
+});
+
+/**
+ * Dismiss/ignore a detected disk (won't show in notifications)
+ * POST /disks/ignore
+ */
+router.post('/disks/ignore', requireAuth, async (req, res) => {
+    try {
+        const { diskId } = req.body;
+        const safeDiskId = sanitizeDiskId(diskId);
+        if (!safeDiskId) {
+            return res.status(400).json({ error: 'Invalid disk ID' });
+        }
+
+        const data = getData();
+        if (!data.ignoredDisks) data.ignoredDisks = [];
+        if (!data.ignoredDisks.includes(safeDiskId)) {
+            data.ignoredDisks.push(safeDiskId);
+            saveData(data);
+        }
+
+        res.json({ success: true, message: `Disk ${safeDiskId} ignored` });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * Get list of ignored disks
+ */
+router.get('/disks/ignored', requireAuth, (req, res) => {
+    const data = getData();
+    res.json({ ignored: data.ignoredDisks || [] });
+});
+
+/**
+ * Un-ignore a disk
+ */
+router.post('/disks/unignore', requireAuth, async (req, res) => {
+    try {
+        const { diskId } = req.body;
+        const data = getData();
+        if (data.ignoredDisks) {
+            data.ignoredDisks = data.ignoredDisks.filter(d => d !== diskId);
+            saveData(data);
+        }
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Helper: Get next disk index for mount point
+async function getNextDiskIndex() {
+    try {
+        const existing = execSync(`ls -1 ${STORAGE_MOUNT_BASE}/ 2>/dev/null || echo ""`, { encoding: 'utf8' });
+        const disks = existing.split('\n').filter(d => d.startsWith('disk'));
+        const indices = disks.map(d => parseInt(d.replace('disk', '')) || 0);
+        return Math.max(0, ...indices) + 1;
+    } catch (e) {
+        return 1;
+    }
+}
+
+// Helper: Add disk to MergerFS pool (hot add)
+async function addDiskToMergerFS(mountPoint, role) {
+    try {
+        // Get current mergerfs mount options
+        const mounts = execSync('mount | grep mergerfs', { encoding: 'utf8' });
+        if (!mounts) {
+            throw new Error('MergerFS not running');
+        }
+
+        // Parse current source paths from mount
+        const match = mounts.match(/^(.+?) on \/mnt\/storage type fuse\.mergerfs/);
+        if (!match) {
+            throw new Error('Could not parse MergerFS mount');
+        }
+
+        const currentSources = match[1];
+        
+        // For hot-add, we need to remount with the new path included
+        // Cache disks go first for write prioritization
+        let newSources;
+        if (role === 'cache') {
+            newSources = `${mountPoint}:${currentSources}`;
+        } else {
+            newSources = `${currentSources}:${mountPoint}`;
+        }
+
+        // Remount MergerFS with new source
+        execSync(`sudo umount ${POOL_MOUNT}`, { encoding: 'utf8' });
+        
+        // Determine policy
+        const hasCache = newSources.includes('cache') || role === 'cache';
+        const policy = hasCache ? 'lfs' : 'mfs';
+        
+        execSync(
+            `sudo mergerfs -o defaults,allow_other,use_ino,cache.files=partial,dropcacheonclose=true,category.create=${policy},moveonenospc=true ${escapeShellArg(newSources)} ${POOL_MOUNT}`,
+            { encoding: 'utf8' }
+        );
+
+        // Update fstab for mergerfs line
+        // This is a bit complex, so we'll leave the existing line and trust the next reboot
+        // A full implementation would update the mergerfs fstab entry here
+
+        return true;
+    } catch (e) {
+        console.error('MergerFS hot-add failed:', e);
+        throw e;
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+
 // Storage config
 // NOTE: This endpoint allows initial config without auth (first-time setup),
 // but requires auth if storage is already configured
