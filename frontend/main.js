@@ -7260,6 +7260,9 @@ function renderFoldersList(folders) {
                 </div>
             </div>
             <div style="display: flex; gap: 8px;">
+                <button class="share-folder-btn" data-folder-id="${escapeHtml(f.id)}" data-folder-label="${escapeHtml(f.label)}" style="padding: 6px 12px; background: #3b82f6; color: #fff; border: none; border-radius: 6px; cursor: pointer;" title="Compartir con dispositivos">
+                    📤
+                </button>
                 <button class="delete-folder-btn" data-folder-id="${escapeHtml(f.id)}" style="padding: 6px 12px; background: #ef4444; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
                     🗑️
                 </button>
@@ -7270,6 +7273,11 @@ function renderFoldersList(folders) {
     // Attach event listeners for delete buttons
     listDiv.querySelectorAll('.delete-folder-btn').forEach(btn => {
         btn.addEventListener('click', () => deleteFolder(btn.dataset.folderId));
+    });
+    
+    // Attach event listeners for share buttons
+    listDiv.querySelectorAll('.share-folder-btn').forEach(btn => {
+        btn.addEventListener('click', () => showShareFolderModal(btn.dataset.folderId, btn.dataset.folderLabel));
     });
 }
 
@@ -7516,6 +7524,105 @@ async function deleteFolder(folderId) {
             foldersList.style.pointerEvents = 'auto';
         }
     }
+}
+
+async function showShareFolderModal(folderId, folderLabel) {
+    // Fetch devices and current folder config
+    let devices = [];
+    let folderDevices = [];
+    
+    try {
+        const devRes = await authFetch(`${API_BASE}/cloud-sync/devices`);
+        if (devRes.ok) devices = await devRes.json();
+        
+        const statusRes = await authFetch(`${API_BASE}/cloud-sync/status`);
+        if (statusRes.ok) {
+            const status = await statusRes.json();
+            const folder = status.folders?.find(f => f.id === folderId);
+            folderDevices = folder?.deviceIds || [];
+        }
+    } catch (e) {
+        console.error('Error loading devices:', e);
+    }
+    
+    if (devices.length === 0) {
+        showNotification('No hay dispositivos añadidos. Primero añade un dispositivo.', 'warning');
+        return;
+    }
+    
+    const modal = document.createElement('div');
+    modal.id = 'share-folder-modal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+    modal.innerHTML = `
+        <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 450px;">
+            <h3 style="color: var(--secondary); margin-bottom: 20px;">📤 Compartir "${escapeHtml(folderLabel)}"</h3>
+            <p style="color: var(--text-dim); margin-bottom: 15px; font-size: 0.9rem;">
+                Selecciona los dispositivos con los que quieres sincronizar esta carpeta:
+            </p>
+            <div id="share-devices-list" style="max-height: 300px; overflow-y: auto;">
+                ${devices.map(d => `
+                    <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; margin-bottom: 8px; cursor: pointer;">
+                        <input type="checkbox" class="share-device-checkbox" data-device-id="${escapeHtml(d.id)}" 
+                            ${folderDevices.includes(d.id) ? 'checked' : ''}
+                            style="width: 18px; height: 18px; cursor: pointer;">
+                        <div>
+                            <div style="color: var(--text); font-weight: 500;">${d.connected ? '🟢' : '⚪'} ${escapeHtml(d.name)}</div>
+                            <div style="color: var(--text-dim); font-size: 0.8rem;">${escapeHtml(d.id.substring(0, 15))}...</div>
+                        </div>
+                    </label>
+                `).join('')}
+            </div>
+            <div style="display: flex; gap: 12px; margin-top: 20px;">
+                <button id="share-cancel-btn" style="flex: 1; padding: 12px; background: #666; color: #fff; border: none; border-radius: 8px; cursor: pointer;">
+                    Cancelar
+                </button>
+                <button id="share-save-btn" style="flex: 1; padding: 12px; background: var(--secondary); color: #000; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                    💾 Guardar
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    
+    // Cancel button
+    document.getElementById('share-cancel-btn').addEventListener('click', () => modal.remove());
+    
+    // Backdrop click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.remove();
+    });
+    
+    // Save button
+    document.getElementById('share-save-btn').addEventListener('click', async () => {
+        const checkboxes = modal.querySelectorAll('.share-device-checkbox:checked');
+        const selectedDevices = Array.from(checkboxes).map(cb => cb.dataset.deviceId);
+        
+        const saveBtn = document.getElementById('share-save-btn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Guardando...';
+        
+        try {
+            // Share with each selected device
+            for (const deviceId of selectedDevices) {
+                if (!folderDevices.includes(deviceId)) {
+                    await authFetch(`${API_BASE}/cloud-sync/folders/${encodeURIComponent(folderId)}/share`, {
+                        method: 'POST',
+                        body: JSON.stringify({ deviceId })
+                    });
+                }
+            }
+            
+            // TODO: Unshare removed devices (need backend endpoint)
+            
+            modal.remove();
+            showNotification('Carpeta compartida correctamente', 'success');
+            await renderCloudSyncView();
+        } catch (e) {
+            showNotification('Error: ' + e.message, 'error');
+            saveBtn.disabled = false;
+            saveBtn.textContent = '💾 Guardar';
+        }
+    });
 }
 
 function showAddDeviceModal() {

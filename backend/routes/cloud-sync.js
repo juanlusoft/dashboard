@@ -152,12 +152,14 @@ router.get('/status', async (req, res) => {
                 
                 // Get folders
                 const config = await syncthingApi('/rest/config');
+                const myID = sysStatus.myID;
                 status.folders = (config.folders || []).map(f => ({
                     id: f.id,
                     label: f.label || f.id,
                     path: f.path,
                     paused: f.paused,
-                    devices: f.devices?.length || 0
+                    devices: (f.devices || []).filter(d => d.deviceID !== myID).length,
+                    deviceIds: (f.devices || []).filter(d => d.deviceID !== myID).map(d => d.deviceID)
                 }));
                 
             } catch (e) {
