@@ -305,6 +305,29 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
     }
 });
 
+// Verify session and refresh CSRF token
+// Used when CSRF token becomes invalid (e.g., after server restart)
+router.post('/verify-session', async (req, res) => {
+    const sessionId = req.headers['x-session-id'];
+    if (!sessionId) {
+        return res.status(401).json({ success: false, message: 'No session' });
+    }
+    
+    const { validateSession } = require('../utils/session');
+    
+    if (!validateSession(sessionId)) {
+        return res.status(401).json({ success: false, message: 'Invalid session' });
+    }
+    
+    // Generate new CSRF token
+    const csrfToken = getCsrfToken(sessionId);
+    
+    res.json({
+        success: true,
+        csrfToken
+    });
+});
+
 // Logout
 router.post('/logout', (req, res) => {
     const sessionId = req.headers['x-session-id'];

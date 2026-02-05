@@ -3733,10 +3733,20 @@ async function renderFilesView() {
     searchInput.placeholder = '🔍 Buscar...';
     searchInput.className = 'fm-search-input';
     searchInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') searchFiles(searchInput.value);
+        if (e.key === 'Enter') searchFiles(searchInput.value); // Deep search on Enter
     });
     searchInput.addEventListener('input', (e) => {
-        if (!e.target.value) loadFiles(currentFilePath);
+        const query = e.target.value.trim().toLowerCase();
+        if (!query) {
+            // Empty search: show all files
+            renderFilteredFiles(fmCurrentFiles);
+        } else {
+            // Local filter: instant results
+            const filtered = fmCurrentFiles.filter(f => 
+                f.name.toLowerCase().includes(query)
+            );
+            renderFilteredFiles(filtered, query);
+        }
     });
 
     const uploadBtn = document.createElement('button');
@@ -4112,6 +4122,34 @@ async function loadFiles(filePath) {
     }
 }
 
+// ── Render filtered files (for local search) ──
+function renderFilteredFiles(files, highlightQuery = '') {
+    const filesList = document.getElementById('files-list');
+    if (!filesList) return;
+
+    if (files.length === 0) {
+        filesList.innerHTML = `<div class="fm-empty-state">
+            <p>🔍 Sin resultados${highlightQuery ? ' para "' + highlightQuery + '"' : ''}</p>
+            <p style="font-size:0.8rem;color:var(--text-dim)">Presiona Enter para buscar en subcarpetas</p>
+        </div>`;
+        return;
+    }
+
+    // Sort: folders first, then alphabetical
+    const sorted = [...files].sort((a, b) => {
+        if (a.type === 'directory' && b.type !== 'directory') return -1;
+        if (a.type !== 'directory' && b.type === 'directory') return 1;
+        return a.name.localeCompare(b.name);
+    });
+
+    filesList.innerHTML = '';
+    if (fmViewMode === 'grid') {
+        renderFilesGrid(filesList, sorted, currentFilePath);
+    } else {
+        renderFilesList(filesList, sorted, currentFilePath);
+    }
+}
+
 // ── Render list view ──
 function renderFilesList(container, files, filePath) {
     files.forEach(file => {
@@ -4388,7 +4426,8 @@ async function handleFileUpload(e) {
         formData.append('path', currentFilePath);
 
         try {
-            await new Promise((resolve, reject) => {
+            // Helper to perform upload with current CSRF token
+            const doUpload = () => new Promise((resolve, reject) => {
                 const xhr = new XMLHttpRequest();
                 xhr.open('POST', `${API_BASE}/files/upload`);
                 xhr.setRequestHeader('X-Session-Id', state.sessionId);
@@ -4404,11 +4443,46 @@ async function handleFileUpload(e) {
 
                 xhr.addEventListener('load', () => {
                     if (xhr.status >= 200 && xhr.status < 300) resolve();
-                    else reject(new Error('Upload failed: ' + xhr.status));
+                    else reject({ status: xhr.status, response: xhr.responseText });
                 });
-                xhr.addEventListener('error', () => reject(new Error('Network error')));
+                xhr.addEventListener('error', () => reject({ status: 0, response: 'Network error' }));
                 xhr.send(formData);
             });
+
+            try {
+                await doUpload();
+            } catch (uploadErr) {
+                // If 403, try refreshing CSRF token and retry once
+                if (uploadErr.status === 403) {
+                    console.log('CSRF token expired, refreshing...');
+                    try {
+                        const refreshRes = await fetch(`${API_BASE}/verify-session`, {
+                            method: 'POST',
+                            headers: { 'X-Session-Id': state.sessionId }
+                        });
+                        if (refreshRes.ok) {
+                            const data = await refreshRes.json();
+                            if (data.csrfToken) {
+                                state.csrfToken = data.csrfToken;
+                                localStorage.setItem('csrfToken', data.csrfToken);
+                                console.log('CSRF token refreshed, retrying upload...');
+                                await doUpload();
+                            } else {
+                                throw new Error('No CSRF token in response');
+                            }
+                        } else {
+                            // Session invalid, force re-login
+                            clearSession();
+                            showView('login');
+                            throw new Error('Session expired');
+                        }
+                    } catch (refreshErr) {
+                        throw new Error('Upload failed: ' + uploadErr.status);
+                    }
+                } else {
+                    throw new Error('Upload failed: ' + uploadErr.status);
+                }
+            }
         } catch (err) {
             console.error('Upload error:', err);
             alert(`Error al subir ${file.name}`);

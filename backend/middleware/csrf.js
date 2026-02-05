@@ -92,6 +92,11 @@ function csrfProtection(req, res, next) {
         return next();
     }
     
+    // Skip verify-session (used to refresh CSRF token)
+    if (req.path === '/api/verify-session') {
+        return next();
+    }
+    
     // Skip agent API (uses its own token auth)
     if (req.path.startsWith('/api/active-backup/agent/')) {
         return next();

@@ -20,8 +20,8 @@ const PERMISSIONS = {
 function getUserRole(username) {
     const data = getData();
     
-    // Legacy single-user mode = admin
-    if (data.user && !data.users?.length && data.user.username === username) {
+    // Primary admin user (data.user) is always admin
+    if (data.user && data.user.username === username) {
         return 'admin';
     }
     
