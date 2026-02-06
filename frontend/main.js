@@ -9239,58 +9239,6 @@ async function addFolder() {
     }
 }
 
-// Custom confirm modal (replaces native confirm() which has issues in some contexts)
-function showConfirmModal(title, message) {
-    return new Promise((resolve) => {
-        // Remove any existing confirm modal
-        const existing = document.getElementById('confirm-modal');
-        if (existing) existing.remove();
-        
-        const modal = document.createElement('div');
-        modal.id = 'confirm-modal';
-        modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 99999;';
-        modal.innerHTML = `
-            <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 400px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
-                <h3 style="color: #ef4444; margin-bottom: 15px;">⚠️ ${escapeHtml(title)}</h3>
-                <p style="color: #ccc; margin-bottom: 25px;">${escapeHtml(message)}</p>
-                <div style="display: flex; gap: 15px; justify-content: center;">
-                    <button id="confirm-cancel-btn" style="padding: 12px 24px; background: #4b5563; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem;">
-                        Cancelar
-                    </button>
-                    <button id="confirm-ok-btn" style="padding: 12px 24px; background: #ef4444; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: 600;">
-                        Confirmar
-                    </button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-        
-        const cancelBtn = document.getElementById('confirm-cancel-btn');
-        const okBtn = document.getElementById('confirm-ok-btn');
-        
-        cancelBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            modal.remove();
-            resolve(false);
-        });
-        okBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            modal.remove();
-            resolve(true);
-        });
-        
-        // Close on backdrop click (click on modal background, not content)
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                modal.remove();
-                resolve(false);
-            }
-        });
-    });
-}
-
 async function deleteFolder(folderId) {
     // Use custom modal instead of confirm() which has issues in some contexts
     const confirmed = await showConfirmModal(
