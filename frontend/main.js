@@ -11029,24 +11029,62 @@ async function installRclone() {
     if (!confirm('¿Instalar rclone? Esto puede tardar unos minutos.')) return;
     
     const contentDiv = document.getElementById('cloud-backup-content');
-    contentDiv.innerHTML = `
-        <div class="glass-card" style="text-align: center; padding: 40px;">
-            <div class="spinner" style="margin: 0 auto 20px;"></div>
-            <p>Instalando rclone...</p>
-        </div>
-    `;
+    
+    const updateProgress = (step, percent, text) => {
+        contentDiv.innerHTML = `
+            <div class="glass-card" style="text-align: center; padding: 40px;">
+                <h3 style="margin-bottom: 20px; color: var(--primary);">📦 Instalando rclone</h3>
+                <div style="margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #a0a0b0;">${text}</span>
+                        <span style="color: #10b981; font-weight: 600;">${percent}%</span>
+                    </div>
+                    <div style="height: 8px; background: #2d2d44; border-radius: 4px; overflow: hidden;">
+                        <div style="height: 100%; background: linear-gradient(90deg, #10b981, #6366f1); width: ${percent}%; transition: width 0.5s ease;"></div>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: center; gap: 20px; margin-top: 20px;">
+                    <span style="color: ${step >= 1 ? '#10b981' : '#4a4a6a'};">${step >= 1 ? '✅' : '⏳'} Descargando</span>
+                    <span style="color: ${step >= 2 ? '#10b981' : '#4a4a6a'};">${step >= 2 ? '✅' : '⏳'} Extrayendo</span>
+                    <span style="color: ${step >= 3 ? '#10b981' : '#4a4a6a'};">${step >= 3 ? '✅' : '⏳'} Instalando</span>
+                </div>
+            </div>
+        `;
+    };
+    
+    updateProgress(0, 5, 'Iniciando...');
+    
+    // Simulate progress while waiting for server
+    let fakeProgress = 5;
+    const progressInterval = setInterval(() => {
+        if (fakeProgress < 30) {
+            fakeProgress += 5;
+            updateProgress(1, fakeProgress, 'Descargando rclone...');
+        } else if (fakeProgress < 60) {
+            fakeProgress += 3;
+            updateProgress(2, fakeProgress, 'Extrayendo archivos...');
+        } else if (fakeProgress < 90) {
+            fakeProgress += 2;
+            updateProgress(3, fakeProgress, 'Instalando...');
+        }
+    }, 500);
     
     try {
         const res = await authFetch(`${API_BASE}/cloud-backup/install`, { method: 'POST' });
+        clearInterval(progressInterval);
+        
         const data = await res.json();
         
         if (data.success) {
-            showToast('rclone instalado correctamente', 'success');
+            updateProgress(3, 100, '¡Completado!');
+            await new Promise(r => setTimeout(r, 1000));
+            showToast(`rclone v${data.version} instalado correctamente`, 'success');
             await loadCloudBackupStatus();
         } else {
             throw new Error(data.error);
         }
     } catch (e) {
+        clearInterval(progressInterval);
         showToast('Error instalando rclone: ' + e.message, 'error');
         await loadCloudBackupStatus();
     }
