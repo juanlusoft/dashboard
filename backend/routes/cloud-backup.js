@@ -750,4 +750,83 @@ router.post('/install', requireAuth, async (req, res) => {
     }
 });
 
+// Resume interrupted syncs on startup
+function resumeInterruptedSyncs() {
+    try {
+        if (!isRcloneInstalled()) {
+            console.log('[Cloud Backup] rclone not installed, skipping resume');
+            return;
+        }
+        
+        const history = loadTransferHistory();
+        const interrupted = history.filter(t => t.status === 'running');
+        
+        if (interrupted.length === 0) {
+            console.log('[Cloud Backup] No interrupted syncs to resume');
+            return;
+        }
+        
+        console.log(`[Cloud Backup] Resuming ${interrupted.length} interrupted sync(s)...`);
+        
+        interrupted.forEach(job => {
+            const { source, dest, mode, id: oldId } = job;
+            
+            // Generate new job ID
+            const jobId = Date.now().toString() + Math.random().toString(36).substr(2, 4);
+            const logFile = `/tmp/rclone-job-${jobId}.log`;
+            
+            // Build command (same as sync endpoint)
+            let cmd;
+            switch (mode) {
+                case 'sync':
+                    cmd = `rclone sync "${source}" "${dest}"`;
+                    break;
+                case 'move':
+                    cmd = `rclone move "${source}" "${dest}"`;
+                    break;
+                default:
+                    cmd = `rclone copy "${source}" "${dest}"`;
+            }
+            cmd += ' --progress --stats-one-line';
+            
+            // Mark old job as resumed
+            job.status = 'resumed';
+            job.resumedAs = jobId;
+            
+            // Add new job
+            history.push({
+                id: jobId,
+                source,
+                dest,
+                mode,
+                status: 'running',
+                timestamp: new Date().toISOString(),
+                resumedFrom: oldId
+            });
+            
+            // Start the sync
+            console.log(`[Cloud Backup] Resuming: ${source} → ${dest} (job ${jobId})`);
+            exec(`${cmd} > ${logFile} 2>&1`, (err) => {
+                const status = err ? 'failed' : 'completed';
+                const h = loadTransferHistory();
+                const idx = h.findIndex(t => t.id === jobId);
+                if (idx !== -1) {
+                    h[idx].status = status;
+                    h[idx].completedAt = new Date().toISOString();
+                    if (err) h[idx].error = err.message;
+                    saveTransferHistory(h);
+                }
+                console.log(`[Cloud Backup] Sync ${jobId} ${status}`);
+            });
+        });
+        
+        saveTransferHistory(history);
+    } catch (e) {
+        console.error('[Cloud Backup] Error resuming syncs:', e.message);
+    }
+}
+
+// Run on module load (with small delay to let server start)
+setTimeout(resumeInterruptedSyncs, 3000);
+
 module.exports = router;
