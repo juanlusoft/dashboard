@@ -9758,6 +9758,12 @@ function renderHomeStoreAppCard(app, categories) {
 
 // Show configuration modal before installing an app
 async function showHomeStoreConfigModal(appId) {
+    // Remove any existing modals first
+    const existingModal = document.getElementById('homestore-config-modal');
+    if (existingModal) existingModal.remove();
+    const existingPicker = document.getElementById('folder-picker-modal');
+    if (existingPicker) existingPicker.remove();
+    
     // Find the app in the catalog
     const app = homestoreCatalog?.apps?.find(a => a.id === appId);
     if (!app) {
@@ -9934,8 +9940,12 @@ async function showHomeStoreConfigModal(appId) {
     
     document.body.appendChild(modal);
     
-    // Close handlers
-    const closeModal = () => modal.remove();
+    // Close handlers - also remove any picker modals
+    const closeModal = () => {
+        const pickerModal = document.getElementById('folder-picker-modal');
+        if (pickerModal) pickerModal.remove();
+        modal.remove();
+    };
     document.getElementById('homestore-config-close').addEventListener('click', closeModal);
     document.getElementById('homestore-config-cancel').addEventListener('click', closeModal);
     modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
