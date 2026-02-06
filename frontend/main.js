@@ -11678,15 +11678,18 @@ async function startSync() {
 function showSyncProgress(jobId) {
     const toast = document.createElement('div');
     toast.id = `sync-progress-${jobId}`;
-    toast.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 12px; padding: 15px 20px; z-index: 100001; min-width: 300px;';
+    toast.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 12px; padding: 15px 20px; z-index: 100001; width: 320px;';
     toast.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
             <span style="color: #10b981; font-weight: 600;">🔄 Sincronizando...</span>
-            <button data-action="close" style="background: none; border: none; color: #fff; cursor: pointer;">×</button>
+            <button data-action="close" style="background: none; border: none; color: #fff; cursor: pointer; font-size: 18px;">×</button>
         </div>
-        <div id="sync-progress-text-${jobId}" style="color: #a0a0b0; font-size: 0.85rem;">Iniciando...</div>
-        <div style="margin-top: 10px; height: 4px; background: #2d2d44; border-radius: 2px; overflow: hidden;">
-            <div id="sync-progress-bar-${jobId}" style="height: 100%; background: #10b981; width: 0%; transition: width 0.3s;"></div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span id="sync-progress-text-${jobId}" style="color: #a0a0b0; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px;">Iniciando...</span>
+            <span id="sync-progress-percent-${jobId}" style="color: #10b981; font-weight: 600; font-size: 0.9rem;">0%</span>
+        </div>
+        <div style="height: 6px; background: #2d2d44; border-radius: 3px; overflow: hidden;">
+            <div id="sync-progress-bar-${jobId}" style="height: 100%; background: linear-gradient(90deg, #10b981, #6366f1); width: 0%; transition: width 0.5s ease;"></div>
         </div>
     `;
     document.body.appendChild(toast);
@@ -11702,13 +11705,38 @@ function showSyncProgress(jobId) {
             
             const textEl = document.getElementById(`sync-progress-text-${jobId}`);
             const barEl = document.getElementById(`sync-progress-bar-${jobId}`);
+            const percentEl = document.getElementById(`sync-progress-percent-${jobId}`);
             
-            if (textEl) textEl.textContent = data.lastLine || 'Procesando...';
+            // Parse rclone output to extract useful info
+            const line = data.lastLine || '';
             
-            // Parse progress percentage if available
-            const percentMatch = data.lastLine?.match(/(\d+)%/);
-            if (percentMatch && barEl) {
-                barEl.style.width = percentMatch[1] + '%';
+            // Try to extract percentage (e.g., "45%")
+            const percentMatch = line.match(/(\d+)%/);
+            const percent = percentMatch ? parseInt(percentMatch[1]) : 0;
+            
+            // Try to extract transferred amount (e.g., "1.234 GiB / 5.678 GiB")
+            const transferMatch = line.match(/([\d.]+\s*[KMGT]i?B)\s*\/\s*([\d.]+\s*[KMGT]i?B)/i);
+            const transferred = transferMatch ? `${transferMatch[1]} / ${transferMatch[2]}` : '';
+            
+            // Try to extract speed (e.g., "10.5 MiB/s")
+            const speedMatch = line.match(/([\d.]+\s*[KMGT]i?B\/s)/i);
+            const speed = speedMatch ? speedMatch[1] : '';
+            
+            // Update UI
+            if (textEl) {
+                if (transferred) {
+                    textEl.textContent = `${transferred}${speed ? ' • ' + speed : ''}`;
+                } else {
+                    textEl.textContent = 'Procesando...';
+                }
+            }
+            
+            if (barEl) {
+                barEl.style.width = percent + '%';
+            }
+            
+            if (percentEl) {
+                percentEl.textContent = percent + '%';
             }
             
             if (data.running) {
@@ -11716,6 +11744,7 @@ function showSyncProgress(jobId) {
             } else {
                 if (textEl) textEl.textContent = '✅ Completado';
                 if (barEl) barEl.style.width = '100%';
+                if (percentEl) percentEl.textContent = '100%';
                 setTimeout(() => {
                     document.getElementById(`sync-progress-${jobId}`)?.remove();
                 }, 5000);
