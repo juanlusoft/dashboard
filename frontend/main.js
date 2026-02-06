@@ -3186,30 +3186,34 @@ async function renderDockerManager() {
             header.appendChild(info);
             header.appendChild(statusSpan);
 
-            // Stats row (only if running)
+            // Stats row (only if running and has real data)
+            card.appendChild(header);
             if (isRunning) {
-                const statsRow = document.createElement('div');
-                statsRow.style.cssText = 'display: flex; gap: 20px; margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 8px;';
-                statsRow.innerHTML = `
-                    <div style="flex: 1; text-align: center;">
-                        <div style="font-size: 0.7rem; color: var(--text-dim);">CPU</div>
-                        <div style="font-size: 1rem; font-weight: 600; color: ${container.cpu !== '---' && parseFloat(container.cpu) > 50 ? '#f59e0b' : '#10b981'}">${escapeHtml(container.cpu)}</div>
-                    </div>
-                    <div style="flex: 1; text-align: center;">
-                        <div style="font-size: 0.7rem; color: var(--text-dim);">RAM</div>
-                        <div style="font-size: 1rem; font-weight: 600; color: #6366f1;">${escapeHtml(container.ram)}</div>
-                    </div>
-                `;
-                card.appendChild(header);
-                card.appendChild(statsRow);
-            } else {
-                card.appendChild(header);
+                const hasCpuData = container.cpu && container.cpu !== '---' && container.cpu !== '0.0%';
+                const hasRamData = container.ram && container.ram !== '---' && container.ram !== '0MB';
+                
+                if (hasCpuData || hasRamData) {
+                    const statsRow = document.createElement('div');
+                    statsRow.style.cssText = 'display: flex; gap: 20px; margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 8px;';
+                    statsRow.innerHTML = `
+                        <div style="flex: 1; text-align: center;">
+                            <div style="font-size: 0.7rem; color: var(--text-dim);">CPU</div>
+                            <div style="font-size: 1rem; font-weight: 600; color: ${parseFloat(container.cpu) > 50 ? '#f59e0b' : '#10b981'}">${escapeHtml(container.cpu || '---')}</div>
+                        </div>
+                        <div style="flex: 1; text-align: center;">
+                            <div style="font-size: 0.7rem; color: var(--text-dim);">RAM</div>
+                            <div style="font-size: 1rem; font-weight: 600; color: #6366f1;">${escapeHtml(container.ram || '---')}</div>
+                        </div>
+                    `;
+                    card.appendChild(statsRow);
+                }
             }
 
             // Ports section
             if (container.ports && container.ports.length > 0) {
                 const portsDiv = document.createElement('div');
                 portsDiv.className = 'docker-ports';
+                portsDiv.style.marginBottom = '12px'; // Add spacing before buttons
                 container.ports.forEach(port => {
                     if (port.public) {
                         const badge = document.createElement('span');
@@ -3225,7 +3229,7 @@ async function renderDockerManager() {
 
             // Controls row
             const controls = document.createElement('div');
-            controls.style.cssText = 'display: flex; gap: 8px; flex-wrap: wrap;';
+            controls.style.cssText = 'display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;';
 
             const actionBtn = document.createElement('button');
             actionBtn.className = 'btn-sm';
