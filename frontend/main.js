@@ -9761,7 +9761,7 @@ function renderHomeStoreAppCard(app, categories) {
     }
     
     return `
-        <div id="homestore-app-${app.id}" class="card" style="background: var(--bg-card); border: 1px solid ${isCompatible ? 'var(--border)' : '#f59e0b'}; border-radius: 12px; padding: 20px; ${!isCompatible ? 'opacity: 0.7;' : ''}">
+        <div id="homestore-app-${app.id}" class="card" style="background: rgba(30, 30, 50, 0.7); border: 2px solid ${isCompatible ? 'rgba(100, 100, 140, 0.5)' : '#f59e0b'}; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); ${!isCompatible ? 'opacity: 0.7;' : ''}">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <span style="font-size: 2rem;">${app.icon}</span>
