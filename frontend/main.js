@@ -11245,13 +11245,25 @@ function showOAuthModal(provider, instructions) {
                 <textarea id="oauth-token" rows="4" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff; resize: vertical;"></textarea>
             </div>
             <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button onclick="document.getElementById('oauth-modal').remove()" style="padding: 10px 20px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Cancelar</button>
-                <button onclick="saveOAuthConfig('${provider}')" style="padding: 10px 20px; background: #10b981; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Guardar</button>
+                <button data-action="cancel" style="padding: 10px 20px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Cancelar</button>
+                <button data-action="save" style="padding: 10px 20px; background: #10b981; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Guardar</button>
             </div>
         </div>
     `;
     
     document.body.appendChild(modal);
+    
+    // Add event listeners
+    modal.addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        
+        if (btn.dataset.action === 'cancel') {
+            modal.remove();
+        } else if (btn.dataset.action === 'save') {
+            await saveOAuthConfig(provider);
+        }
+    });
 }
 
 async function saveOAuthConfig(provider) {
@@ -11288,6 +11300,8 @@ function showConfigFormModal(provider, fields) {
     modal.id = 'config-form-modal';
     modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100000;';
     
+    const fieldNames = fields.map(f => f.name);
+    
     const fieldsHtml = fields.map(f => `
         <div style="margin-bottom: 15px;">
             <label style="color: #fff; display: block; margin-bottom: 8px;">${f.label}${f.required ? ' *' : ''}:</label>
@@ -11311,13 +11325,25 @@ function showConfigFormModal(provider, fields) {
             </div>
             ${fieldsHtml}
             <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
-                <button onclick="document.getElementById('config-form-modal').remove()" style="padding: 10px 20px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Cancelar</button>
-                <button onclick="saveSimpleConfig('${provider}', ${JSON.stringify(fields.map(f => f.name))})" style="padding: 10px 20px; background: #10b981; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Guardar</button>
+                <button data-action="cancel" style="padding: 10px 20px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Cancelar</button>
+                <button data-action="save" style="padding: 10px 20px; background: #10b981; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Guardar</button>
             </div>
         </div>
     `;
     
     document.body.appendChild(modal);
+    
+    // Add event listeners
+    modal.addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        
+        if (btn.dataset.action === 'cancel') {
+            modal.remove();
+        } else if (btn.dataset.action === 'save') {
+            await saveSimpleConfig(provider, fieldNames);
+        }
+    });
 }
 
 async function saveSimpleConfig(provider, fieldNames) {
