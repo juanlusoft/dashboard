@@ -2427,12 +2427,7 @@ function updateUserAvatar() {
 }
 
 async function renderContent(view) {
-    console.log('[NAV] renderContent called with:', view);
     state.currentView = view;
-    if (!dashboardContent) {
-        console.error('[NAV] dashboardContent is null!');
-        return;
-    }
     dashboardContent.innerHTML = '';
     if (view === 'dashboard') await renderDashboard();
     else if (view === 'docker') await renderDockerManager();
@@ -9477,7 +9472,7 @@ let homestoreFilter = 'all';
 let systemArch = null;
 
 async function renderHomeStoreView() {
-    document.getElementById('main-content').innerHTML = `
+    dashboardContent.innerHTML = `
         <div class="section">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h2>🏪 HomeStore</h2>
