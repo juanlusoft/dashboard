@@ -1222,6 +1222,9 @@ WorkingDirectory=$TARGET_DIR
 ExecStart=$(which node) $TARGET_DIR/backend/index.js
 Restart=always
 Environment=NODE_ENV=production
+# Allow binding to ports 80/443 without root
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 
 [Install]
 WantedBy=multi-user.target

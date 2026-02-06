@@ -226,12 +226,12 @@
       "category": "monitoring",
       "icon": "📊",
       "image": "louislam/uptime-kuma:latest",
-      "ports": { "3001": "3001" },
+      "ports": { "3002": "3001" },
       "volumes": {
         "/app/data": "/opt/homepinas/apps/uptime-kuma/data"
       },
       "env": {},
-      "webUI": 3001,
+      "webUI": 3002,
       "docs": "https://github.com/louislam/uptime-kuma/wiki"
     },
     {

@@ -68,8 +68,8 @@ try {
 
 // Configuration
 const VERSION = '2.3.0';
-const HTTPS_PORT = process.env.HTTPS_PORT || 3001;
-const HTTP_PORT = process.env.HTTP_PORT || 3000;
+const HTTPS_PORT = process.env.HTTPS_PORT || 443;
+const HTTP_PORT = process.env.HTTP_PORT || 80;
 const SSL_CERT_PATH = path.join(__dirname, 'certs', 'server.crt');
 const SSL_KEY_PATH = path.join(__dirname, 'certs', 'server.key');
 
@@ -274,9 +274,10 @@ if (httpsServer) {
     // Create a simple redirect app for HTTP
     httpApp = express();
     httpApp.use((req, res) => {
-        // Redirect to HTTPS with same host but different port
+        // Redirect to HTTPS (omit port if using standard 443)
         const host = req.headers.host?.split(':')[0] || req.hostname;
-        const httpsUrl = `https://${host}:${HTTPS_PORT}${req.url}`;
+        const portSuffix = HTTPS_PORT == 443 ? '' : `:${HTTPS_PORT}`;
+        const httpsUrl = `https://${host}${portSuffix}${req.url}`;
         res.redirect(301, httpsUrl);
     });
     console.log(`[HTTP]  Will redirect all traffic to HTTPS`);

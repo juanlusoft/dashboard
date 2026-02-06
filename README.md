@@ -106,9 +106,9 @@ The admin manages everything from the NAS dashboard: approve devices, set schedu
 
 ### Local Network
 ```
-https://homepinas.local:3001    (mDNS)
-https://<IP>:3001               (HTTPS)
-http://<IP>:3000                (HTTP fallback)
+https://homepinas.local         (mDNS)
+https://<IP>                    (HTTPS - puerto 443)
+http://<IP>                     (HTTP - redirige a HTTPS)
 ```
 
 ### Network Share (SMB)
