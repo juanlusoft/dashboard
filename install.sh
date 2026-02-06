@@ -582,28 +582,28 @@ if command -v avahi-daemon &> /dev/null; then
 <service-group>
   <name replace-wildcards="yes">HomePiNAS on %h</name>
 
-  <!-- HTTP Service (port 3000) -->
+  <!-- HTTP Service (port 80) -->
   <service>
     <type>_http._tcp</type>
-    <port>3000</port>
+    <port>80</port>
     <txt-record>path=/</txt-record>
-    <txt-record>version=2.2.0</txt-record>
+    <txt-record>version=2.5.0</txt-record>
     <txt-record>product=HomePiNAS</txt-record>
   </service>
 
-  <!-- HTTPS Service (port 3001) -->
+  <!-- HTTPS Service (port 443) -->
   <service>
     <type>_https._tcp</type>
-    <port>3001</port>
+    <port>443</port>
     <txt-record>path=/</txt-record>
-    <txt-record>version=2.2.0</txt-record>
+    <txt-record>version=2.5.0</txt-record>
     <txt-record>product=HomePiNAS</txt-record>
   </service>
 
   <!-- Web Admin Interface -->
   <service>
     <type>_http-alt._tcp</type>
-    <port>3001</port>
+    <port>443</port>
     <txt-record>txtvers=1</txt-record>
     <txt-record>type=NAS Dashboard</txt-record>
   </service>
@@ -642,12 +642,18 @@ AVAHIEOF
         fi
     fi
 
-    # Set hostname to homepinas if not already set
+    # Set hostname to homepinas for easy access via homepinas.local
     CURRENT_HOSTNAME=$(hostname)
-    if [ "$CURRENT_HOSTNAME" != "homepinas" ]; then
-        echo -e "${YELLOW}Note: Current hostname is '$CURRENT_HOSTNAME'${NC}"
-        echo -e "${YELLOW}To access via homepinas.local, you may want to change hostname:${NC}"
-        echo -e "  sudo hostnamectl set-hostname homepinas"
+    if [ "$CURRENT_HOSTNAME" != "homepinas" ] && [ "$CURRENT_HOSTNAME" != "PiNas" ]; then
+        echo -e "${BLUE}Setting hostname to 'homepinas' for easy network access...${NC}"
+        hostnamectl set-hostname homepinas
+        # Update /etc/hosts
+        sed -i "s/$CURRENT_HOSTNAME/homepinas/g" /etc/hosts 2>/dev/null || true
+        if ! grep -q "homepinas" /etc/hosts; then
+            echo "127.0.1.1       homepinas" >> /etc/hosts
+        fi
+        echo -e "${GREEN}Hostname set to 'homepinas'${NC}"
+        echo -e "${CYAN}Access your NAS at: https://homepinas.local${NC}"
     fi
 
     # Enable and start Avahi
@@ -1254,13 +1260,13 @@ CURRENT_HOSTNAME=$(hostname)
 echo -e ""
 echo -e "${GREEN}╔═══════════════════════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║                                                           ║${NC}"
-echo -e "${GREEN}║   Web HomePiNAS: ${CYAN}https://${IP_ADDR}:3001${NC}${GREEN}                ║${NC}"
+echo -e "${GREEN}║   Web HomePiNAS: ${CYAN}https://${IP_ADDR}${NC}${GREEN}                ║${NC}"
 echo -e "${GREEN}║                                                           ║${NC}"
 echo -e "${GREEN}╚═══════════════════════════════════════════════════════════╝${NC}"
 echo -e ""
 echo -e "${YELLOW}Dashboard Access:${NC}"
-echo -e "  ${CYAN}mDNS (Local):${NC}      ${GREEN}https://${CURRENT_HOSTNAME}.local:3001${NC}"
-echo -e "  HTTPS (IP):         ${GREEN}https://${IP_ADDR}:3001${NC}"
+echo -e "  ${CYAN}mDNS (Local):${NC}      ${GREEN}https://${CURRENT_HOSTNAME}.local${NC}"
+echo -e "  HTTPS (IP):         ${GREEN}https://${IP_ADDR}${NC}"
 echo -e "  HTTP  (Fallback):   ${BLUE}http://${IP_ADDR}:3000${NC}"
 echo -e ""
 echo -e "${YELLOW}Note:${NC} Your browser will show a certificate warning for HTTPS."
