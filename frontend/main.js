@@ -11366,34 +11366,6 @@ function remoteBrowserRefresh() {
     loadRemoteFiles(state.remoteName, state.path);
 }
 
-function getFileIcon(filename) {
-    const ext = filename.split('.').pop().toLowerCase();
-    const icons = {
-        // Images
-        jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', webp: '🖼️', svg: '🖼️',
-        // Videos
-        mp4: '🎬', mkv: '🎬', avi: '🎬', mov: '🎬', wmv: '🎬', webm: '🎬',
-        // Audio
-        mp3: '🎵', wav: '🎵', flac: '🎵', ogg: '🎵', m4a: '🎵',
-        // Documents
-        pdf: '📄', doc: '📝', docx: '📝', xls: '📊', xlsx: '📊', ppt: '📑', pptx: '📑',
-        txt: '📄', md: '📄', csv: '📊',
-        // Archives
-        zip: '📦', rar: '📦', '7z': '📦', tar: '📦', gz: '📦',
-        // Code
-        js: '💻', py: '🐍', html: '🌐', css: '🎨', json: '📋', xml: '📋',
-    };
-    return icons[ext] || '📄';
-}
-
-function formatFileSize(bytes) {
-    if (!bytes || bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-}
-
 async function downloadRemoteFile(remoteName, filePath) {
     showToast('Descarga iniciada...', 'info');
     // This would need a backend endpoint to handle the actual download
