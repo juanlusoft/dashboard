@@ -400,6 +400,45 @@ router.post('/sync', requireAuth, async (req, res) => {
     }
 });
 
+// GET /jobs/active - Get all active sync jobs
+router.get('/jobs/active', requireAuth, (req, res) => {
+    try {
+        const history = loadTransferHistory();
+        const activeJobs = history.filter(t => t.status === 'running');
+        
+        // Get progress for each active job
+        const jobsWithProgress = activeJobs.map(job => {
+            const logFile = `/tmp/rclone-job-${job.id}.log`;
+            let lastLine = '';
+            let percent = 0;
+            
+            try {
+                if (fs.existsSync(logFile)) {
+                    const log = fs.readFileSync(logFile, 'utf8');
+                    const lines = log.trim().split('\n');
+                    lastLine = lines[lines.length - 1] || '';
+                    
+                    // Extract percentage
+                    const percentMatch = lastLine.match(/(\d+)%/);
+                    if (percentMatch) percent = parseInt(percentMatch[1]);
+                }
+            } catch (e) {
+                // Ignore read errors
+            }
+            
+            return {
+                ...job,
+                lastLine,
+                percent
+            };
+        });
+        
+        res.json({ jobs: jobsWithProgress });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // GET /jobs/:id - Get job status
 router.get('/jobs/:id', requireAuth, (req, res) => {
     const { id } = req.params;

@@ -10878,6 +10878,10 @@ async function loadCloudBackupStatus() {
             `;
         }
         
+        // Load active sync jobs
+        const activeJobsRes = await authFetch(`${API_BASE}/cloud-backup/jobs/active`);
+        const activeJobsData = await activeJobsRes.json();
+        
         // Load scheduled syncs
         const schedulesRes = await authFetch(`${API_BASE}/cloud-backup/schedules`);
         const schedulesData = await schedulesRes.json();
@@ -10885,6 +10889,42 @@ async function loadCloudBackupStatus() {
         // Load transfer history
         const historyRes = await authFetch(`${API_BASE}/cloud-backup/history`);
         const historyData = await historyRes.json();
+        
+        // Build active syncs section (only if there are active jobs)
+        let activeHtml = '';
+        if (activeJobsData.jobs && activeJobsData.jobs.length > 0) {
+            activeHtml = `
+                <div class="glass-card" style="margin-bottom: 20px; border: 2px solid rgba(16,185,129,0.3);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h4 style="margin: 0; color: #10b981;">🔄 Sincronizaciones Activas</h4>
+                        <span style="font-size: 0.8rem; color: #a0a0b0;">Auto-actualiza cada 5s</span>
+                    </div>
+                    <div id="active-syncs-list">
+                        ${activeJobsData.jobs.map(job => `
+                            <div style="padding: 15px; background: rgba(16,185,129,0.05); border-radius: 8px; margin-bottom: 10px; border: 1px solid rgba(16,185,129,0.2);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                    <div style="overflow: hidden;">
+                                        <div style="font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(job.source)}</div>
+                                        <div style="font-size: 0.8rem; color: #a0a0b0;">→ ${escapeHtml(job.dest)}</div>
+                                    </div>
+                                    <span style="color: #10b981; font-weight: 600; font-size: 1.1rem;">${job.percent}%</span>
+                                </div>
+                                <div style="height: 6px; background: #2d2d44; border-radius: 3px; overflow: hidden;">
+                                    <div style="height: 100%; background: linear-gradient(90deg, #10b981, #6366f1); width: ${job.percent}%; transition: width 0.5s ease;"></div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            
+            // Auto-refresh active syncs
+            setTimeout(() => {
+                if (document.getElementById('active-syncs-list')) {
+                    loadCloudBackupStatus();
+                }
+            }, 5000);
+        }
         
         // Build scheduled syncs section
         let schedulesHtml = `
@@ -10956,7 +10996,7 @@ async function loadCloudBackupStatus() {
         }
         historyHtml += '</div></div>';
         
-        contentDiv.innerHTML = remotesHtml + schedulesHtml + historyHtml;
+        contentDiv.innerHTML = remotesHtml + activeHtml + schedulesHtml + historyHtml;
         
         // Bind event listeners after DOM is updated
         bindCloudBackupEventListeners();
