@@ -329,6 +329,7 @@ const viewsMap = {
     'backup': 'Backup y Tareas',
     'active-backup': 'Active Backup',
     'cloud-sync': 'Cloud Sync',
+    'cloud-backup': 'Cloud Backup',
     'homestore': 'HomeStore',
     'logs': 'Visor de Logs',
     'users': 'Gestión de Usuarios',
@@ -2443,6 +2444,7 @@ async function renderContent(view) {
     else if (view === 'backup') await renderBackupView();
     else if (view === 'active-backup') await renderActiveBackupView();
     else if (view === 'cloud-sync') await renderCloudSyncView();
+    else if (view === 'cloud-backup') await renderCloudBackupView();
     else if (view === 'homestore') await renderHomeStoreView();
     else if (view === 'logs') await renderLogsView();
     else if (view === 'users') await renderUsersView();
@@ -10765,5 +10767,376 @@ window.showStackLogs = showStackLogs;
 window.deleteStack = deleteStack;
 window.useTemplate = useTemplate;
 
+// ═══════════════════════════════════════════════════════════════════════════
+// CLOUD BACKUP - rclone integration for Google Drive, Dropbox, OneDrive, etc.
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function renderCloudBackupView() {
+    const dashboardContent = document.getElementById('dashboard-content');
+    if (!dashboardContent) return;
+    
+    dashboardContent.innerHTML = `
+        <div class="glass-card" style="margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h3 style="color: var(--primary); margin: 0;">☁️ Cloud Backup</h3>
+                    <p style="color: var(--text-dim); margin: 5px 0 0;">Sincroniza con Google Drive, Dropbox, OneDrive y más</p>
+                </div>
+                <div id="cloud-backup-status-badge"></div>
+            </div>
+        </div>
+        <div id="cloud-backup-content">
+            <div style="text-align: center; padding: 40px; color: var(--text-dim);">
+                Cargando...
+            </div>
+        </div>
+    `;
+    
+    await loadCloudBackupStatus();
+}
+
+async function loadCloudBackupStatus() {
+    const contentDiv = document.getElementById('cloud-backup-content');
+    const badgeDiv = document.getElementById('cloud-backup-status-badge');
+    
+    try {
+        const res = await authFetch(`${API_BASE}/cloud-backup/status`);
+        if (!res.ok) throw new Error('Failed to load status');
+        const status = await res.json();
+        
+        if (!status.installed) {
+            // rclone not installed
+            badgeDiv.innerHTML = '<span style="color: #f59e0b;">⚠️ rclone no instalado</span>';
+            contentDiv.innerHTML = `
+                <div class="glass-card" style="text-align: center; padding: 40px;">
+                    <h3 style="margin-bottom: 15px;">📦 Instalar rclone</h3>
+                    <p style="color: var(--text-dim); margin-bottom: 20px;">
+                        rclone es necesario para conectar con servicios de nube como Google Drive, Dropbox, OneDrive, etc.
+                    </p>
+                    <button onclick="installRclone()" class="btn-primary" style="padding: 12px 24px;">
+                        Instalar rclone
+                    </button>
+                </div>
+            `;
+            return;
+        }
+        
+        badgeDiv.innerHTML = `<span style="color: #10b981;">✓ rclone v${status.version}</span>`;
+        
+        // Load configured remotes
+        const remotesRes = await authFetch(`${API_BASE}/cloud-backup/remotes`);
+        const remotesData = await remotesRes.json();
+        
+        let remotesHtml = '';
+        if (remotesData.remotes && remotesData.remotes.length > 0) {
+            remotesHtml = `
+                <div class="glass-card" style="margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h4 style="margin: 0;">🌐 Nubes Configuradas</h4>
+                        <button onclick="showAddCloudModal()" class="btn-primary" style="padding: 8px 16px;">
+                            + Añadir Nube
+                        </button>
+                    </div>
+                    <div id="cloud-remotes-list">
+                        ${remotesData.remotes.map(r => `
+                            <div class="remote-card" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background: rgba(255,255,255,0.03); border-radius: 10px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <span style="font-size: 1.8rem;">${r.icon}</span>
+                                    <div>
+                                        <div style="font-weight: 600;">${escapeHtml(r.name)}</div>
+                                        <div style="font-size: 0.85rem; color: var(--text-dim);">${r.displayName}</div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 8px;">
+                                    <button onclick="browseRemote('${escapeHtml(r.name)}')" class="btn-sm" style="background: #6366f1;" title="Explorar">
+                                        📂
+                                    </button>
+                                    <button onclick="syncRemote('${escapeHtml(r.name)}')" class="btn-sm" style="background: #10b981;" title="Sincronizar">
+                                        🔄
+                                    </button>
+                                    <button onclick="deleteRemote('${escapeHtml(r.name)}')" class="btn-sm" style="background: #ef4444;" title="Eliminar">
+                                        🗑️
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        } else {
+            remotesHtml = `
+                <div class="glass-card" style="text-align: center; padding: 40px;">
+                    <h3 style="margin-bottom: 15px;">🌐 No hay nubes configuradas</h3>
+                    <p style="color: var(--text-dim); margin-bottom: 20px;">
+                        Añade tu primera nube para empezar a sincronizar archivos
+                    </p>
+                    <button onclick="showAddCloudModal()" class="btn-primary" style="padding: 12px 24px;">
+                        + Añadir Nube
+                    </button>
+                </div>
+            `;
+        }
+        
+        contentDiv.innerHTML = remotesHtml;
+        
+    } catch (e) {
+        contentDiv.innerHTML = `<div class="glass-card" style="color: #ef4444; padding: 20px;">Error: ${e.message}</div>`;
+    }
+}
+
+async function installRclone() {
+    if (!confirm('¿Instalar rclone? Esto puede tardar unos minutos.')) return;
+    
+    const contentDiv = document.getElementById('cloud-backup-content');
+    contentDiv.innerHTML = `
+        <div class="glass-card" style="text-align: center; padding: 40px;">
+            <div class="spinner" style="margin: 0 auto 20px;"></div>
+            <p>Instalando rclone...</p>
+        </div>
+    `;
+    
+    try {
+        const res = await authFetch(`${API_BASE}/cloud-backup/install`, { method: 'POST' });
+        const data = await res.json();
+        
+        if (data.success) {
+            showToast('rclone instalado correctamente', 'success');
+            await loadCloudBackupStatus();
+        } else {
+            throw new Error(data.error);
+        }
+    } catch (e) {
+        showToast('Error instalando rclone: ' + e.message, 'error');
+        await loadCloudBackupStatus();
+    }
+}
+
+async function showAddCloudModal() {
+    // Get available providers
+    const res = await authFetch(`${API_BASE}/cloud-backup/providers`);
+    const data = await res.json();
+    
+    const modal = document.createElement('div');
+    modal.id = 'add-cloud-modal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100000;';
+    
+    modal.innerHTML = `
+        <div style="background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 16px; width: 95%; max-width: 600px; max-height: 80vh; overflow: hidden;">
+            <div style="padding: 20px; border-bottom: 1px solid #3d3d5c; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; color: #10b981;">☁️ Añadir Nube</h3>
+                <button onclick="document.getElementById('add-cloud-modal').remove()" style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer;">×</button>
+            </div>
+            <div style="padding: 20px; overflow-y: auto; max-height: 60vh;">
+                <p style="color: #a0a0b0; margin-bottom: 20px;">Selecciona el servicio de nube que quieres configurar:</p>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px;">
+                    ${data.providers.map(p => `
+                        <button onclick="startCloudConfig('${p.id}')" style="
+                            background: rgba(255,255,255,0.05);
+                            border: 2px solid rgba(255,255,255,0.1);
+                            border-radius: 12px;
+                            padding: 20px 15px;
+                            cursor: pointer;
+                            text-align: center;
+                            transition: all 0.2s;
+                        " onmouseover="this.style.borderColor='${p.color}'" onmouseout="this.style.borderColor='rgba(255,255,255,0.1)'">
+                            <div style="font-size: 2rem; margin-bottom: 8px;">${p.icon}</div>
+                            <div style="color: #fff; font-size: 0.9rem;">${p.name}</div>
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+async function startCloudConfig(provider) {
+    document.getElementById('add-cloud-modal')?.remove();
+    
+    const res = await authFetch(`${API_BASE}/cloud-backup/config/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider, name: `${provider}_${Date.now()}` })
+    });
+    const data = await res.json();
+    
+    if (data.needsOAuth) {
+        // Show OAuth instructions
+        showOAuthModal(provider, data.instructions);
+    } else {
+        // Show config form
+        showConfigFormModal(provider, data.fields);
+    }
+}
+
+function showOAuthModal(provider, instructions) {
+    const modal = document.createElement('div');
+    modal.id = 'oauth-modal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100000;';
+    
+    modal.innerHTML = `
+        <div style="background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 16px; width: 95%; max-width: 500px; padding: 25px;">
+            <h3 style="color: #10b981; margin-bottom: 20px;">🔐 Autorización OAuth</h3>
+            <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <pre style="white-space: pre-wrap; color: #a0a0b0; font-size: 0.9rem;">${escapeHtml(instructions)}</pre>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="color: #fff; display: block; margin-bottom: 8px;">Nombre para esta nube:</label>
+                <input type="text" id="oauth-remote-name" value="${provider}" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label style="color: #fff; display: block; margin-bottom: 8px;">Pega el token aquí:</label>
+                <textarea id="oauth-token" rows="4" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff; resize: vertical;"></textarea>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button onclick="document.getElementById('oauth-modal').remove()" style="padding: 10px 20px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Cancelar</button>
+                <button onclick="saveOAuthConfig('${provider}')" style="padding: 10px 20px; background: #10b981; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Guardar</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+async function saveOAuthConfig(provider) {
+    const name = document.getElementById('oauth-remote-name').value.trim();
+    const token = document.getElementById('oauth-token').value.trim();
+    
+    if (!name || !token) {
+        alert('Nombre y token son requeridos');
+        return;
+    }
+    
+    try {
+        const res = await authFetch(`${API_BASE}/cloud-backup/config/save-oauth`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, provider, token })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+            document.getElementById('oauth-modal').remove();
+            showToast('Nube configurada correctamente', 'success');
+            await loadCloudBackupStatus();
+        } else {
+            throw new Error(data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+function showConfigFormModal(provider, fields) {
+    const modal = document.createElement('div');
+    modal.id = 'config-form-modal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100000;';
+    
+    const fieldsHtml = fields.map(f => `
+        <div style="margin-bottom: 15px;">
+            <label style="color: #fff; display: block; margin-bottom: 8px;">${f.label}${f.required ? ' *' : ''}:</label>
+            ${f.type === 'select' ? `
+                <select id="config-${f.name}" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+                    ${f.options.map(o => `<option value="${o}">${o}</option>`).join('')}
+                </select>
+            ` : `
+                <input type="${f.type}" id="config-${f.name}" value="${f.default || ''}" placeholder="${f.placeholder || ''}" 
+                    style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+            `}
+        </div>
+    `).join('');
+    
+    modal.innerHTML = `
+        <div style="background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 16px; width: 95%; max-width: 500px; padding: 25px;">
+            <h3 style="color: #10b981; margin-bottom: 20px;">⚙️ Configurar ${provider.toUpperCase()}</h3>
+            <div style="margin-bottom: 15px;">
+                <label style="color: #fff; display: block; margin-bottom: 8px;">Nombre para esta nube *:</label>
+                <input type="text" id="config-name" value="${provider}" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+            </div>
+            ${fieldsHtml}
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button onclick="document.getElementById('config-form-modal').remove()" style="padding: 10px 20px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Cancelar</button>
+                <button onclick="saveSimpleConfig('${provider}', ${JSON.stringify(fields.map(f => f.name))})" style="padding: 10px 20px; background: #10b981; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Guardar</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+async function saveSimpleConfig(provider, fieldNames) {
+    const name = document.getElementById('config-name').value.trim();
+    if (!name) {
+        alert('El nombre es requerido');
+        return;
+    }
+    
+    const config = {};
+    for (const fieldName of fieldNames) {
+        const el = document.getElementById(`config-${fieldName}`);
+        if (el) config[fieldName] = el.value;
+    }
+    
+    try {
+        const res = await authFetch(`${API_BASE}/cloud-backup/config/save-simple`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, provider, config })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+            document.getElementById('config-form-modal').remove();
+            showToast('Nube configurada correctamente', 'success');
+            await loadCloudBackupStatus();
+        } else {
+            throw new Error(data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function browseRemote(remoteName) {
+    // TODO: Implement file browser for remote
+    alert('Navegador de archivos en desarrollo');
+}
+
+async function syncRemote(remoteName) {
+    // TODO: Implement sync modal
+    alert('Sincronización en desarrollo');
+}
+
+async function deleteRemote(remoteName) {
+    if (!confirm(`¿Eliminar la configuración de "${remoteName}"?`)) return;
+    
+    try {
+        const res = await authFetch(`${API_BASE}/cloud-backup/remotes/${encodeURIComponent(remoteName)}/delete`, {
+            method: 'POST'
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+            showToast('Nube eliminada', 'success');
+            await loadCloudBackupStatus();
+        } else {
+            throw new Error(data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+// Expose cloud backup functions globally
+window.installRclone = installRclone;
+window.showAddCloudModal = showAddCloudModal;
+window.startCloudConfig = startCloudConfig;
+window.saveOAuthConfig = saveOAuthConfig;
+window.saveSimpleConfig = saveSimpleConfig;
+window.browseRemote = browseRemote;
+window.syncRemote = syncRemote;
+window.deleteRemote = deleteRemote;
+
 init();
-console.log("HomePiNAS Core v2.5.0 Loaded - HomeStore + Stacks");
+console.log("HomePiNAS Core v2.6.0 Loaded - Cloud Backup");

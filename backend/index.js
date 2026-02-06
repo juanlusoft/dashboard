@@ -55,6 +55,7 @@ const upsRoutes = require('./routes/ups');
 const ddnsRoutes = require('./routes/ddns');
 const activeBackupRoutes = require('./routes/active-backup');
 const cloudSyncRoutes = require('./routes/cloud-sync');
+const cloudBackupRoutes = require('./routes/cloud-backup');
 const homestoreRoutes = require('./routes/homestore');
 const stacksRoutes = require('./routes/stacks');
 
@@ -149,6 +150,7 @@ app.use(express.json({ limit: '10kb' }));
 
 // Cloud Sync routes (before CSRF - uses session auth only)
 app.use('/api/cloud-sync', cloudSyncRoutes);
+app.use('/api/cloud-backup', cloudBackupRoutes);
 
 // CSRF protection for state-changing requests
 app.use(csrfProtection);
