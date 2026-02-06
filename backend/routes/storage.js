@@ -925,7 +925,32 @@ router.post('/disks/add-to-pool', requireAuth, async (req, res) => {
         // PREPARATION PHASE
         // ══════════════════════════════════════════════════════════════════
         
-        // Step 1: Create partition if needed (for new disks or format requested)
+        // Step 1: Unmount ALL partitions of this disk (MUST be first!)
+        try {
+            // Find all mount points for this disk (any partition)
+            const mountCheck = execSync(`mount | grep "/dev/${safeDiskId}" || true`, { encoding: 'utf8' });
+            if (mountCheck.trim()) {
+                console.log(`Unmounting all partitions of /dev/${safeDiskId}...`);
+                const mountLines = mountCheck.trim().split('\n');
+                for (const line of mountLines) {
+                    const mountedDev = line.split(' ')[0];
+                    if (mountedDev) {
+                        console.log(`  Unmounting ${mountedDev}...`);
+                        try {
+                            execSync(`sudo umount ${escapeShellArg(mountedDev)} 2>/dev/null || sudo umount -l ${escapeShellArg(mountedDev)} 2>/dev/null || true`, { encoding: 'utf8' });
+                        } catch (e) {
+                            console.log(`  Failed to unmount ${mountedDev}: ${e.message}`);
+                        }
+                    }
+                }
+                // Wait for unmount to complete
+                execSync('sleep 1', { encoding: 'utf8' });
+            }
+        } catch (e) {
+            console.log('Unmount check/attempt:', e.message);
+        }
+        
+        // Step 2: Create partition if needed (for new disks or format requested)
         if (!hasPartition || format) {
             try {
                 console.log(`Creating partition on ${devicePath}...`);
@@ -946,23 +971,6 @@ router.post('/disks/add-to-pool', requireAuth, async (req, res) => {
                 // Partition might already exist, continue
                 console.log('Partition creation skipped (may already exist):', e.message);
             }
-        }
-
-        // Step 2: Unmount if mounted (required before formatting)
-        try {
-            const mountCheck = execSync(`mount | grep -E "${escapeShellArg(partitionPath)}|${escapeShellArg(devicePath)}" || true`, { encoding: 'utf8' });
-            if (mountCheck.trim()) {
-                console.log(`Unmounting ${partitionPath} before operations...`);
-                try {
-                    execSync(`sudo umount ${escapeShellArg(partitionPath)} 2>/dev/null || true`, { encoding: 'utf8' });
-                    execSync(`sudo umount ${escapeShellArg(devicePath)} 2>/dev/null || true`, { encoding: 'utf8' });
-                } catch (e) {
-                    // Try lazy unmount as fallback
-                    execSync(`sudo umount -l ${escapeShellArg(partitionPath)} 2>/dev/null || true`, { encoding: 'utf8' });
-                }
-            }
-        } catch (e) {
-            console.log('Unmount check/attempt:', e.message);
         }
         
         // Step 3: Format if requested
