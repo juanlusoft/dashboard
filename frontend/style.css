@@ -540,13 +540,12 @@ body {
 /* Sidebar Logo */
 .sidebar-logo {
     margin-top: auto;
-    padding: 20px 16px;
+    padding: 24px 16px;
     display: flex;
-    flex-direction: column;
+    justify-content: center;
     align-items: center;
-    gap: 8px;
     border-top: 1px solid var(--border);
-    opacity: 0.7;
+    opacity: 0.8;
     transition: opacity 0.3s;
 }
 
@@ -555,27 +554,20 @@ body {
 }
 
 .sidebar-logo img {
-    width: 48px;
-    height: 48px;
+    width: 120px;
+    height: auto;
 }
 
 .sidebar-logo-text {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--primary);
-}
-
-.sidebar.collapsed .sidebar-logo-text {
     display: none;
 }
 
 .sidebar.collapsed .sidebar-logo img {
-    width: 32px;
-    height: 32px;
+    width: 40px;
 }
 
 .sidebar.collapsed .sidebar-logo {
-    padding: 12px 8px;
+    padding: 16px 8px;
 }
 
 .content {
