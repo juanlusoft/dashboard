@@ -9811,7 +9811,7 @@ async function showHomeStoreConfigModal(appId) {
                            data-container-path="${escapeHtml(containerPath)}"
                            value="${escapeHtml(savedPath)}"
                            placeholder="${escapeHtml(hostPath)}"
-                           style="flex: 1; padding: 10px 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: monospace; font-size: 0.9rem;">
+                           style="flex: 1; padding: 10px 12px; background: rgba(255,255,255,0.1); border: 1px solid #3a3a5e; border-radius: 8px; color: #fff; font-family: monospace; font-size: 0.9rem;">
                     <button type="button" class="homestore-browse-btn" data-target="${escapeHtml(containerPath)}"
                             style="padding: 10px 14px; background: rgba(255,255,255,0.1); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; color: var(--text);"
                             title="Explorar carpetas">
@@ -9838,7 +9838,7 @@ async function showHomeStoreConfigModal(appId) {
                            data-container-port="${escapeHtml(containerPort)}"
                            value="${escapeHtml(savedPort.toString().split('/')[0])}"
                            min="1" max="65535"
-                           style="width: 100px; padding: 10px 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: monospace;">
+                           style="width: 100px; padding: 10px 12px; background: rgba(255,255,255,0.1); border: 1px solid #3a3a5e; border-radius: 8px; color: #fff; font-family: monospace;">
                     <span style="color: var(--text-secondary);">→ ${escapeHtml(containerPort)}</span>
                 </div>
             </div>
@@ -9860,7 +9860,7 @@ async function showHomeStoreConfigModal(appId) {
                        data-env-key="${escapeHtml(key)}"
                        value="${escapeHtml(savedValue)}"
                        placeholder="${escapeHtml(value)}"
-                       style="width: 100%; padding: 10px 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: monospace; font-size: 0.9rem;">
+                       style="width: 100%; padding: 10px 12px; background: rgba(255,255,255,0.1); border: 1px solid #3a3a5e; border-radius: 8px; color: #fff; font-family: monospace; font-size: 0.9rem;">
             </div>
         `;
     }).join('') : '';
