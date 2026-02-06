@@ -116,14 +116,18 @@ router.get('/catalog', async (req, res) => {
         const catalog = await loadCatalog();
         const installed = await loadInstalled();
         
-        // Enrich apps with install status
+        // Enrich apps with install status and saved config
         const apps = await Promise.all(catalog.apps.map(async (app) => {
             const status = await getContainerStatus(app.id);
+            const savedConfig = await loadAppConfig(app.id);
+            const installInfo = installed.apps[app.id];
+            
             return {
                 ...app,
-                installed: !!installed.apps[app.id],
+                installed: !!installInfo,
                 status: status,
-                installedAt: installed.apps[app.id]?.installedAt
+                installedAt: installInfo?.installedAt,
+                config: savedConfig || installInfo?.config || null
             };
         }));
         
@@ -160,12 +164,14 @@ router.get('/installed', async (req, res) => {
                 const appDef = catalog.apps.find(a => a.id === appId);
                 const status = await getContainerStatus(appId);
                 const stats = status === 'running' ? await getContainerStats(appId) : null;
+                const savedConfig = await loadAppConfig(appId);
                 
                 return {
                     ...appDef,
                     ...installed.apps[appId],
                     status,
-                    stats
+                    stats,
+                    config: savedConfig || installed.apps[appId]?.config || null
                 };
             })
         );
@@ -536,27 +542,35 @@ router.post('/update/:id', async (req, res) => {
             exec(`docker stop homestore-${id} && docker rm homestore-${id}`, () => resolve());
         });
         
-        // Reinstall with same config
-        const config = installed.apps[id].config;
+        // Load saved config (persisted from installation)
+        const savedConfig = await loadAppConfig(id);
+        const config = savedConfig || installed.apps[id].config || {};
         
-        // Build docker run command (same as install)
+        // Use saved volumes/ports or fall back to defaults
+        const finalVolumes = config.volumes || app.volumes || {};
+        const finalPorts = config.ports || app.ports || {};
+        const finalEnv = config.env || app.env || {};
+        
+        // Build docker run command with saved configuration
         let cmd = `docker run -d --name homestore-${id} --restart unless-stopped`;
         
-        if (app.ports) {
-            for (const [host, container] of Object.entries(app.ports)) {
-                cmd += ` -p ${host}:${container}`;
-            }
+        // Add ports
+        for (const [host, container] of Object.entries(finalPorts)) {
+            const hostPort = host.split('/')[0];
+            const protocol = host.includes('/') ? host.split('/')[1] : '';
+            const containerPort = container.includes('/') ? container : (protocol ? `${container}/${protocol}` : container);
+            cmd += ` -p ${hostPort}:${containerPort}`;
         }
         
-        if (app.volumes) {
-            for (const [container, host] of Object.entries(app.volumes)) {
-                cmd += ` -v ${host}:${container}`;
-            }
+        // Add volumes
+        for (const [container, host] of Object.entries(finalVolumes)) {
+            cmd += ` -v ${host}:${container}`;
         }
         
-        const envVars = { ...app.env, ...(config?.env || {}) };
-        for (const [key, value] of Object.entries(envVars)) {
-            cmd += ` -e ${key}="${value}"`;
+        // Add environment variables
+        for (const [key, value] of Object.entries(finalEnv)) {
+            const escapedValue = String(value).replace(/"/g, '\\"');
+            cmd += ` -e ${key}="${escapedValue}"`;
         }
         
         if (app.capabilities) {
@@ -576,6 +590,8 @@ router.post('/update/:id', async (req, res) => {
         }
         
         cmd += ` ${app.image}`;
+        
+        console.log('Updating app with config:', cmd);
         
         await new Promise((resolve, reject) => {
             exec(cmd, { timeout: 300000 }, (err, stdout, stderr) => {
