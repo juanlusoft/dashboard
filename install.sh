@@ -5,7 +5,7 @@
 # Version: 2.0.0 (Homelabs.club Edition)
 
 # Version - CHANGE THIS FOR EACH RELEASE
-VERSION="2.2.19"
+VERSION="2.6.0"
 
 # Determine the real user early (before any operations that need it)
 REAL_USER=${SUDO_USER:-$USER}
