@@ -55,6 +55,7 @@ const upsRoutes = require('./routes/ups');
 const ddnsRoutes = require('./routes/ddns');
 const activeBackupRoutes = require('./routes/active-backup');
 const cloudSyncRoutes = require('./routes/cloud-sync');
+const homestoreRoutes = require('./routes/homestore');
 
 // Import terminal WebSocket handler
 let setupTerminalWebSocket;
@@ -232,6 +233,9 @@ app.use('/api/ddns', ddnsRoutes);
 
 // Active Backup for Business
 app.use('/api/active-backup', activeBackupRoutes);
+
+// HomeStore - App marketplace
+app.use('/api/homestore', homestoreRoutes);
 
 // Cloud Sync routes registered before CSRF middleware
 

@@ -134,6 +134,7 @@ const viewsMap = {
     'backup': 'Backup y Tareas',
     'active-backup': 'Active Backup',
     'cloud-sync': 'Cloud Sync',
+    'homestore': 'HomeStore',
     'logs': 'Visor de Logs',
     'users': 'Gestión de Usuarios',
     'system': 'System Administration'
@@ -1615,6 +1616,7 @@ async function renderContent(view) {
     else if (view === 'backup') await renderBackupView();
     else if (view === 'active-backup') await renderActiveBackupView();
     else if (view === 'cloud-sync') await renderCloudSyncView();
+    else if (view === 'homestore') await renderHomeStoreView();
     else if (view === 'logs') await renderLogsView();
     else if (view === 'users') await renderUsersView();
     else if (view === 'system') {
@@ -8666,6 +8668,354 @@ async function deleteDevice(deviceId) {
     }
 }
 
+// =============================================================================
+// HOMESTORE - APP MARKETPLACE
+// =============================================================================
+
+let homestoreCatalog = null;
+let homestoreFilter = 'all';
+
+async function renderHomeStoreView() {
+    document.querySelector('.main-view').innerHTML = `
+        <div class="section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>🏪 HomeStore</h2>
+                <div id="homestore-docker-status"></div>
+            </div>
+            <p style="color: var(--text-secondary); margin-bottom: 20px;">
+                Instala aplicaciones con un clic. Todas funcionan sobre Docker.
+            </p>
+            
+            <div id="homestore-categories" style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;"></div>
+            
+            <div id="homestore-apps" class="grid-3" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;"></div>
+        </div>
+    `;
+    
+    await loadHomeStoreCatalog();
+}
+
+async function loadHomeStoreCatalog() {
+    const appsDiv = document.getElementById('homestore-apps');
+    const categoriesDiv = document.getElementById('homestore-categories');
+    const dockerStatusDiv = document.getElementById('homestore-docker-status');
+    
+    try {
+        // Check Docker status
+        const dockerRes = await authFetch(`${API_BASE}/homestore/check-docker`);
+        const dockerData = await dockerRes.json();
+        
+        if (!dockerData.available) {
+            dockerStatusDiv.innerHTML = `<span style="color: #ef4444;">⚠️ Docker no disponible</span>`;
+            appsDiv.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-secondary);">
+                    <p style="font-size: 48px; margin-bottom: 20px;">🐳</p>
+                    <p>Docker no está instalado o no está corriendo.</p>
+                    <p style="margin-top: 10px;">Instala Docker primero desde el Gestor de Docker.</p>
+                    <button onclick="navigateTo('/docker')" class="btn" style="margin-top: 20px; background: var(--primary); color: #000; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;">
+                        Ir a Gestor de Docker
+                    </button>
+                </div>
+            `;
+            return;
+        }
+        
+        dockerStatusDiv.innerHTML = `<span style="color: #10b981;">✓ Docker activo</span>`;
+        
+        // Load catalog
+        const res = await authFetch(`${API_BASE}/homestore/catalog`);
+        const data = await res.json();
+        
+        if (!data.success) throw new Error(data.error);
+        
+        homestoreCatalog = data;
+        
+        // Render categories
+        const categories = Object.entries(data.categories).sort((a, b) => a[1].order - b[1].order);
+        categoriesDiv.innerHTML = `
+            <button class="homestore-cat-btn ${homestoreFilter === 'all' ? 'active' : ''}" data-cat="all" 
+                    style="padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border); background: ${homestoreFilter === 'all' ? 'var(--primary)' : 'var(--bg-card)'}; color: ${homestoreFilter === 'all' ? '#000' : 'var(--text)'}; cursor: pointer;">
+                Todas
+            </button>
+            <button class="homestore-cat-btn ${homestoreFilter === 'installed' ? 'active' : ''}" data-cat="installed"
+                    style="padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border); background: ${homestoreFilter === 'installed' ? 'var(--primary)' : 'var(--bg-card)'}; color: ${homestoreFilter === 'installed' ? '#000' : 'var(--text)'}; cursor: pointer;">
+                ✓ Instaladas
+            </button>
+            ${categories.map(([id, cat]) => `
+                <button class="homestore-cat-btn ${homestoreFilter === id ? 'active' : ''}" data-cat="${id}"
+                        style="padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border); background: ${homestoreFilter === id ? 'var(--primary)' : 'var(--bg-card)'}; color: ${homestoreFilter === id ? '#000' : 'var(--text)'}; cursor: pointer;">
+                    ${cat.icon} ${cat.name}
+                </button>
+            `).join('')}
+        `;
+        
+        // Add category click handlers
+        categoriesDiv.querySelectorAll('.homestore-cat-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                homestoreFilter = btn.dataset.cat;
+                loadHomeStoreCatalog();
+            });
+        });
+        
+        // Filter apps
+        let apps = data.apps;
+        if (homestoreFilter === 'installed') {
+            apps = apps.filter(app => app.installed);
+        } else if (homestoreFilter !== 'all') {
+            apps = apps.filter(app => app.category === homestoreFilter);
+        }
+        
+        // Render apps
+        if (apps.length === 0) {
+            appsDiv.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-secondary);">
+                    <p>No hay aplicaciones en esta categoría.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        appsDiv.innerHTML = apps.map(app => renderHomeStoreAppCard(app, data.categories)).join('');
+        
+        // Add button handlers
+        apps.forEach(app => {
+            const card = document.getElementById(`homestore-app-${app.id}`);
+            if (!card) return;
+            
+            card.querySelector('.homestore-install-btn')?.addEventListener('click', () => installHomeStoreApp(app.id));
+            card.querySelector('.homestore-uninstall-btn')?.addEventListener('click', () => uninstallHomeStoreApp(app.id));
+            card.querySelector('.homestore-start-btn')?.addEventListener('click', () => startHomeStoreApp(app.id));
+            card.querySelector('.homestore-stop-btn')?.addEventListener('click', () => stopHomeStoreApp(app.id));
+            card.querySelector('.homestore-open-btn')?.addEventListener('click', () => openHomeStoreApp(app));
+            card.querySelector('.homestore-logs-btn')?.addEventListener('click', () => showHomeStoreAppLogs(app.id));
+            card.querySelector('.homestore-update-btn')?.addEventListener('click', () => updateHomeStoreApp(app.id));
+        });
+        
+    } catch (error) {
+        console.error('Error loading HomeStore:', error);
+        appsDiv.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #ef4444;">
+                <p>Error al cargar el catálogo: ${error.message}</p>
+                <button onclick="loadHomeStoreCatalog()" class="btn" style="margin-top: 20px;">Reintentar</button>
+            </div>
+        `;
+    }
+}
+
+function renderHomeStoreAppCard(app, categories) {
+    const cat = categories[app.category] || { name: app.category, icon: '📦' };
+    const isRunning = app.status === 'running';
+    const isStopped = app.status === 'stopped';
+    
+    let statusBadge = '';
+    let actionButtons = '';
+    
+    if (app.installed) {
+        if (isRunning) {
+            statusBadge = `<span style="background: #10b981; color: #fff; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem;">● Activa</span>`;
+            actionButtons = `
+                <button class="homestore-open-btn" style="background: var(--primary); color: #000; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                    Abrir
+                </button>
+                <button class="homestore-stop-btn" style="background: #6b7280; color: #fff; padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer;">
+                    ⏹ Parar
+                </button>
+                <button class="homestore-logs-btn" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; cursor: pointer;">
+                    📋
+                </button>
+            `;
+        } else {
+            statusBadge = `<span style="background: #6b7280; color: #fff; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem;">○ Parada</span>`;
+            actionButtons = `
+                <button class="homestore-start-btn" style="background: #10b981; color: #fff; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                    ▶ Iniciar
+                </button>
+                <button class="homestore-uninstall-btn" style="background: #ef4444; color: #fff; padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer;">
+                    🗑
+                </button>
+                <button class="homestore-update-btn" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; cursor: pointer;">
+                    ↻
+                </button>
+            `;
+        }
+    } else {
+        actionButtons = `
+            <button class="homestore-install-btn" style="background: var(--primary); color: #000; padding: 8px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                Instalar
+            </button>
+            <a href="${app.docs}" target="_blank" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; text-decoration: none; display: inline-block;">
+                📖 Docs
+            </a>
+        `;
+    }
+    
+    return `
+        <div id="homestore-app-${app.id}" class="card" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 2rem;">${app.icon}</span>
+                    <div>
+                        <h3 style="margin: 0; font-size: 1.1rem;">${app.name}</h3>
+                        <span style="color: var(--text-secondary); font-size: 0.85rem;">${cat.icon} ${cat.name}</span>
+                    </div>
+                </div>
+                ${statusBadge}
+            </div>
+            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 16px; line-height: 1.4;">
+                ${app.description}
+            </p>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                ${actionButtons}
+            </div>
+        </div>
+    `;
+}
+
+async function installHomeStoreApp(appId) {
+    const btn = document.querySelector(`#homestore-app-${appId} .homestore-install-btn`);
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Instalando...';
+    }
+    
+    try {
+        const res = await authFetch(`${API_BASE}/homestore/install/${appId}`, { method: 'POST' });
+        const data = await res.json();
+        
+        if (!data.success) throw new Error(data.error);
+        
+        alert(`✅ ${appId} instalado correctamente!${data.webUI ? `\n\nAccede en: ${data.webUI}` : ''}`);
+        await loadHomeStoreCatalog();
+        
+    } catch (error) {
+        console.error('Install error:', error);
+        alert(`❌ Error al instalar: ${error.message}`);
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Instalar';
+        }
+    }
+}
+
+async function uninstallHomeStoreApp(appId) {
+    if (!confirm(`¿Desinstalar ${appId}?\n\n¿Eliminar también los datos?`)) return;
+    
+    const removeData = confirm('¿Eliminar los datos de la aplicación?');
+    
+    try {
+        const res = await authFetch(`${API_BASE}/homestore/uninstall/${appId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ removeData })
+        });
+        const data = await res.json();
+        
+        if (!data.success) throw new Error(data.error);
+        
+        alert(`✅ ${appId} desinstalado`);
+        await loadHomeStoreCatalog();
+        
+    } catch (error) {
+        console.error('Uninstall error:', error);
+        alert(`❌ Error: ${error.message}`);
+    }
+}
+
+async function startHomeStoreApp(appId) {
+    try {
+        const res = await authFetch(`${API_BASE}/homestore/start/${appId}`, { method: 'POST' });
+        const data = await res.json();
+        
+        if (!data.success) throw new Error(data.error);
+        
+        await loadHomeStoreCatalog();
+        
+    } catch (error) {
+        alert(`❌ Error: ${error.message}`);
+    }
+}
+
+async function stopHomeStoreApp(appId) {
+    try {
+        const res = await authFetch(`${API_BASE}/homestore/stop/${appId}`, { method: 'POST' });
+        const data = await res.json();
+        
+        if (!data.success) throw new Error(data.error);
+        
+        await loadHomeStoreCatalog();
+        
+    } catch (error) {
+        alert(`❌ Error: ${error.message}`);
+    }
+}
+
+function openHomeStoreApp(app) {
+    if (app.webUI) {
+        const url = `http://${window.location.hostname}:${app.webUI}`;
+        window.open(url, '_blank');
+    }
+}
+
+async function showHomeStoreAppLogs(appId) {
+    try {
+        const res = await authFetch(`${API_BASE}/homestore/logs/${appId}?lines=100`);
+        const data = await res.json();
+        
+        if (!data.success) throw new Error(data.error);
+        
+        // Create modal
+        const modal = document.createElement('div');
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; align-items: center; justify-content: center;';
+        modal.innerHTML = `
+            <div style="background: var(--bg-card); border-radius: 12px; padding: 20px; width: 90%; max-width: 800px; max-height: 80vh; display: flex; flex-direction: column;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0;">📋 Logs: ${appId}</h3>
+                    <button id="close-logs-modal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text);">×</button>
+                </div>
+                <pre style="background: #1a1a2e; color: #0f0; padding: 15px; border-radius: 8px; overflow: auto; flex: 1; font-size: 0.85rem; line-height: 1.4;">${data.logs || 'No logs available'}</pre>
+            </div>
+        `;
+        
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal || e.target.id === 'close-logs-modal') {
+                modal.remove();
+            }
+        });
+        
+        document.body.appendChild(modal);
+        
+    } catch (error) {
+        alert(`❌ Error: ${error.message}`);
+    }
+}
+
+async function updateHomeStoreApp(appId) {
+    if (!confirm(`¿Actualizar ${appId}?\n\nSe descargará la última versión de la imagen.`)) return;
+    
+    try {
+        const res = await authFetch(`${API_BASE}/homestore/update/${appId}`, { method: 'POST' });
+        const data = await res.json();
+        
+        if (!data.success) throw new Error(data.error);
+        
+        alert(`✅ ${appId} actualizado`);
+        await loadHomeStoreCatalog();
+        
+    } catch (error) {
+        alert(`❌ Error: ${error.message}`);
+    }
+}
+
+// Expose HomeStore functions globally
+window.loadHomeStoreCatalog = loadHomeStoreCatalog;
+window.installHomeStoreApp = installHomeStoreApp;
+window.uninstallHomeStoreApp = uninstallHomeStoreApp;
+window.startHomeStoreApp = startHomeStoreApp;
+window.stopHomeStoreApp = stopHomeStoreApp;
+window.openHomeStoreApp = openHomeStoreApp;
+window.showHomeStoreAppLogs = showHomeStoreAppLogs;
+window.updateHomeStoreApp = updateHomeStoreApp;
+
 // Expose functions globally for onclick handlers
 window.deleteFolder = deleteFolder;
 window.deleteDevice = deleteDevice;
@@ -8673,4 +9023,4 @@ window.addFolder = addFolder;
 window.addDevice = addDevice;
 
 init();
-console.log("HomePiNAS Core v2.5.0 Loaded - Cloud Sync");
+console.log("HomePiNAS Core v2.5.0 Loaded - HomeStore");
