@@ -8865,6 +8865,11 @@ function renderFoldersList(folders) {
                         title="${f.paused ? 'Reanudar' : 'Pausar'}">
                         ${f.paused ? '▶️' : '⏸️'}
                     </button>
+                    <button class="browse-folder-btn" data-folder-path="${escapeHtml(f.path)}" 
+                        style="padding: 6px 10px; background: #8b5cf6; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;" 
+                        title="Ver archivos">
+                        📂
+                    </button>
                     <button class="share-folder-btn" data-folder-id="${escapeHtml(f.id)}" data-folder-label="${escapeHtml(f.label)}" 
                         style="padding: 6px 10px; background: #3b82f6; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;" 
                         title="Compartir">
@@ -8908,6 +8913,15 @@ function renderFoldersList(folders) {
     });
     listDiv.querySelectorAll('.pause-folder-btn').forEach(btn => {
         btn.addEventListener('click', () => toggleFolderPause(btn.dataset.folderId, btn.dataset.paused === 'true'));
+    });
+    listDiv.querySelectorAll('.browse-folder-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            // Navigate to Files view and open the folder
+            state.currentView = 'files';
+            state.filesCurrentPath = btn.dataset.folderPath;
+            renderContent();
+            updateSidebarActive();
+        });
     });
     
     // Load detailed sync status for each folder
