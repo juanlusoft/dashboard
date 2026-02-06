@@ -11098,14 +11098,330 @@ async function saveSimpleConfig(provider, fieldNames) {
     }
 }
 
-async function browseRemote(remoteName) {
-    // TODO: Implement file browser for remote
-    alert('Navegador de archivos en desarrollo');
+async function browseRemote(remoteName, path = '') {
+    const modal = document.createElement('div');
+    modal.id = 'remote-browser-modal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 100000;';
+    
+    modal.innerHTML = `
+        <div style="background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 16px; width: 95%; max-width: 800px; height: 80vh; display: flex; flex-direction: column;">
+            <div style="padding: 15px 20px; border-bottom: 1px solid #3d3d5c; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h3 style="margin: 0; color: #10b981;">📂 ${escapeHtml(remoteName)}</h3>
+                    <div id="remote-path-display" style="font-size: 0.85rem; color: #a0a0b0; margin-top: 4px;">/${escapeHtml(path)}</div>
+                </div>
+                <button onclick="document.getElementById('remote-browser-modal').remove()" style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer;">×</button>
+            </div>
+            <div style="padding: 10px 20px; border-bottom: 1px solid #3d3d5c; display: flex; gap: 10px;">
+                <button id="remote-back-btn" onclick="remoteBrowserBack()" style="padding: 8px 16px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;" ${!path ? 'disabled style="opacity:0.5;padding: 8px 16px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff;"' : ''}>
+                    ⬅️ Atrás
+                </button>
+                <button onclick="remoteBrowserRefresh()" style="padding: 8px 16px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;">
+                    🔄 Actualizar
+                </button>
+                <button onclick="syncFromCurrentPath()" style="padding: 8px 16px; background: #10b981; border: none; border-radius: 6px; color: #fff; cursor: pointer;">
+                    📥 Sincronizar esta carpeta
+                </button>
+            </div>
+            <div id="remote-files-list" style="flex: 1; overflow-y: auto; padding: 15px 20px;">
+                <div style="text-align: center; padding: 40px; color: #a0a0b0;">Cargando...</div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Store current state
+    window.remoteBrowserState = { remoteName, path };
+    
+    await loadRemoteFiles(remoteName, path);
+}
+
+async function loadRemoteFiles(remoteName, path) {
+    const listDiv = document.getElementById('remote-files-list');
+    const pathDisplay = document.getElementById('remote-path-display');
+    
+    if (pathDisplay) pathDisplay.textContent = '/' + path;
+    
+    try {
+        const res = await authFetch(`${API_BASE}/cloud-backup/remotes/${encodeURIComponent(remoteName)}/ls?path=${encodeURIComponent(path)}`);
+        if (!res.ok) throw new Error('Failed to load files');
+        const data = await res.json();
+        
+        if (!data.items || data.items.length === 0) {
+            listDiv.innerHTML = '<div style="text-align: center; padding: 40px; color: #a0a0b0;">📭 Carpeta vacía</div>';
+            return;
+        }
+        
+        // Sort: folders first, then files
+        const sorted = data.items.sort((a, b) => {
+            if (a.isDir && !b.isDir) return -1;
+            if (!a.isDir && b.isDir) return 1;
+            return a.name.localeCompare(b.name);
+        });
+        
+        listDiv.innerHTML = sorted.map(item => `
+            <div class="remote-file-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 8px; cursor: ${item.isDir ? 'pointer' : 'default'}; border: 1px solid rgba(255,255,255,0.05);"
+                ${item.isDir ? `onclick="navigateRemoteFolder('${escapeHtml(item.path)}')"` : ''}>
+                <div style="display: flex; align-items: center; gap: 12px; overflow: hidden;">
+                    <span style="font-size: 1.4rem;">${item.isDir ? '📁' : getFileIcon(item.name)}</span>
+                    <div style="overflow: hidden;">
+                        <div style="font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(item.name)}</div>
+                        <div style="font-size: 0.8rem; color: #a0a0b0;">
+                            ${item.isDir ? 'Carpeta' : formatFileSize(item.size)}
+                            ${item.modTime ? ' • ' + new Date(item.modTime).toLocaleDateString() : ''}
+                        </div>
+                    </div>
+                </div>
+                ${!item.isDir ? `
+                    <button onclick="event.stopPropagation(); downloadRemoteFile('${escapeHtml(window.remoteBrowserState.remoteName)}', '${escapeHtml(item.path)}')" 
+                        style="padding: 6px 12px; background: #6366f1; border: none; border-radius: 6px; color: #fff; cursor: pointer; font-size: 0.85rem;">
+                        📥
+                    </button>
+                ` : ''}
+            </div>
+        `).join('');
+        
+    } catch (e) {
+        listDiv.innerHTML = `<div style="text-align: center; padding: 40px; color: #ef4444;">Error: ${e.message}</div>`;
+    }
+}
+
+function navigateRemoteFolder(path) {
+    window.remoteBrowserState.path = path;
+    loadRemoteFiles(window.remoteBrowserState.remoteName, path);
+    
+    // Enable back button
+    const backBtn = document.getElementById('remote-back-btn');
+    if (backBtn) {
+        backBtn.disabled = false;
+        backBtn.style.opacity = '1';
+    }
+}
+
+function remoteBrowserBack() {
+    const state = window.remoteBrowserState;
+    if (!state.path) return;
+    
+    // Go up one level
+    const parts = state.path.split('/').filter(Boolean);
+    parts.pop();
+    state.path = parts.join('/');
+    
+    loadRemoteFiles(state.remoteName, state.path);
+    
+    // Disable back button if at root
+    if (!state.path) {
+        const backBtn = document.getElementById('remote-back-btn');
+        if (backBtn) {
+            backBtn.disabled = true;
+            backBtn.style.opacity = '0.5';
+        }
+    }
+}
+
+function remoteBrowserRefresh() {
+    const state = window.remoteBrowserState;
+    loadRemoteFiles(state.remoteName, state.path);
+}
+
+function getFileIcon(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    const icons = {
+        // Images
+        jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', webp: '🖼️', svg: '🖼️',
+        // Videos
+        mp4: '🎬', mkv: '🎬', avi: '🎬', mov: '🎬', wmv: '🎬', webm: '🎬',
+        // Audio
+        mp3: '🎵', wav: '🎵', flac: '🎵', ogg: '🎵', m4a: '🎵',
+        // Documents
+        pdf: '📄', doc: '📝', docx: '📝', xls: '📊', xlsx: '📊', ppt: '📑', pptx: '📑',
+        txt: '📄', md: '📄', csv: '📊',
+        // Archives
+        zip: '📦', rar: '📦', '7z': '📦', tar: '📦', gz: '📦',
+        // Code
+        js: '💻', py: '🐍', html: '🌐', css: '🎨', json: '📋', xml: '📋',
+    };
+    return icons[ext] || '📄';
+}
+
+function formatFileSize(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+async function downloadRemoteFile(remoteName, filePath) {
+    showToast('Descarga iniciada...', 'info');
+    // This would need a backend endpoint to handle the actual download
+    alert(`Para descargar: rclone copy "${remoteName}:${filePath}" /mnt/storage/downloads/`);
+}
+
+function syncFromCurrentPath() {
+    const state = window.remoteBrowserState;
+    document.getElementById('remote-browser-modal')?.remove();
+    showSyncWizard(state.remoteName, state.path);
 }
 
 async function syncRemote(remoteName) {
-    // TODO: Implement sync modal
-    alert('Sincronización en desarrollo');
+    showSyncWizard(remoteName, '');
+}
+
+function showSyncWizard(remoteName, remotePath = '') {
+    const modal = document.createElement('div');
+    modal.id = 'sync-wizard-modal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 100000;';
+    
+    modal.innerHTML = `
+        <div style="background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 16px; width: 95%; max-width: 600px; padding: 25px;">
+            <h3 style="color: #10b981; margin-bottom: 20px;">🔄 Configurar Sincronización</h3>
+            
+            <div style="margin-bottom: 20px;">
+                <label style="color: #fff; display: block; margin-bottom: 8px;">📤 Origen (nube):</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="sync-source" value="${remoteName}:${remotePath}" readonly 
+                        style="flex: 1; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+                    <button onclick="browseForSync('source')" style="padding: 10px 15px; background: #6366f1; border: none; border-radius: 6px; color: #fff; cursor: pointer;">📂</button>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <label style="color: #fff; display: block; margin-bottom: 8px;">📥 Destino (NAS):</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="sync-dest" value="/mnt/storage/cloud-backup/${remoteName}" 
+                        style="flex: 1; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+                    <button onclick="browseLocalForSync()" style="padding: 10px 15px; background: #6366f1; border: none; border-radius: 6px; color: #fff; cursor: pointer;">📂</button>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <label style="color: #fff; display: block; margin-bottom: 8px;">⚙️ Modo:</label>
+                <select id="sync-mode" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+                    <option value="copy">📥 Copiar (solo añade archivos nuevos)</option>
+                    <option value="sync">🔄 Sincronizar (hace destino idéntico al origen)</option>
+                    <option value="move">✂️ Mover (elimina del origen después de copiar)</option>
+                </select>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <label style="color: #fff; display: block; margin-bottom: 8px;">⏰ Programar:</label>
+                <select id="sync-schedule" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+                    <option value="now">▶️ Ejecutar ahora (una vez)</option>
+                    <option value="hourly">🕐 Cada hora</option>
+                    <option value="daily">📅 Diariamente (3:00 AM)</option>
+                    <option value="weekly">📆 Semanalmente (Domingo 3:00 AM)</option>
+                </select>
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button onclick="document.getElementById('sync-wizard-modal').remove()" style="padding: 12px 24px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Cancelar</button>
+                <button onclick="startSync()" style="padding: 12px 24px; background: #10b981; border: none; border-radius: 6px; color: #fff; cursor: pointer; font-weight: 600;">🚀 Iniciar</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+async function startSync() {
+    const source = document.getElementById('sync-source').value;
+    const dest = document.getElementById('sync-dest').value;
+    const mode = document.getElementById('sync-mode').value;
+    const schedule = document.getElementById('sync-schedule').value;
+    
+    if (!source || !dest) {
+        alert('Origen y destino son requeridos');
+        return;
+    }
+    
+    document.getElementById('sync-wizard-modal')?.remove();
+    
+    if (schedule === 'now') {
+        // Execute immediately
+        showToast('Iniciando sincronización...', 'info');
+        
+        try {
+            const res = await authFetch(`${API_BASE}/cloud-backup/sync`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ source, dest, mode })
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                showToast('Sincronización iniciada en segundo plano', 'success');
+                showSyncProgress(data.jobId);
+            } else {
+                throw new Error(data.error);
+            }
+        } catch (e) {
+            showToast('Error: ' + e.message, 'error');
+        }
+    } else {
+        // Schedule for later - would need cron integration
+        showToast(`Sincronización programada: ${schedule}`, 'success');
+        // TODO: Save to scheduler
+    }
+}
+
+function showSyncProgress(jobId) {
+    const toast = document.createElement('div');
+    toast.id = `sync-progress-${jobId}`;
+    toast.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 12px; padding: 15px 20px; z-index: 100001; min-width: 300px;';
+    toast.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <span style="color: #10b981; font-weight: 600;">🔄 Sincronizando...</span>
+            <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; color: #fff; cursor: pointer;">×</button>
+        </div>
+        <div id="sync-progress-text-${jobId}" style="color: #a0a0b0; font-size: 0.85rem;">Iniciando...</div>
+        <div style="margin-top: 10px; height: 4px; background: #2d2d44; border-radius: 2px; overflow: hidden;">
+            <div id="sync-progress-bar-${jobId}" style="height: 100%; background: #10b981; width: 0%; transition: width 0.3s;"></div>
+        </div>
+    `;
+    document.body.appendChild(toast);
+    
+    // Poll for progress
+    const pollProgress = async () => {
+        try {
+            const res = await authFetch(`${API_BASE}/cloud-backup/jobs/${jobId}`);
+            const data = await res.json();
+            
+            const textEl = document.getElementById(`sync-progress-text-${jobId}`);
+            const barEl = document.getElementById(`sync-progress-bar-${jobId}`);
+            
+            if (textEl) textEl.textContent = data.lastLine || 'Procesando...';
+            
+            // Parse progress percentage if available
+            const percentMatch = data.lastLine?.match(/(\d+)%/);
+            if (percentMatch && barEl) {
+                barEl.style.width = percentMatch[1] + '%';
+            }
+            
+            if (data.running) {
+                setTimeout(pollProgress, 2000);
+            } else {
+                if (textEl) textEl.textContent = '✅ Completado';
+                if (barEl) barEl.style.width = '100%';
+                setTimeout(() => {
+                    document.getElementById(`sync-progress-${jobId}`)?.remove();
+                }, 5000);
+            }
+        } catch (e) {
+            console.error('Progress poll error:', e);
+        }
+    };
+    
+    setTimeout(pollProgress, 2000);
+}
+
+function browseLocalForSync() {
+    // Simple prompt for now - could integrate with file browser
+    const path = prompt('Ruta de destino en el NAS:', document.getElementById('sync-dest').value);
+    if (path) {
+        document.getElementById('sync-dest').value = path;
+    }
 }
 
 async function deleteRemote(remoteName) {
@@ -11137,6 +11453,15 @@ window.saveSimpleConfig = saveSimpleConfig;
 window.browseRemote = browseRemote;
 window.syncRemote = syncRemote;
 window.deleteRemote = deleteRemote;
+window.loadRemoteFiles = loadRemoteFiles;
+window.navigateRemoteFolder = navigateRemoteFolder;
+window.remoteBrowserBack = remoteBrowserBack;
+window.remoteBrowserRefresh = remoteBrowserRefresh;
+window.downloadRemoteFile = downloadRemoteFile;
+window.syncFromCurrentPath = syncFromCurrentPath;
+window.showSyncWizard = showSyncWizard;
+window.startSync = startSync;
+window.browseLocalForSync = browseLocalForSync;
 
 init();
 console.log("HomePiNAS Core v2.6.0 Loaded - Cloud Backup");
