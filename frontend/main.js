@@ -1636,7 +1636,20 @@ async function renderDashboard() {
     const cpuLoad = Number(stats.cpuLoad) || 0;
     const ramUsedPercent = Number(stats.ramUsedPercent) || 0;
     const publicIP = escapeHtml(state.publicIP);
-    const lanIP = escapeHtml(state.network.interfaces[0]?.ip || 'Scanning...');
+    
+    // Fetch real LAN IP if not already loaded
+    if (!state.network.interfaces || state.network.interfaces.length === 0 || state.network.interfaces[0]?.ip === '192.168.1.100') {
+        try {
+            const res = await fetch(`${API_BASE}/network/interfaces`);
+            if (res.ok) {
+                state.network.interfaces = await res.json();
+            }
+        } catch (e) {
+            console.warn('Could not fetch network interfaces:', e);
+        }
+    }
+    
+    const lanIP = escapeHtml(state.network.interfaces[0]?.ip || 'No disponible');
     const ddnsCount = (state.network.ddns || []).filter(d => d.enabled).length;
 
     // CPU Model - save once and reuse (CPU doesn't change)
