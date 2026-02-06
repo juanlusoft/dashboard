@@ -5850,17 +5850,30 @@ function fmPreviewFile(file, basePath) {
     // Header
     const header = document.createElement('div');
     header.className = 'fm-preview-header';
-    header.innerHTML = `
-        <span class="fm-preview-title">${file.name}</span>
-        <div class="fm-preview-actions">
-            <button class="fm-action-btn" onclick="downloadFile('${fullPath.replace(/'/g, "\\'")}')" title="Descargar">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            </button>
-            <button class="fm-action-btn" onclick="this.closest('.fm-preview-overlay').remove()" title="Cerrar">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-        </div>
-    `;
+    
+    const titleSpan = document.createElement('span');
+    titleSpan.className = 'fm-preview-title';
+    titleSpan.textContent = file.name;
+    
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'fm-preview-actions';
+    
+    const downloadBtn = document.createElement('button');
+    downloadBtn.className = 'fm-action-btn';
+    downloadBtn.title = 'Descargar';
+    downloadBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+    downloadBtn.addEventListener('click', () => downloadFile(fullPath));
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'fm-action-btn';
+    closeBtn.title = 'Cerrar';
+    closeBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    closeBtn.addEventListener('click', () => overlay.remove());
+    
+    actionsDiv.appendChild(downloadBtn);
+    actionsDiv.appendChild(closeBtn);
+    header.appendChild(titleSpan);
+    header.appendChild(actionsDiv);
     modal.appendChild(header);
 
     const body = document.createElement('div');
@@ -5891,11 +5904,12 @@ function fmPreviewFile(file, basePath) {
         body.innerHTML = `
             <div class="fm-preview-nopreview">
                 ${getFileIconSVG(file.name, 80)}
-                <p style="margin-top:16px;font-size:1rem">${file.name}</p>
+                <p style="margin-top:16px;font-size:1rem">${escapeHtml(file.name)}</p>
                 <p style="color:var(--text-dim);font-size:0.85rem">${formatFileSize(file.size)} · ${ext.toUpperCase()}</p>
-                <button class="btn-primary btn-sm" style="margin-top:16px" onclick="downloadFile('${fullPath.replace(/'/g, "\\'")}')">Descargar archivo</button>
+                <button class="btn-primary btn-sm fm-nopreview-download" style="margin-top:16px">Descargar archivo</button>
             </div>
         `;
+        body.querySelector('.fm-nopreview-download').addEventListener('click', () => downloadFile(fullPath));
     }
 
     modal.appendChild(body);
