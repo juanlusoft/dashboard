@@ -8690,7 +8690,7 @@ let homestoreFilter = 'all';
 let systemArch = null;
 
 async function renderHomeStoreView() {
-    document.querySelector('.main-view').innerHTML = `
+    document.getElementById('main-content').innerHTML = `
         <div class="section">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h2>🏪 HomeStore</h2>
