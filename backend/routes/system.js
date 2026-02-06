@@ -428,4 +428,56 @@ router.get('/status', async (req, res) => {
     });
 });
 
+// System Architecture Detection
+router.get('/arch', async (req, res) => {
+    try {
+        const os = require('os');
+        const arch = os.arch(); // 'arm64', 'x64', 'arm', etc.
+        const platform = os.platform(); // 'linux', 'darwin', 'win32'
+        
+        // Normalize architecture names
+        let normalizedArch;
+        switch (arch) {
+            case 'arm64':
+            case 'aarch64':
+                normalizedArch = 'arm64';
+                break;
+            case 'arm':
+            case 'armv7l':
+                normalizedArch = 'arm';
+                break;
+            case 'x64':
+            case 'amd64':
+                normalizedArch = 'amd64';
+                break;
+            case 'ia32':
+            case 'x86':
+                normalizedArch = 'i386';
+                break;
+            default:
+                normalizedArch = arch;
+        }
+        
+        // Check if running on Raspberry Pi
+        let isRaspberryPi = false;
+        try {
+            const cpuInfo = fs.readFileSync('/proc/cpuinfo', 'utf8');
+            isRaspberryPi = cpuInfo.toLowerCase().includes('raspberry') || 
+                           cpuInfo.toLowerCase().includes('bcm2');
+        } catch (e) {}
+        
+        res.json({
+            arch: normalizedArch,
+            rawArch: arch,
+            platform,
+            isRaspberryPi,
+            isArm: normalizedArch === 'arm64' || normalizedArch === 'arm',
+            isX86: normalizedArch === 'amd64' || normalizedArch === 'i386'
+        });
+    } catch (error) {
+        console.error('Architecture detection error:', error);
+        res.status(500).json({ error: 'Failed to detect architecture' });
+    }
+});
+
 module.exports = router;

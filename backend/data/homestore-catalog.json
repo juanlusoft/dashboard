@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "apps": [
     {
       "id": "jellyfin",
@@ -8,6 +8,7 @@
       "category": "media",
       "icon": "🎬",
       "image": "jellyfin/jellyfin:latest",
+      "arch": ["amd64", "arm64"],
       "ports": { "8096": "8096" },
       "volumes": {
         "/config": "/opt/homepinas/apps/jellyfin/config",
@@ -24,6 +25,7 @@
       "category": "media",
       "icon": "📺",
       "image": "plexinc/pms-docker:latest",
+      "arch": ["amd64", "arm64"],
       "ports": { "32400": "32400" },
       "volumes": {
         "/config": "/opt/homepinas/apps/plex/config",
@@ -40,6 +42,7 @@
       "category": "downloads",
       "icon": "⬇️",
       "image": "linuxserver/transmission:latest",
+      "arch": ["amd64", "arm64", "arm"],
       "ports": { "9091": "9091", "51413": "51413" },
       "volumes": {
         "/config": "/opt/homepinas/apps/transmission/config",
@@ -59,6 +62,7 @@
       "category": "downloads",
       "icon": "🔽",
       "image": "linuxserver/qbittorrent:latest",
+      "arch": ["amd64", "arm64", "arm"],
       "ports": { "8080": "8080", "6881": "6881" },
       "volumes": {
         "/config": "/opt/homepinas/apps/qbittorrent/config",
@@ -79,6 +83,7 @@
       "category": "media",
       "icon": "📷",
       "image": "photoprism/photoprism:latest",
+      "arch": ["amd64", "arm64"],
       "ports": { "2342": "2342" },
       "volumes": {
         "/photoprism/storage": "/opt/homepinas/apps/photoprism/storage",
@@ -98,6 +103,7 @@
       "category": "productivity",
       "icon": "☁️",
       "image": "nextcloud:latest",
+      "arch": ["amd64", "arm64", "arm"],
       "ports": { "8888": "80" },
       "volumes": {
         "/var/www/html": "/opt/homepinas/apps/nextcloud/data"
@@ -113,6 +119,7 @@
       "category": "network",
       "icon": "🛡️",
       "image": "pihole/pihole:latest",
+      "arch": ["amd64", "arm64", "arm"],
       "ports": { "8053": "80", "53": "53/udp" },
       "volumes": {
         "/etc/pihole": "/opt/homepinas/apps/pihole/etc",
@@ -131,6 +138,7 @@
       "category": "automation",
       "icon": "🏠",
       "image": "homeassistant/home-assistant:latest",
+      "arch": ["amd64", "arm64", "arm"],
       "ports": { "8123": "8123" },
       "volumes": {
         "/config": "/opt/homepinas/apps/homeassistant/config"
@@ -147,6 +155,8 @@
       "category": "surveillance",
       "icon": "📹",
       "image": "ghcr.io/blakeblackshear/frigate:stable",
+      "arch": ["amd64"],
+      "archNote": "ARM requiere imagen específica con Coral TPU",
       "ports": { "5000": "5000", "8554": "8554", "8555": "8555" },
       "volumes": {
         "/config": "/opt/homepinas/apps/frigate/config",
@@ -164,6 +174,7 @@
       "category": "development",
       "icon": "🐙",
       "image": "gitea/gitea:latest",
+      "arch": ["amd64", "arm64"],
       "ports": { "3333": "3000", "2222": "22" },
       "volumes": {
         "/data": "/opt/homepinas/apps/gitea/data"
@@ -179,6 +190,7 @@
       "category": "security",
       "icon": "🔐",
       "image": "vaultwarden/server:latest",
+      "arch": ["amd64", "arm64", "arm"],
       "ports": { "8880": "80" },
       "volumes": {
         "/data": "/opt/homepinas/apps/vaultwarden/data"
@@ -194,6 +206,7 @@
       "category": "files",
       "icon": "📁",
       "image": "filebrowser/filebrowser:latest",
+      "arch": ["amd64", "arm64", "arm"],
       "ports": { "8085": "80" },
       "volumes": {
         "/srv": "/mnt/storage",
@@ -210,6 +223,7 @@
       "category": "system",
       "icon": "🐳",
       "image": "portainer/portainer-ce:latest",
+      "arch": ["amd64", "arm64", "arm"],
       "ports": { "9000": "9000" },
       "volumes": {
         "/data": "/opt/homepinas/apps/portainer/data",
@@ -226,6 +240,7 @@
       "category": "monitoring",
       "icon": "📊",
       "image": "louislam/uptime-kuma:latest",
+      "arch": ["amd64", "arm64", "arm"],
       "ports": { "3002": "3001" },
       "volumes": {
         "/app/data": "/opt/homepinas/apps/uptime-kuma/data"
@@ -241,6 +256,7 @@
       "category": "network",
       "icon": "🔒",
       "image": "linuxserver/wireguard:latest",
+      "arch": ["amd64", "arm64", "arm"],
       "ports": { "51820": "51820/udp" },
       "volumes": {
         "/config": "/opt/homepinas/apps/wireguard/config"
@@ -264,6 +280,7 @@
       "category": "network",
       "icon": "🚫",
       "image": "adguard/adguardhome:latest",
+      "arch": ["amd64", "arm64", "arm"],
       "ports": { "3003": "3000", "53": "53/udp", "853": "853" },
       "volumes": {
         "/opt/adguardhome/work": "/opt/homepinas/apps/adguard/work",
@@ -280,6 +297,7 @@
       "category": "backup",
       "icon": "💾",
       "image": "linuxserver/duplicati:latest",
+      "arch": ["amd64", "arm64", "arm"],
       "ports": { "8200": "8200" },
       "volumes": {
         "/config": "/opt/homepinas/apps/duplicati/config",
@@ -299,6 +317,7 @@
       "category": "productivity",
       "icon": "📄",
       "image": "ghcr.io/paperless-ngx/paperless-ngx:latest",
+      "arch": ["amd64", "arm64"],
       "ports": { "8000": "8000" },
       "volumes": {
         "/usr/src/paperless/data": "/opt/homepinas/apps/paperless/data",
@@ -319,6 +338,7 @@
       "category": "media",
       "icon": "🖼️",
       "image": "ghcr.io/immich-app/immich-server:release",
+      "arch": ["amd64", "arm64"],
       "ports": { "2283": "2283" },
       "volumes": {
         "/usr/src/app/upload": "/mnt/storage/photos/immich"

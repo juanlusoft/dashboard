@@ -8687,13 +8687,17 @@ async function deleteDevice(deviceId) {
 
 let homestoreCatalog = null;
 let homestoreFilter = 'all';
+let systemArch = null;
 
 async function renderHomeStoreView() {
     document.querySelector('.main-view').innerHTML = `
         <div class="section">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h2>🏪 HomeStore</h2>
-                <div id="homestore-docker-status"></div>
+                <div id="homestore-status" style="display: flex; gap: 15px; align-items: center;">
+                    <div id="homestore-arch-status"></div>
+                    <div id="homestore-docker-status"></div>
+                </div>
             </div>
             <p style="color: var(--text-secondary); margin-bottom: 20px;">
                 Instala aplicaciones con un clic. Todas funcionan sobre Docker.
@@ -8712,8 +8716,29 @@ async function loadHomeStoreCatalog() {
     const appsDiv = document.getElementById('homestore-apps');
     const categoriesDiv = document.getElementById('homestore-categories');
     const dockerStatusDiv = document.getElementById('homestore-docker-status');
+    const archStatusDiv = document.getElementById('homestore-arch-status');
     
     try {
+        // Detect system architecture
+        if (!systemArch) {
+            try {
+                const archRes = await authFetch(`${API_BASE}/system/arch`);
+                if (archRes.ok) {
+                    systemArch = await archRes.json();
+                }
+            } catch (e) {
+                console.warn('Could not detect architecture:', e);
+                systemArch = { arch: 'unknown', isArm: false, isX86: false };
+            }
+        }
+        
+        // Show architecture
+        if (archStatusDiv && systemArch) {
+            const archLabel = systemArch.isArm ? 'ARM' : (systemArch.isX86 ? 'x86' : systemArch.arch);
+            const archIcon = systemArch.isArm ? '🍓' : '💻';
+            archStatusDiv.innerHTML = `<span style="color: var(--text-secondary);">${archIcon} ${archLabel.toUpperCase()}</span>`;
+        }
+        
         // Check Docker status
         const dockerRes = await authFetch(`${API_BASE}/homestore/check-docker`);
         const dockerData = await dockerRes.json();
@@ -8820,8 +8845,22 @@ function renderHomeStoreAppCard(app, categories) {
     const isRunning = app.status === 'running';
     const isStopped = app.status === 'stopped';
     
+    // Check architecture compatibility
+    const appArch = app.arch || ['amd64', 'arm64', 'arm']; // Default to all if not specified
+    const isCompatible = !systemArch || systemArch.arch === 'unknown' || appArch.includes(systemArch.arch);
+    const archNote = app.archNote || '';
+    
     let statusBadge = '';
     let actionButtons = '';
+    let compatWarning = '';
+    
+    if (!isCompatible) {
+        compatWarning = `
+            <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 0.85rem; color: #92400e;">
+                ⚠️ No compatible con ${systemArch.arch.toUpperCase()}${archNote ? ` — ${archNote}` : ''}
+            </div>
+        `;
+    }
     
     if (app.installed) {
         if (isRunning) {
@@ -8852,18 +8891,35 @@ function renderHomeStoreAppCard(app, categories) {
             `;
         }
     } else {
-        actionButtons = `
-            <button class="homestore-install-btn" style="background: var(--primary); color: #000; padding: 8px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
-                Instalar
-            </button>
-            <a href="${app.docs}" target="_blank" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; text-decoration: none; display: inline-block;">
-                📖 Docs
-            </a>
-        `;
+        if (isCompatible) {
+            actionButtons = `
+                <button class="homestore-install-btn" style="background: var(--primary); color: #000; padding: 8px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                    Instalar
+                </button>
+                <a href="${app.docs}" target="_blank" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; text-decoration: none; display: inline-block;">
+                    📖 Docs
+                </a>
+            `;
+        } else {
+            actionButtons = `
+                <button disabled style="background: #6b7280; color: #fff; padding: 8px 20px; border: none; border-radius: 6px; cursor: not-allowed; font-weight: 500; opacity: 0.6;">
+                    No disponible
+                </button>
+                <a href="${app.docs}" target="_blank" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; text-decoration: none; display: inline-block;">
+                    📖 Docs
+                </a>
+            `;
+        }
     }
     
+    // Show supported architectures
+    const archBadges = appArch.map(a => {
+        const isCurrentArch = systemArch && systemArch.arch === a;
+        return `<span style="background: ${isCurrentArch ? '#10b981' : 'var(--bg-card)'}; color: ${isCurrentArch ? '#fff' : 'var(--text-secondary)'}; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; border: 1px solid var(--border);">${a}</span>`;
+    }).join(' ');
+    
     return `
-        <div id="homestore-app-${app.id}" class="card" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px;">
+        <div id="homestore-app-${app.id}" class="card" style="background: var(--bg-card); border: 1px solid ${isCompatible ? 'var(--border)' : '#f59e0b'}; border-radius: 12px; padding: 20px; ${!isCompatible ? 'opacity: 0.7;' : ''}">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <span style="font-size: 2rem;">${app.icon}</span>
@@ -8874,9 +8930,13 @@ function renderHomeStoreAppCard(app, categories) {
                 </div>
                 ${statusBadge}
             </div>
-            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 16px; line-height: 1.4;">
+            ${compatWarning}
+            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px; line-height: 1.4;">
                 ${app.description}
             </p>
+            <div style="margin-bottom: 12px;">
+                ${archBadges}
+            </div>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 ${actionButtons}
             </div>
