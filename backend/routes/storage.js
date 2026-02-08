@@ -39,7 +39,7 @@ function formatSize(gb) {
 }
 
 // Get storage pool status (real-time)
-router.get('/pool/status', async (req, res) => {
+router.get('/pool/status', requireAuth, async (req, res) => {
     try {
         const status = {
             // MergerFS status
@@ -658,7 +658,7 @@ router.post('/snapraid/sync', requireAuth, async (req, res) => {
 });
 
 // Get SnapRAID sync progress
-router.get('/snapraid/sync/progress', (req, res) => {
+router.get('/snapraid/sync/progress', requireAuth, (req, res) => {
     res.json(snapraidSyncStatus);
 });
 
@@ -675,7 +675,7 @@ router.post('/snapraid/scrub', requireAuth, async (req, res) => {
 });
 
 // Get SnapRAID status
-router.get('/snapraid/status', async (req, res) => {
+router.get('/snapraid/status', requireAuth, async (req, res) => {
     try {
         const status = execSync('sudo snapraid status 2>&1 || echo "Not configured"', { encoding: 'utf8' });
         res.json({ status });

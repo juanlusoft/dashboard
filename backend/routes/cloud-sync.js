@@ -5,6 +5,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const https = require('https');
 const http = require('http');
+const { requireAuth } = require('../middleware/auth');
 
 // Syncthing configuration (check multiple possible locations)
 // Get current system user (for syncthing service)
@@ -120,7 +121,7 @@ async function installSyncthing() {
 }
 
 // GET /cloud-sync/status - Get Syncthing status
-router.get('/status', async (req, res) => {
+router.get('/status', requireAuth, async (req, res) => {
     try {
         const installed = await isSyncthingInstalled();
         const running = installed ? await isSyncthingRunning() : false;
@@ -174,7 +175,7 @@ router.get('/status', async (req, res) => {
 });
 
 // POST /cloud-sync/install - Install Syncthing
-router.post('/install', async (req, res) => {
+router.post('/install', requireAuth, async (req, res) => {
     try {
         const installed = await isSyncthingInstalled();
         if (installed) {
@@ -196,7 +197,7 @@ router.post('/install', async (req, res) => {
 });
 
 // POST /cloud-sync/start - Start Syncthing service
-router.post('/start', async (req, res) => {
+router.post('/start', requireAuth, async (req, res) => {
     try {
         await new Promise((resolve, reject) => {
             exec(`sudo systemctl start syncthing@${SYSTEM_USER}`, (err) => {
@@ -211,7 +212,7 @@ router.post('/start', async (req, res) => {
 });
 
 // POST /cloud-sync/stop - Stop Syncthing service
-router.post('/stop', async (req, res) => {
+router.post('/stop', requireAuth, async (req, res) => {
     try {
         await new Promise((resolve, reject) => {
             exec(`sudo systemctl stop syncthing@${SYSTEM_USER}`, (err) => {
@@ -226,7 +227,7 @@ router.post('/stop', async (req, res) => {
 });
 
 // GET /cloud-sync/device-id - Get this device's ID for pairing
-router.get('/device-id', async (req, res) => {
+router.get('/device-id', requireAuth, async (req, res) => {
     try {
         const status = await syncthingApi('/rest/system/status');
         res.json({ deviceId: status.myID });
@@ -236,7 +237,7 @@ router.get('/device-id', async (req, res) => {
 });
 
 // GET /cloud-sync/folders - List shared folders
-router.get('/folders', async (req, res) => {
+router.get('/folders', requireAuth, async (req, res) => {
     try {
         const config = await syncthingApi('/rest/config');
         const folderStats = await syncthingApi('/rest/stats/folder');
@@ -262,7 +263,7 @@ router.get('/folders', async (req, res) => {
 });
 
 // POST /cloud-sync/folders - Add a new shared folder
-router.post('/folders', async (req, res) => {
+router.post('/folders', requireAuth, async (req, res) => {
     try {
         const { path: folderPath, label, type = 'sendreceive' } = req.body;
         
@@ -311,7 +312,7 @@ router.post('/folders', async (req, res) => {
 });
 
 // DELETE /cloud-sync/folders/:id - Remove a shared folder
-router.delete('/folders/:id', async (req, res) => {
+router.delete('/folders/:id', requireAuth, async (req, res) => {
     try {
         const { id } = req.params;
         
@@ -327,7 +328,7 @@ router.delete('/folders/:id', async (req, res) => {
 });
 
 // GET /cloud-sync/devices - List connected devices
-router.get('/devices', async (req, res) => {
+router.get('/devices', requireAuth, async (req, res) => {
     try {
         const config = await syncthingApi('/rest/config');
         const connections = await syncthingApi('/rest/system/connections');
@@ -356,7 +357,7 @@ router.get('/devices', async (req, res) => {
 });
 
 // POST /cloud-sync/devices - Add a new device
-router.post('/devices', async (req, res) => {
+router.post('/devices', requireAuth, async (req, res) => {
     try {
         const { deviceId, name } = req.body;
         
@@ -397,7 +398,7 @@ router.post('/devices', async (req, res) => {
 });
 
 // DELETE /cloud-sync/devices/:id - Remove a device
-router.delete('/devices/:id', async (req, res) => {
+router.delete('/devices/:id', requireAuth, async (req, res) => {
     try {
         const { id } = req.params;
         
@@ -421,7 +422,7 @@ router.delete('/devices/:id', async (req, res) => {
 });
 
 // POST /cloud-sync/devices/:id/rename - Rename a device
-router.post('/devices/:id/rename', async (req, res) => {
+router.post('/devices/:id/rename', requireAuth, async (req, res) => {
     try {
         const { id } = req.params;
         const { name } = req.body;
@@ -448,7 +449,7 @@ router.post('/devices/:id/rename', async (req, res) => {
 });
 
 // POST /cloud-sync/folders/:id/share - Share folder with a device
-router.post('/folders/:id/share', async (req, res) => {
+router.post('/folders/:id/share', requireAuth, async (req, res) => {
     try {
         const { id } = req.params;
         const { deviceId } = req.body;
@@ -484,7 +485,7 @@ router.post('/folders/:id/share', async (req, res) => {
 });
 
 // POST /cloud-sync/folders/:id/pause - Pause/resume folder sync
-router.post('/folders/:id/pause', async (req, res) => {
+router.post('/folders/:id/pause', requireAuth, async (req, res) => {
     try {
         const { id } = req.params;
         const { paused } = req.body;
@@ -507,7 +508,7 @@ router.post('/folders/:id/pause', async (req, res) => {
 });
 
 // GET /cloud-sync/qr - Generate QR code data for device pairing
-router.get('/qr', async (req, res) => {
+router.get('/qr', requireAuth, async (req, res) => {
     try {
         const status = await syncthingApi('/rest/system/status');
         
@@ -524,7 +525,7 @@ router.get('/qr', async (req, res) => {
 });
 
 // GET /cloud-sync/sync-status - Get detailed sync status for all folders
-router.get('/sync-status', async (req, res) => {
+router.get('/sync-status', requireAuth, async (req, res) => {
     try {
         const config = await syncthingApi('/rest/config');
         const folders = config.folders || [];

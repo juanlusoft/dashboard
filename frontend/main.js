@@ -502,8 +502,10 @@ function stopGlobalPolling() {
 // Public IP Tracker
 async function updatePublicIP() {
     const val = document.getElementById('public-ip-val');
-    const mockIps = ['84.120.45.122', '84.120.45.123', '84.120.45.124'];
-    state.publicIP = mockIps[Math.floor(Math.random() * mockIps.length)];
+    // TODO: Replace with real API endpoint (e.g. authFetch(`${API_BASE}/network/public-ip`))
+    // const mockIps = ['84.120.45.122', '84.120.45.123', '84.120.45.124'];
+    // state.publicIP = mockIps[Math.floor(Math.random() * mockIps.length)];
+    state.publicIP = 'N/A';
     if (val) val.textContent = state.publicIP;
 
     // Don't re-render network view on IP update - causes duplicate cards
@@ -1129,7 +1131,7 @@ async function applyDiskActions() {
                 const resultEl = document.getElementById(`progress-${disk.id}-result`);
                 if (resultEl) {
                     resultEl.style.display = 'block';
-                    resultEl.innerHTML = `<span style="color: #ef4444; font-weight: 600;">❌ ${err.error}</span>`;
+                    resultEl.innerHTML = `<span style="color: #ef4444; font-weight: 600;">&#10060; ${escapeHtml(err.error)}</span>`;
                 }
             }
         } catch (e) {
@@ -1146,7 +1148,7 @@ async function applyDiskActions() {
             const resultEl = document.getElementById(`progress-${disk.id}-result`);
             if (resultEl) {
                 resultEl.style.display = 'block';
-                resultEl.innerHTML = `<span style="color: #ef4444; font-weight: 600;">❌ ${e.message}</span>`;
+                resultEl.innerHTML = `<span style="color: #ef4444; font-weight: 600;">&#10060; ${escapeHtml(e.message)}</span>`;
             }
         }
     }
@@ -1181,9 +1183,8 @@ async function applyDiskActions() {
 async function ignoreDiskNotification() {
     for (const disk of detectedNewDisks) {
         try {
-            await fetch(`${API_BASE}/storage/disks/ignore`, {
+            await authFetch(`${API_BASE}/storage/disks/ignore`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ diskId: disk.id })
             });
         } catch (e) {
@@ -3404,7 +3405,7 @@ async function renderDockerManager() {
 }
 
 // Docker Update Functions
-async function checkDockerUpdates() {
+async function checkDockerUpdates(event) {
     const btn = event.target;
     btn.disabled = true;
     btn.innerHTML = '🔄 Checking...';
@@ -6114,7 +6115,7 @@ async function searchFiles(query) {
         const searchData = await res.json();
         const results = searchData.results || searchData || [];
         if (results.length === 0) {
-            filesList.innerHTML = '<div class="fm-empty-state"><p>Sin resultados para "' + query + '"</p></div>';
+            filesList.innerHTML = '<div class="fm-empty-state"><p>Sin resultados para "' + escapeHtml(query) + '"</p></div>';
             return;
         }
         filesList.innerHTML = '';
@@ -6467,10 +6468,12 @@ async function setup2FA() {
         content.innerHTML = `
             <div style="text-align: center; max-width: 400px; margin: 0 auto;">
                 <p style="margin-bottom: 15px;">Escanea este código QR con tu app de autenticación:</p>
-                <div style="background: white; padding: 20px; border-radius: 12px; display: inline-block; margin-bottom: 15px;">
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(data.uri)}" alt="QR Code" style="display: block;">
+                <div style="background: var(--bg-card); padding: 20px; border-radius: 12px; display: inline-block; margin-bottom: 15px; border: 1px solid var(--border);">
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 10px;">Introduce esta clave manualmente en tu app de autenticaci\u00f3n:</p>
+                    <code id="totp-secret-display" style="display: block; background: var(--bg-hover); padding: 12px 16px; border-radius: 8px; font-size: 1.1rem; letter-spacing: 2px; word-break: break-all; user-select: all; cursor: text; color: var(--primary); font-weight: 600;">${escapeHtml(data.secret)}</code>
+                    <button onclick="navigator.clipboard.writeText(document.getElementById('totp-secret-display').textContent).then(() => this.textContent = '\u2713 Copiado').catch(() => {})" style="margin-top: 10px; padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-hover); color: var(--text); cursor: pointer; font-size: 0.85rem;">Copiar clave</button>
                 </div>
-                <p style="font-size: 0.8rem; color: var(--text-dim); word-break: break-all; margin-bottom: 20px;">Secret: ${escapeHtml(data.secret)}</p>
+                <p style="font-size: 0.8rem; color: var(--text-dim); word-break: break-all; margin-bottom: 20px;">Account: ${escapeHtml(data.uri ? new URL(data.uri).pathname.replace(/^\\/\\/totp\\//, '') : '')}</p>
                 <div style="display: flex; gap: 10px; justify-content: center; align-items: center;">
                     <input type="text" id="totp-verify-code" placeholder="Código de 6 dígitos" maxlength="6" style="padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); width: 160px; text-align: center; font-size: 1.2rem; letter-spacing: 4px;">
                     <button class="btn-primary" id="verify-totp-btn">Verificar</button>
@@ -10422,7 +10425,7 @@ async function loadStacksList() {
                         color: ${stack.status === 'running' ? '#10b981' : stack.status === 'partial' ? '#f59e0b' : '#6b7280'};
                     ">${stack.status === 'running' ? '● Running' : stack.status === 'partial' ? '◐ Partial' : '○ Stopped'}</span>
                     
-                    <button onclick="stackAction('${stack.id}', '${stack.status === 'running' ? 'down' : 'up'}')" 
+                    <button onclick="stackAction('${stack.id}', '${stack.status === 'running' ? 'down' : 'up'}', event)"
                         class="btn-primary" style="padding: 6px 12px; font-size: 12px; background: ${stack.status === 'running' ? '#ef4444' : '#10b981'};">
                         ${stack.status === 'running' ? '⏹ Stop' : '▶ Start'}
                     </button>
@@ -10609,7 +10612,7 @@ async function useTemplate(templateId) {
     }
 }
 
-async function stackAction(stackId, action) {
+async function stackAction(stackId, action, event) {
     const btn = event.target;
     const originalText = btn.innerHTML;
     btn.disabled = true;

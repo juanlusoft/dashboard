@@ -148,20 +148,29 @@ app.use(generalLimiter);
 // Body parsing
 app.use(express.json({ limit: '10kb' }));
 
-// Cloud Sync routes (before CSRF - uses session auth only)
-app.use('/api/cloud-sync', cloudSyncRoutes);
-app.use('/api/cloud-backup', cloudBackupRoutes);
-
 // CSRF protection for state-changing requests
 app.use(csrfProtection);
+
+// Cloud Sync/Backup routes (after CSRF for proper protection)
+app.use('/api/cloud-sync', cloudSyncRoutes);
+app.use('/api/cloud-backup', cloudBackupRoutes);
 
 // =============================================================================
 // STATIC FILES
 // =============================================================================
 
-// Serve frontend files
-app.use(express.static(path.join(__dirname, '../')));
+// SECURITY: Serve only specific directories - NOT the project root
+// This prevents exposure of backend source, config, package.json, etc.
 app.use('/frontend', express.static(path.join(__dirname, '../frontend')));
+app.use('/icons', express.static(path.join(__dirname, '../icons')));
+
+// Serve only specific root-level files needed by the browser
+const allowedRootFiles = ['index.html', 'manifest.json', 'service-worker.js'];
+allowedRootFiles.forEach(file => {
+    app.get(`/${file}`, (req, res) => {
+        res.sendFile(path.join(__dirname, '..', file));
+    });
+});
 
 // Serve i18n files
 app.use('/frontend/i18n', express.static(path.join(__dirname, '../frontend/i18n')));
@@ -242,7 +251,15 @@ app.use('/api/active-backup', activeBackupRoutes);
 app.use('/api/homestore', homestoreRoutes);
 app.use('/api/stacks', stacksRoutes);
 
-// Cloud Sync routes registered before CSRF middleware
+// =============================================================================
+// GLOBAL ERROR HANDLER
+// =============================================================================
+
+// Catch unhandled errors - prevent stack traces from leaking to client
+app.use((err, req, res, next) => {
+    console.error(`[ERROR] ${req.method} ${req.path}:`, err.message);
+    res.status(err.status || 500).json({ error: 'Internal server error' });
+});
 
 // =============================================================================
 // SERVER STARTUP
@@ -283,7 +300,7 @@ if (httpsServer) {
         const host = req.headers.host?.split(':')[0] || req.hostname;
         const portSuffix = HTTPS_PORT == 443 ? '' : `:${HTTPS_PORT}`;
         const httpsUrl = `https://${host}${portSuffix}${req.url}`;
-        res.redirect(301, httpsUrl);
+        res.redirect(302, httpsUrl);
     });
     console.log(`[HTTP]  Will redirect all traffic to HTTPS`);
 } else {

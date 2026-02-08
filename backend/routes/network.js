@@ -19,7 +19,7 @@ const {
 } = require('../utils/sanitize');
 
 // Get network interfaces
-router.get('/interfaces', async (req, res) => {
+router.get('/interfaces', requireAuth, async (req, res) => {
     try {
         const netInterfaces = await si.networkInterfaces();
 
