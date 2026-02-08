@@ -292,6 +292,9 @@ router.get('/templates', requireAuth, (req, res) => {
 
 // Get template content
 router.get('/templates/:id', requireAuth, (req, res) => {
+    if (!/^[a-zA-Z0-9_-]+$/.test(req.params.id)) {
+        return res.status(400).json({ error: 'Invalid stack ID' });
+    }
     const template = STACK_TEMPLATES[req.params.id];
     if (!template) {
         return res.status(404).json({ error: 'Template not found' });
@@ -350,6 +353,9 @@ router.post('/create', requireAuth, async (req, res) => {
 // Get stack details
 router.get('/:id', requireAuth, (req, res) => {
     try {
+        if (!/^[a-zA-Z0-9_-]+$/.test(req.params.id)) {
+            return res.status(400).json({ error: 'Invalid stack ID' });
+        }
         const stackPath = path.join(STACKS_DIR, req.params.id);
         const composePath = path.join(stackPath, 'docker-compose.yml');
         const metaPath = path.join(stackPath, 'stack.json');
@@ -373,6 +379,9 @@ router.get('/:id', requireAuth, (req, res) => {
 // Update stack compose file
 router.put('/:id', requireAuth, (req, res) => {
     try {
+        if (!/^[a-zA-Z0-9_-]+$/.test(req.params.id)) {
+            return res.status(400).json({ error: 'Invalid stack ID' });
+        }
         const { compose, description, icon } = req.body;
         const stackPath = path.join(STACKS_DIR, req.params.id);
         const composePath = path.join(stackPath, 'docker-compose.yml');
@@ -406,13 +415,16 @@ router.put('/:id', requireAuth, (req, res) => {
 // Deploy/Start stack
 router.post('/:id/up', requireAuth, async (req, res) => {
     try {
+        if (!/^[a-zA-Z0-9_-]+$/.test(req.params.id)) {
+            return res.status(400).json({ error: 'Invalid stack ID' });
+        }
         const stackPath = path.join(STACKS_DIR, req.params.id);
         const composePath = path.join(stackPath, 'docker-compose.yml');
-        
+
         if (!fs.existsSync(composePath)) {
             return res.status(404).json({ error: 'Stack not found' });
         }
-        
+
         const output = execSync(`docker compose -f "${composePath}" up -d 2>&1`, {
             encoding: 'utf8',
             timeout: 120000,
@@ -429,13 +441,16 @@ router.post('/:id/up', requireAuth, async (req, res) => {
 // Stop stack
 router.post('/:id/down', requireAuth, async (req, res) => {
     try {
+        if (!/^[a-zA-Z0-9_-]+$/.test(req.params.id)) {
+            return res.status(400).json({ error: 'Invalid stack ID' });
+        }
         const stackPath = path.join(STACKS_DIR, req.params.id);
         const composePath = path.join(stackPath, 'docker-compose.yml');
-        
+
         if (!fs.existsSync(composePath)) {
             return res.status(404).json({ error: 'Stack not found' });
         }
-        
+
         const output = execSync(`docker compose -f "${composePath}" down 2>&1`, {
             encoding: 'utf8',
             timeout: 60000,
@@ -451,13 +466,16 @@ router.post('/:id/down', requireAuth, async (req, res) => {
 // Restart stack
 router.post('/:id/restart', requireAuth, async (req, res) => {
     try {
+        if (!/^[a-zA-Z0-9_-]+$/.test(req.params.id)) {
+            return res.status(400).json({ error: 'Invalid stack ID' });
+        }
         const stackPath = path.join(STACKS_DIR, req.params.id);
         const composePath = path.join(stackPath, 'docker-compose.yml');
-        
+
         if (!fs.existsSync(composePath)) {
             return res.status(404).json({ error: 'Stack not found' });
         }
-        
+
         execSync(`docker compose -f "${composePath}" restart 2>&1`, {
             encoding: 'utf8',
             timeout: 60000,
@@ -473,15 +491,21 @@ router.post('/:id/restart', requireAuth, async (req, res) => {
 // Get stack logs
 router.get('/:id/logs', requireAuth, (req, res) => {
     try {
+        if (!/^[a-zA-Z0-9_-]+$/.test(req.params.id)) {
+            return res.status(400).json({ error: 'Invalid stack ID' });
+        }
         const stackPath = path.join(STACKS_DIR, req.params.id);
         const composePath = path.join(stackPath, 'docker-compose.yml');
-        const lines = parseInt(req.query.lines) || 100;
-        const service = req.query.service || '';
-        
+        const service = req.query.service;
+        if (service && !/^[a-zA-Z0-9_-]+$/.test(service)) {
+            return res.status(400).json({ error: 'Invalid service name' });
+        }
+        const lines = Math.min(Math.max(parseInt(req.query.lines) || 100, 1), 5000);
+
         if (!fs.existsSync(composePath)) {
             return res.status(404).json({ error: 'Stack not found' });
         }
-        
+
         const serviceArg = service ? ` ${service}` : '';
         const logs = execSync(
             `docker compose -f "${composePath}" logs --tail=${lines}${serviceArg} 2>&1`,
@@ -497,6 +521,9 @@ router.get('/:id/logs', requireAuth, (req, res) => {
 // Delete stack
 router.delete('/:id', requireAuth, async (req, res) => {
     try {
+        if (!/^[a-zA-Z0-9_-]+$/.test(req.params.id)) {
+            return res.status(400).json({ error: 'Invalid stack ID' });
+        }
         const stackPath = path.join(STACKS_DIR, req.params.id);
         const composePath = path.join(stackPath, 'docker-compose.yml');
         
@@ -529,6 +556,9 @@ router.delete('/:id', requireAuth, async (req, res) => {
 // Pull latest images for stack
 router.post('/:id/pull', requireAuth, async (req, res) => {
     try {
+        if (!/^[a-zA-Z0-9_-]+$/.test(req.params.id)) {
+            return res.status(400).json({ error: 'Invalid stack ID' });
+        }
         const stackPath = path.join(STACKS_DIR, req.params.id);
         const composePath = path.join(stackPath, 'docker-compose.yml');
         

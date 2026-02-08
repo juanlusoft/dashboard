@@ -131,7 +131,7 @@ function saveUpdateCache(cache) {
 }
 
 // List containers with update status, ports, and notes
-router.get('/containers', async (req, res) => {
+router.get('/containers', requireAuth, async (req, res) => {
     try {
         const containers = await docker.listContainers({ all: true });
         const updateCache = loadUpdateCache();
@@ -308,7 +308,7 @@ router.post('/check-updates', requireAuth, async (req, res) => {
 });
 
 // Get update status (cached)
-router.get('/update-status', async (req, res) => {
+router.get('/update-status', requireAuth, async (req, res) => {
     const cache = loadUpdateCache();
     res.json({
         lastCheck: cache.lastCheck,
@@ -433,7 +433,7 @@ router.post('/compose/import', requireAuth, async (req, res) => {
 });
 
 // List saved compose files
-router.get('/compose/list', async (req, res) => {
+router.get('/compose/list', requireAuth, async (req, res) => {
     try {
         const composes = [];
 
@@ -606,7 +606,7 @@ router.delete('/compose/:name', requireAuth, async (req, res) => {
 });
 
 // Get compose file content
-router.get('/compose/:name', async (req, res) => {
+router.get('/compose/:name', requireAuth, async (req, res) => {
     // SECURITY: Use dedicated sanitization function
     const safeName = sanitizeComposeName(req.params.name);
     if (!safeName) {

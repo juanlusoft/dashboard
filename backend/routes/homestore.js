@@ -1,14 +1,20 @@
 const express = require('express');
 const router = express.Router();
-const { exec, spawn } = require('child_process');
+const { exec, execFile, spawn } = require('child_process');
 const fs = require('fs').promises;
 const path = require('path');
+const { requireAuth } = require('../middleware/auth');
 
 // Load catalog
 const CATALOG_PATH = path.join(__dirname, '../data/homestore-catalog.json');
 const APPS_BASE = '/opt/homepinas/apps';
 const INSTALLED_PATH = path.join(__dirname, '../config/homestore-installed.json');
 const APP_CONFIGS_PATH = path.join(__dirname, '../config/homestore-app-configs');
+
+// Helper: Validate app/container ID to prevent command injection
+function validateAppId(id) {
+    return id && /^[a-zA-Z0-9_-]+$/.test(id);
+}
 
 // Helper: Load catalog
 async function loadCatalog() {
@@ -79,7 +85,7 @@ async function checkDocker() {
 // Helper: Get container status
 async function getContainerStatus(appId) {
     return new Promise((resolve) => {
-        exec(`docker ps -a --filter "name=homestore-${appId}" --format "{{.Status}}"`, (err, stdout) => {
+        execFile('docker', ['ps', '-a', '--filter', `name=homestore-${appId}`, '--format', '{{.Status}}'], (err, stdout) => {
             if (err || !stdout.trim()) {
                 resolve(null);
             } else {
@@ -99,7 +105,7 @@ async function getContainerStatus(appId) {
 // Helper: Get container stats
 async function getContainerStats(appId) {
     return new Promise((resolve) => {
-        exec(`docker stats homestore-${appId} --no-stream --format "{{.CPUPerc}},{{.MemUsage}}"`, (err, stdout) => {
+        execFile('docker', ['stats', `homestore-${appId}`, '--no-stream', '--format', '{{.CPUPerc}},{{.MemUsage}}'], (err, stdout) => {
             if (err || !stdout.trim()) {
                 resolve(null);
             } else {
@@ -111,7 +117,7 @@ async function getContainerStats(appId) {
 }
 
 // GET /homestore/catalog - List all available apps
-router.get('/catalog', async (req, res) => {
+router.get('/catalog', requireAuth, async (req, res) => {
     try {
         const catalog = await loadCatalog();
         const installed = await loadInstalled();
@@ -144,7 +150,7 @@ router.get('/catalog', async (req, res) => {
 });
 
 // GET /homestore/categories - List categories
-router.get('/categories', async (req, res) => {
+router.get('/categories', requireAuth, async (req, res) => {
     try {
         const catalog = await loadCatalog();
         res.json({ success: true, categories: catalog.categories });
@@ -154,7 +160,7 @@ router.get('/categories', async (req, res) => {
 });
 
 // GET /homestore/installed - List installed apps
-router.get('/installed', async (req, res) => {
+router.get('/installed', requireAuth, async (req, res) => {
     try {
         const catalog = await loadCatalog();
         const installed = await loadInstalled();
@@ -183,9 +189,12 @@ router.get('/installed', async (req, res) => {
 });
 
 // GET /homestore/app/:id - Get app details
-router.get('/app/:id', async (req, res) => {
+router.get('/app/:id', requireAuth, async (req, res) => {
     try {
         const { id } = req.params;
+        if (!validateAppId(id)) {
+            return res.status(400).json({ error: 'Invalid app ID' });
+        }
         const catalog = await loadCatalog();
         const installed = await loadInstalled();
         
@@ -216,9 +225,12 @@ router.get('/app/:id', async (req, res) => {
 });
 
 // GET /homestore/app/:id/config - Get saved app config (for reinstalls)
-router.get('/app/:id/config', async (req, res) => {
+router.get('/app/:id/config', requireAuth, async (req, res) => {
     try {
         const { id } = req.params;
+        if (!validateAppId(id)) {
+            return res.status(400).json({ error: 'Invalid app ID' });
+        }
         const config = await loadAppConfig(id);
         
         if (config) {
@@ -232,11 +244,14 @@ router.get('/app/:id/config', async (req, res) => {
 });
 
 // POST /homestore/install/:id - Install an app
-router.post('/install/:id', async (req, res) => {
+router.post('/install/:id', requireAuth, async (req, res) => {
     try {
         const { id } = req.params;
+        if (!validateAppId(id)) {
+            return res.status(400).json({ error: 'Invalid app ID' });
+        }
         const { config } = req.body || {};
-        
+
         // Check Docker
         if (!await checkDocker()) {
             return res.status(400).json({ success: false, error: 'Docker is not available' });
@@ -392,27 +407,32 @@ router.post('/install/:id', async (req, res) => {
 });
 
 // POST /homestore/uninstall/:id - Uninstall an app
-router.post('/uninstall/:id', async (req, res) => {
+router.post('/uninstall/:id', requireAuth, async (req, res) => {
     try {
         const { id } = req.params;
+        if (!validateAppId(id)) {
+            return res.status(400).json({ error: 'Invalid app ID' });
+        }
         const { removeData } = req.body || {};
-        
+
         const catalog = await loadCatalog();
         const installed = await loadInstalled();
-        
+
         const app = catalog.apps.find(a => a.id === id);
         if (!app) {
             return res.status(404).json({ success: false, error: 'App not found' });
         }
-        
+
         if (!installed.apps[id]) {
             return res.status(400).json({ success: false, error: 'App is not installed' });
         }
-        
+
         // Stop and remove container
         await new Promise((resolve) => {
-            exec(`docker stop homestore-${id} && docker rm homestore-${id}`, (err) => {
-                resolve(); // Continue even if error (container might not exist)
+            execFile('docker', ['stop', `homestore-${id}`], (err) => {
+                execFile('docker', ['rm', `homestore-${id}`], (err) => {
+                    resolve(); // Continue even if error (container might not exist)
+                });
             });
         });
         
@@ -440,12 +460,15 @@ router.post('/uninstall/:id', async (req, res) => {
 });
 
 // POST /homestore/start/:id - Start an app
-router.post('/start/:id', async (req, res) => {
+router.post('/start/:id', requireAuth, async (req, res) => {
     try {
         const { id } = req.params;
-        
+        if (!validateAppId(id)) {
+            return res.status(400).json({ error: 'Invalid app ID' });
+        }
+
         await new Promise((resolve, reject) => {
-            exec(`docker start homestore-${id}`, (err, stdout, stderr) => {
+            execFile('docker', ['start', `homestore-${id}`], (err, stdout, stderr) => {
                 if (err) reject(new Error(stderr || err.message));
                 else resolve();
             });
@@ -458,12 +481,15 @@ router.post('/start/:id', async (req, res) => {
 });
 
 // POST /homestore/stop/:id - Stop an app
-router.post('/stop/:id', async (req, res) => {
+router.post('/stop/:id', requireAuth, async (req, res) => {
     try {
         const { id } = req.params;
-        
+        if (!validateAppId(id)) {
+            return res.status(400).json({ error: 'Invalid app ID' });
+        }
+
         await new Promise((resolve, reject) => {
-            exec(`docker stop homestore-${id}`, (err, stdout, stderr) => {
+            execFile('docker', ['stop', `homestore-${id}`], (err, stdout, stderr) => {
                 if (err) reject(new Error(stderr || err.message));
                 else resolve();
             });
@@ -476,12 +502,15 @@ router.post('/stop/:id', async (req, res) => {
 });
 
 // POST /homestore/restart/:id - Restart an app
-router.post('/restart/:id', async (req, res) => {
+router.post('/restart/:id', requireAuth, async (req, res) => {
     try {
         const { id } = req.params;
-        
+        if (!validateAppId(id)) {
+            return res.status(400).json({ error: 'Invalid app ID' });
+        }
+
         await new Promise((resolve, reject) => {
-            exec(`docker restart homestore-${id}`, (err, stdout, stderr) => {
+            execFile('docker', ['restart', `homestore-${id}`], (err, stdout, stderr) => {
                 if (err) reject(new Error(stderr || err.message));
                 else resolve();
             });
@@ -494,15 +523,18 @@ router.post('/restart/:id', async (req, res) => {
 });
 
 // GET /homestore/logs/:id - Get app logs
-router.get('/logs/:id', async (req, res) => {
+router.get('/logs/:id', requireAuth, async (req, res) => {
     try {
         const { id } = req.params;
-        const lines = req.query.lines || 100;
-        
+        if (!validateAppId(id)) {
+            return res.status(400).json({ error: 'Invalid app ID' });
+        }
+        const lines = Math.min(Math.max(parseInt(req.query.lines) || 100, 1), 5000);
+
         const logs = await new Promise((resolve, reject) => {
-            exec(`docker logs homestore-${id} --tail ${lines} 2>&1`, (err, stdout) => {
+            execFile('docker', ['logs', `homestore-${id}`, '--tail', String(lines)], (err, stdout, stderr) => {
                 if (err) reject(new Error(err.message));
-                else resolve(stdout);
+                else resolve(stdout + stderr);
             });
         });
         
@@ -513,10 +545,13 @@ router.get('/logs/:id', async (req, res) => {
 });
 
 // POST /homestore/update/:id - Update an app (pull new image and recreate)
-router.post('/update/:id', async (req, res) => {
+router.post('/update/:id', requireAuth, async (req, res) => {
     try {
         const { id } = req.params;
-        
+        if (!validateAppId(id)) {
+            return res.status(400).json({ error: 'Invalid app ID' });
+        }
+
         const catalog = await loadCatalog();
         const installed = await loadInstalled();
         
@@ -531,15 +566,17 @@ router.post('/update/:id', async (req, res) => {
         
         // Pull new image
         await new Promise((resolve, reject) => {
-            exec(`docker pull ${app.image}`, { timeout: 600000 }, (err, stdout, stderr) => {
+            execFile('docker', ['pull', app.image], { timeout: 600000 }, (err, stdout, stderr) => {
                 if (err) reject(new Error(stderr || err.message));
                 else resolve();
             });
         });
-        
+
         // Stop and remove old container
         await new Promise((resolve) => {
-            exec(`docker stop homestore-${id} && docker rm homestore-${id}`, () => resolve());
+            execFile('docker', ['stop', `homestore-${id}`], () => {
+                execFile('docker', ['rm', `homestore-${id}`], () => resolve());
+            });
         });
         
         // Load saved config (persisted from installation)
@@ -613,7 +650,7 @@ router.post('/update/:id', async (req, res) => {
 });
 
 // GET /homestore/check-docker - Check if Docker is available
-router.get('/check-docker', async (req, res) => {
+router.get('/check-docker', requireAuth, async (req, res) => {
     const available = await checkDocker();
     res.json({ success: true, available });
 });

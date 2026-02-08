@@ -98,7 +98,7 @@ HYST_TEMP=2
 };
 
 // System Hardware Telemetry
-router.get('/stats', async (req, res) => {
+router.get('/stats', requireAuth, async (req, res) => {
     try {
         const [cpu, cpuInfo, mem, temp, osInfo, graphics] = await Promise.all([
             si.currentLoad(),
@@ -251,7 +251,7 @@ router.post('/fan', requireAuth, (req, res) => {
 });
 
 // Get current fan mode
-router.get('/fan/mode', (req, res) => {
+router.get('/fan/mode', requireAuth, (req, res) => {
     try {
         let currentMode = 'balanced';
         try {
@@ -320,7 +320,7 @@ router.post('/fan/mode', requireAuth, (req, res) => {
 });
 
 // Real Disk Detection & SMART
-router.get('/disks', async (req, res) => {
+router.get('/disks', requireAuth, async (req, res) => {
     try {
         // Get disk info from lsblk (no sudo needed, includes serial)
         let lsblkData = {};
@@ -419,7 +419,7 @@ router.get('/disks', async (req, res) => {
 });
 
 // System Status
-router.get('/status', async (req, res) => {
+router.get('/status', requireAuth, async (req, res) => {
     const data = getData();
     res.json({
         user: data.user ? { username: data.user.username } : null,
@@ -430,7 +430,7 @@ router.get('/status', async (req, res) => {
 });
 
 // System Architecture Detection
-router.get('/arch', async (req, res) => {
+router.get('/arch', requireAuth, async (req, res) => {
     try {
         const os = require('os');
         const arch = os.arch(); // 'arm64', 'x64', 'arm', etc.

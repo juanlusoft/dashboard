@@ -31,28 +31,35 @@ function logSecurityEvent(event, user, ipOrMeta) {
  * Execute command with sanitized arguments using execFile (safer than exec)
  */
 async function safeExec(command, args = [], options = {}) {
-    // SECURITY: Removed 'rm' and 'bash' from allowlist (audit 2026-02-04)
+    // SECURITY: Only specific commands allowed. NO sudo/dd/bash (audit 2026-02-08)
     // Use safeRemove() for file deletion, Node fs for scripts
+    // sudo must be invoked directly by routes that need it, with specific sub-commands
     const allowedCommands = [
-        'sudo', 'cat', 'ls', 'df', 'mount', 'umount', 'smartctl',
+        'cat', 'ls', 'df', 'mount', 'umount', 'smartctl',
         'systemctl', 'snapraid', 'mergerfs', 'smbpasswd', 'useradd',
         'usermod', 'chown', 'chmod', 'mkfs.ext4', 'mkfs.xfs', 'parted',
         'partprobe', 'id', 'getent', 'cp', 'tee', 'mkdir',
         'journalctl', 'smbstatus', 'smbd', 'nmbd', 'userdel',
         'apcaccess', 'apctest', 'upsc', 'upscmd', 'rsync', 'tar',
-        'crontab', 'mv', 'grep', 'blkid', 'lsblk', 'findmnt', 'dd',
+        'crontab', 'mv', 'grep', 'blkid', 'lsblk', 'findmnt',
         'mkswap', 'swapon', 'swapoff', 'fdisk', 'xorriso', 'mksquashfs'
     ];
 
-    const baseCommand = command.split('/').pop();
+    // Require absolute path or resolve from PATH - no path traversal tricks
+    const baseCommand = path.basename(command);
     if (!allowedCommands.includes(baseCommand)) {
         throw new Error(`Command not allowed: ${baseCommand}`);
     }
 
+    // Apply security options AFTER user options to prevent override
+    const userOpts = { ...options };
+    delete userOpts.timeout;
+    delete userOpts.maxBuffer;
+
     return execFileAsync(command, args, {
+        ...userOpts,
         timeout: options.timeout || 30000,
         maxBuffer: 10 * 1024 * 1024,
-        ...options
     });
 }
 

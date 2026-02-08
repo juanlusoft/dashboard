@@ -11,13 +11,14 @@ const fs = require('fs');
 const { exec } = require('child_process');
 
 const { requireAuth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/rbac');
 const { criticalLimiter } = require('../middleware/rateLimit');
 const { logSecurityEvent } = require('../utils/security');
 const { clearAllSessions } = require('../utils/session');
 const { DATA_FILE } = require('../utils/data');
 
 // System reset
-router.post('/reset', requireAuth, criticalLimiter, (req, res) => {
+router.post('/reset', requireAuth, requireAdmin, criticalLimiter, (req, res) => {
     try {
         logSecurityEvent('SYSTEM_RESET', { user: req.user.username }, req.ip);
 
@@ -36,7 +37,7 @@ router.post('/reset', requireAuth, criticalLimiter, (req, res) => {
 });
 
 // System reboot
-router.post('/reboot', requireAuth, criticalLimiter, (req, res) => {
+router.post('/reboot', requireAuth, requireAdmin, criticalLimiter, (req, res) => {
     logSecurityEvent('SYSTEM_REBOOT', { user: req.user.username }, req.ip);
     res.json({ message: 'Rebooting...' });
 
@@ -50,7 +51,7 @@ router.post('/reboot', requireAuth, criticalLimiter, (req, res) => {
 });
 
 // System shutdown
-router.post('/shutdown', requireAuth, criticalLimiter, (req, res) => {
+router.post('/shutdown', requireAuth, requireAdmin, criticalLimiter, (req, res) => {
     logSecurityEvent('SYSTEM_SHUTDOWN', { user: req.user.username }, req.ip);
     res.json({ message: 'Shutting down...' });
 

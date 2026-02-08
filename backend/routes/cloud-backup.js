@@ -5,9 +5,10 @@
 
 const express = require('express');
 const router = express.Router();
-const { execSync, exec, spawn } = require('child_process');
+const { execFileSync, execFile, spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 // Auth middleware
 const { requireAuth } = require('../middleware/auth');
@@ -32,10 +33,23 @@ const PROVIDERS = {
     'nextcloud': { name: 'Nextcloud', icon: '☁️', color: '#0082c9' },
 };
 
+// Validation: remote name must be alphanumeric/underscore/dash
+function validateRemoteName(name) {
+    if (!name || typeof name !== 'string') return false;
+    return /^[a-zA-Z0-9_-]+$/.test(name);
+}
+
+// Validation: rclone path must not contain shell metacharacters
+function validateRclonePath(p) {
+    if (!p || typeof p !== 'string') return false;
+    if (/[;|&$`\\<>(){}!#\n\r]/.test(p)) return false;
+    return true;
+}
+
 // Helper: Check if rclone is installed
 function isRcloneInstalled() {
     try {
-        execSync('which rclone', { encoding: 'utf8' });
+        execFileSync('which', ['rclone'], { encoding: 'utf8' });
         return true;
     } catch {
         return false;
@@ -45,7 +59,7 @@ function isRcloneInstalled() {
 // Helper: Get rclone version
 function getRcloneVersion() {
     try {
-        const output = execSync('rclone version 2>/dev/null | head -1', { encoding: 'utf8' });
+        const output = execFileSync('rclone', ['version'], { encoding: 'utf8', timeout: 10000 });
         const match = output.match(/rclone v([\d.]+)/);
         return match ? match[1] : null;
     } catch {
@@ -56,7 +70,7 @@ function getRcloneVersion() {
 // Helper: List configured remotes
 function listRemotes() {
     try {
-        const output = execSync('rclone listremotes 2>/dev/null', { encoding: 'utf8' });
+        const output = execFileSync('rclone', ['listremotes'], { encoding: 'utf8', timeout: 10000 });
         return output.trim().split('\n').filter(Boolean).map(r => r.replace(':', ''));
     } catch {
         return [];
@@ -65,8 +79,9 @@ function listRemotes() {
 
 // Helper: Get remote type
 function getRemoteType(remoteName) {
+    if (!validateRemoteName(remoteName)) return 'unknown';
     try {
-        const output = execSync(`rclone config show "${remoteName}" 2>/dev/null`, { encoding: 'utf8' });
+        const output = execFileSync('rclone', ['config', 'show', remoteName], { encoding: 'utf8', timeout: 10000 });
         const match = output.match(/type\s*=\s*(\w+)/);
         return match ? match[1] : 'unknown';
     } catch {
@@ -76,8 +91,9 @@ function getRemoteType(remoteName) {
 
 // Helper: Get remote info
 function getRemoteInfo(remoteName) {
+    if (!validateRemoteName(remoteName)) return null;
     try {
-        const output = execSync(`rclone about "${remoteName}:" --json 2>/dev/null`, { encoding: 'utf8', timeout: 30000 });
+        const output = execFileSync('rclone', ['about', `${remoteName}:`, '--json'], { encoding: 'utf8', timeout: 30000 });
         return JSON.parse(output);
     } catch {
         return null;
@@ -161,16 +177,20 @@ router.get('/remotes/:name/about', requireAuth, async (req, res) => {
 router.get('/remotes/:name/ls', requireAuth, async (req, res) => {
     const { name } = req.params;
     const remotePath = req.query.path || '';
-    
+
+    if (!validateRemoteName(name)) {
+        return res.status(400).json({ error: 'Invalid remote name' });
+    }
+
     try {
         const fullPath = remotePath ? `${name}:${remotePath}` : `${name}:`;
-        const output = execSync(`rclone lsjson "${fullPath}" --max-depth 1 2>/dev/null`, { 
+        const output = execFileSync('rclone', ['lsjson', fullPath, '--max-depth', '1'], {
             encoding: 'utf8',
-            timeout: 60000 
+            timeout: 60000
         });
-        
+
         const items = JSON.parse(output);
-        res.json({ 
+        res.json({
             path: remotePath,
             items: items.map(item => ({
                 name: item.Name,
@@ -182,19 +202,23 @@ router.get('/remotes/:name/ls', requireAuth, async (req, res) => {
             }))
         });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        res.status(500).json({ error: 'Failed to list remote files' });
     }
 });
 
 // POST /remotes/:name/delete - Delete a remote config
 router.post('/remotes/:name/delete', requireAuth, async (req, res) => {
     const { name } = req.params;
-    
+
+    if (!validateRemoteName(name)) {
+        return res.status(400).json({ error: 'Invalid remote name' });
+    }
+
     try {
-        execSync(`rclone config delete "${name}" 2>/dev/null`, { encoding: 'utf8' });
+        execFileSync('rclone', ['config', 'delete', name], { encoding: 'utf8' });
         res.json({ success: true });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        res.status(500).json({ error: 'Failed to delete remote' });
     }
 });
 
@@ -254,43 +278,54 @@ router.post('/config/create', requireAuth, async (req, res) => {
 // POST /config/save-simple - Save simple (non-OAuth) remote config
 router.post('/config/save-simple', requireAuth, async (req, res) => {
     const { name, provider, config } = req.body;
-    
+
     if (!name || !provider || !config) {
         return res.status(400).json({ error: 'Name, provider, and config required' });
     }
-    
+
+    if (!validateRemoteName(name)) {
+        return res.status(400).json({ error: 'Invalid remote name' });
+    }
+
+    const validProviders = ['sftp', 'ftp', 'webdav', 's3', 'b2', 'drive', 'dropbox', 'onedrive', 'mega', 'pcloud', 'box', 'nextcloud'];
+    if (!validProviders.includes(provider)) {
+        return res.status(400).json({ error: 'Invalid provider' });
+    }
+
     try {
-        // Build rclone config command
-        let cmd = `rclone config create "${name}" "${provider}"`;
-        
+        // Build args array safely (no shell interpolation)
+        const args = ['config', 'create', name, provider];
+
         for (const [key, value] of Object.entries(config)) {
-            if (value) {
-                cmd += ` "${key}" "${value}"`;
+            if (value && /^[a-zA-Z0-9_]+$/.test(key)) {
+                args.push(`${key}=${value}`);
             }
         }
-        
-        execSync(cmd + ' 2>/dev/null', { encoding: 'utf8' });
+
+        execFileSync('rclone', args, { encoding: 'utf8', timeout: 30000 });
         res.json({ success: true, name });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        res.status(500).json({ error: 'Failed to create remote config' });
     }
 });
 
 // POST /config/save-oauth - Save OAuth remote with token
 router.post('/config/save-oauth', requireAuth, async (req, res) => {
     const { name, provider, token } = req.body;
-    
+
     if (!name || !provider || !token) {
         return res.status(400).json({ error: 'Name, provider, and token required' });
     }
-    
+
+    if (!validateRemoteName(name)) {
+        return res.status(400).json({ error: 'Invalid remote name' });
+    }
+
     try {
-        // Create config with token
-        const cmd = `rclone config create "${name}" "${provider}" token '${token}'`;
-        execSync(cmd + ' 2>/dev/null', { encoding: 'utf8' });
+        execFileSync('rclone', ['config', 'create', name, provider, `token=${token}`], { encoding: 'utf8', timeout: 30000 });
         res.json({ success: true, name });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        res.status(500).json({ error: 'Failed to create OAuth remote' });
     }
 });
 
@@ -332,71 +367,70 @@ function logTransfer(transfer) {
 // POST /sync - Start sync operation
 router.post('/sync', requireAuth, async (req, res) => {
     const { source, dest, mode = 'copy', deleteFiles = false } = req.body;
-    
+
     if (!source || !dest) {
         return res.status(400).json({ error: 'Source and destination required' });
     }
-    
+
+    if (!validateRclonePath(source) || !validateRclonePath(dest)) {
+        return res.status(400).json({ error: 'Invalid source or destination path' });
+    }
+
+    const validModes = ['sync', 'copy', 'move'];
+    const selectedMode = validModes.includes(mode) ? mode : 'copy';
+
     try {
-        let cmd;
-        
-        switch (mode) {
-            case 'sync':
-                // Sync makes dest identical to source
-                cmd = `rclone sync "${source}" "${dest}"`;
-                if (deleteFiles) cmd += ' --delete-during';
-                break;
-            case 'copy':
-                // Copy only copies new/changed files
-                cmd = `rclone copy "${source}" "${dest}"`;
-                break;
-            case 'move':
-                // Move files (delete from source after copy)
-                cmd = `rclone move "${source}" "${dest}"`;
-                break;
-            default:
-                cmd = `rclone copy "${source}" "${dest}"`;
+        // Build args array safely
+        const args = [selectedMode, source, dest, '--progress', '--stats-one-line'];
+        if (selectedMode === 'sync' && deleteFiles) {
+            args.push('--delete-during');
         }
-        
-        // Add progress flag
-        cmd += ' --progress --stats-one-line';
-        
-        // Run async
-        const jobId = Date.now().toString();
+
+        const jobId = crypto.randomBytes(8).toString('hex');
         const logFile = `/tmp/rclone-job-${jobId}.log`;
-        
-        // Create dest directory if needed
-        execSync(`mkdir -p "${dest}"`, { encoding: 'utf8' });
-        
+
+        // Create dest directory if local path
+        if (!dest.includes(':')) {
+            fs.mkdirSync(dest, { recursive: true });
+        }
+
         // Log start of transfer
         logTransfer({
             id: jobId,
             source,
             dest,
-            mode,
+            mode: selectedMode,
             status: 'running'
         });
-        
-        // Run in background and update status when done
-        const child = exec(`${cmd} > ${logFile} 2>&1`, (err) => {
-            const status = err ? 'failed' : 'completed';
+
+        // Run in background using spawn (no shell)
+        const logFd = fs.openSync(logFile, 'w');
+        const child = spawn('rclone', args, {
+            stdio: ['ignore', logFd, logFd],
+            detached: true
+        });
+        child.unref();
+        fs.closeSync(logFd);
+
+        child.on('close', (code) => {
+            const status = code !== 0 ? 'failed' : 'completed';
             const history = loadTransferHistory();
             const idx = history.findIndex(t => t.id === jobId);
             if (idx !== -1) {
                 history[idx].status = status;
                 history[idx].completedAt = new Date().toISOString();
-                if (err) history[idx].error = err.message;
+                if (code !== 0) history[idx].error = `Exit code ${code}`;
                 saveTransferHistory(history);
             }
         });
-        
-        res.json({ 
-            success: true, 
+
+        res.json({
+            success: true,
             jobId,
             message: 'Sync started in background'
         });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        res.status(500).json({ error: 'Failed to start sync' });
     }
 });
 
@@ -442,6 +476,9 @@ router.get('/jobs/active', requireAuth, (req, res) => {
 // GET /jobs/:id - Get job status
 router.get('/jobs/:id', requireAuth, (req, res) => {
     const { id } = req.params;
+    if (!/^[a-zA-Z0-9]+$/.test(id)) {
+        return res.status(400).json({ error: 'Invalid job ID' });
+    }
     const logFile = `/tmp/rclone-job-${id}.log`;
     
     try {
@@ -532,37 +569,50 @@ function scheduleToCron(schedule) {
 function writeCloudBackupCrontab() {
     return new Promise((resolve, reject) => {
         const syncs = loadScheduledSyncs().filter(s => s.enabled);
-        
+
         // Read existing crontab (to preserve non-cloud-backup entries)
-        exec('crontab -l 2>/dev/null || echo ""', (err, existingCrontab) => {
-            // Filter out old cloud-backup entries
-            const otherLines = existingCrontab.split('\n').filter(line => 
-                !line.includes('# HomePiNAS Cloud Backup:') && 
-                !line.includes('rclone sync') && 
-                !line.includes('rclone copy')
+        execFile('crontab', ['-l'], { encoding: 'utf8' }, (err, existingCrontab) => {
+            if (err) existingCrontab = '';
+
+            // Only filter lines tagged by HomePiNAS (not all rclone lines)
+            const otherLines = existingCrontab.split('\n').filter(line =>
+                !line.includes('# HomePiNAS Cloud Backup:') &&
+                !line.startsWith('# ═══ HomePiNAS Cloud Backup')
             );
-            
-            // Add cloud backup entries
-            let content = otherLines.join('\n').trim() + '\n\n';
+
+            // Remove orphaned HomePiNAS cron command lines (next line after a removed comment)
+            const cleanedLines = [];
+            let skipNext = false;
+            for (const line of otherLines) {
+                if (skipNext) { skipNext = false; continue; }
+                cleanedLines.push(line);
+            }
+
+            let content = cleanedLines.join('\n').trim() + '\n\n';
             content += '# ═══ HomePiNAS Cloud Backup Scheduled Syncs ═══\n';
-            
+
             syncs.forEach(sync => {
+                // Validate sync fields to prevent crontab injection
+                if (!validateRclonePath(sync.source) || !validateRclonePath(sync.dest)) return;
+                if (!/^[a-zA-Z0-9 _-]+$/.test(sync.name)) return;
+                if (!/^[a-zA-Z0-9]+$/.test(sync.id)) return;
+
                 const cronExpr = scheduleToCron(sync.schedule);
+                if (!/^[\d*,\/-\s]+$/.test(cronExpr)) return;
+
                 const logFile = `/var/log/homepinas/cloud-backup-${sync.id}.log`;
-                const cmd = sync.mode === 'sync' 
-                    ? `rclone sync "${sync.source}" "${sync.dest}"` 
-                    : `rclone copy "${sync.source}" "${sync.dest}"`;
-                
+                const rcloneMode = sync.mode === 'sync' ? 'sync' : 'copy';
+
                 content += `# HomePiNAS Cloud Backup: ${sync.name} (ID: ${sync.id})\n`;
-                content += `${cronExpr} ${cmd} >> ${logFile} 2>&1\n`;
+                content += `${cronExpr} /usr/bin/rclone ${rcloneMode} "${sync.source}" "${sync.dest}" >> ${logFile} 2>&1\n`;
             });
-            
+
             // Write to temp file and apply
-            const tmpFile = `/tmp/homepinas-crontab-${Date.now()}`;
+            const tmpFile = `/tmp/homepinas-crontab-${crypto.randomBytes(8).toString('hex')}`;
             fs.writeFile(tmpFile, content, (writeErr) => {
                 if (writeErr) return reject(writeErr);
-                
-                exec(`crontab ${tmpFile}`, (cronErr) => {
+
+                execFile('crontab', [tmpFile], (cronErr) => {
                     fs.unlink(tmpFile, () => {});
                     if (cronErr) return reject(cronErr);
                     resolve();
@@ -590,31 +640,36 @@ router.post('/schedules', requireAuth, async (req, res) => {
         return res.status(400).json({ error: 'Name, source, dest, and schedule required' });
     }
     
+    if (!validateRclonePath(source) || !validateRclonePath(dest)) {
+        return res.status(400).json({ error: 'Invalid source or destination path' });
+    }
+
     try {
         const syncs = loadScheduledSyncs();
         const newSync = {
-            id: Date.now().toString(),
-            name,
+            id: crypto.randomBytes(6).toString('hex'),
+            name: name.replace(/[^a-zA-Z0-9 _-]/g, ''),
             source,
             dest,
-            mode,
+            mode: ['sync', 'copy'].includes(mode) ? mode : 'copy',
             schedule,
             enabled: true,
             createdAt: new Date().toISOString()
         };
-        
+
         syncs.push(newSync);
         saveScheduledSyncs(syncs);
-        
+
         // Update system crontab
         await writeCloudBackupCrontab();
-        
-        // Create log directory
-        execSync('sudo mkdir -p /var/log/homepinas && sudo chmod 777 /var/log/homepinas', { encoding: 'utf8' });
-        
+
+        // Create log directory with proper permissions (750, not 777)
+        execFileSync('sudo', ['mkdir', '-p', '/var/log/homepinas'], { encoding: 'utf8' });
+        execFileSync('sudo', ['chmod', '750', '/var/log/homepinas'], { encoding: 'utf8' });
+
         res.json({ success: true, schedule: newSync });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        res.status(500).json({ error: 'Failed to create schedule' });
     }
 });
 
@@ -701,44 +756,49 @@ function getProviderFields(provider) {
 router.post('/install', requireAuth, async (req, res) => {
     try {
         console.log('Starting rclone installation...');
-        
+
         // Detect architecture
-        const arch = execSync('uname -m', { encoding: 'utf8' }).trim();
+        const arch = execFileSync('uname', ['-m'], { encoding: 'utf8' }).trim();
         let rcloneArch = 'amd64';
         if (arch === 'aarch64' || arch === 'arm64') rcloneArch = 'arm64';
         else if (arch.startsWith('arm')) rcloneArch = 'arm';
-        
+
+        // Validate rcloneArch is one of expected values
+        if (!['amd64', 'arm64', 'arm'].includes(rcloneArch)) {
+            return res.status(500).json({ error: 'Unsupported architecture' });
+        }
+
         console.log(`Detected architecture: ${arch} -> rclone arch: ${rcloneArch}`);
-        
-        // Download rclone
-        const tmpDir = '/tmp/rclone-install-' + Date.now();
-        execSync(`mkdir -p ${tmpDir}`, { encoding: 'utf8' });
-        
+
+        const tmpDir = `/tmp/rclone-install-${crypto.randomBytes(8).toString('hex')}`;
+        fs.mkdirSync(tmpDir, { recursive: true });
+
         const downloadUrl = `https://downloads.rclone.org/rclone-current-linux-${rcloneArch}.zip`;
         console.log(`Downloading from: ${downloadUrl}`);
-        
-        execSync(`curl -fsSL "${downloadUrl}" -o ${tmpDir}/rclone.zip`, { 
+
+        execFileSync('curl', ['-fsSL', downloadUrl, '-o', path.join(tmpDir, 'rclone.zip')], {
             encoding: 'utf8',
-            timeout: 60000 
+            timeout: 60000
         });
-        
-        // Extract
-        execSync(`cd ${tmpDir} && unzip -o rclone.zip`, { encoding: 'utf8' });
-        
-        // Find the extracted binary
-        const extractedDir = execSync(`ls -d ${tmpDir}/rclone-*/`, { encoding: 'utf8' }).trim();
-        console.log(`Extracted to: ${extractedDir}`);
-        
-        // Install binary
-        execSync(`sudo cp ${extractedDir}rclone /usr/local/bin/rclone`, { encoding: 'utf8' });
-        execSync('sudo chmod 755 /usr/local/bin/rclone', { encoding: 'utf8' });
-        
+
+        execFileSync('unzip', ['-o', path.join(tmpDir, 'rclone.zip'), '-d', tmpDir], { encoding: 'utf8' });
+
+        // Find extracted directory
+        const entries = fs.readdirSync(tmpDir).filter(e =>
+            e.startsWith('rclone-') && fs.statSync(path.join(tmpDir, e)).isDirectory()
+        );
+        if (entries.length === 0) throw new Error('Extracted rclone directory not found');
+
+        const rcloneBin = path.join(tmpDir, entries[0], 'rclone');
+        execFileSync('sudo', ['cp', rcloneBin, '/usr/local/bin/rclone'], { encoding: 'utf8' });
+        execFileSync('sudo', ['chmod', '755', '/usr/local/bin/rclone'], { encoding: 'utf8' });
+
         // Cleanup
-        execSync(`rm -rf ${tmpDir}`, { encoding: 'utf8' });
-        
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+
         const version = getRcloneVersion();
         console.log(`rclone installed: ${version}`);
-        
+
         if (version) {
             res.json({ success: true, version });
         } else {
@@ -746,7 +806,7 @@ router.post('/install', requireAuth, async (req, res) => {
         }
     } catch (e) {
         console.error('rclone install error:', e.message);
-        res.status(500).json({ error: 'Failed to install rclone: ' + e.message });
+        res.status(500).json({ error: 'Failed to install rclone' });
     }
 });
 
@@ -770,50 +830,51 @@ function resumeInterruptedSyncs() {
         
         interrupted.forEach(job => {
             const { source, dest, mode, id: oldId } = job;
-            
-            // Generate new job ID
-            const jobId = Date.now().toString() + Math.random().toString(36).substr(2, 4);
-            const logFile = `/tmp/rclone-job-${jobId}.log`;
-            
-            // Build command (same as sync endpoint)
-            let cmd;
-            switch (mode) {
-                case 'sync':
-                    cmd = `rclone sync "${source}" "${dest}"`;
-                    break;
-                case 'move':
-                    cmd = `rclone move "${source}" "${dest}"`;
-                    break;
-                default:
-                    cmd = `rclone copy "${source}" "${dest}"`;
+
+            // Validate stored paths
+            if (!validateRclonePath(source) || !validateRclonePath(dest)) {
+                job.status = 'failed';
+                job.error = 'Invalid path in stored job';
+                return;
             }
-            cmd += ' --progress --stats-one-line';
-            
+
+            const jobId = crypto.randomBytes(8).toString('hex');
+            const logFile = `/tmp/rclone-job-${jobId}.log`;
+
+            const rcloneMode = ['sync', 'move'].includes(mode) ? mode : 'copy';
+            const args = [rcloneMode, source, dest, '--progress', '--stats-one-line'];
+
             // Mark old job as resumed
             job.status = 'resumed';
             job.resumedAs = jobId;
-            
-            // Add new job
+
             history.push({
                 id: jobId,
                 source,
                 dest,
-                mode,
+                mode: rcloneMode,
                 status: 'running',
                 timestamp: new Date().toISOString(),
                 resumedFrom: oldId
             });
-            
-            // Start the sync
+
             console.log(`[Cloud Backup] Resuming: ${source} → ${dest} (job ${jobId})`);
-            exec(`${cmd} > ${logFile} 2>&1`, (err) => {
-                const status = err ? 'failed' : 'completed';
+            const logFd = fs.openSync(logFile, 'w');
+            const child = spawn('rclone', args, {
+                stdio: ['ignore', logFd, logFd],
+                detached: true
+            });
+            child.unref();
+            fs.closeSync(logFd);
+
+            child.on('close', (code) => {
+                const status = code !== 0 ? 'failed' : 'completed';
                 const h = loadTransferHistory();
                 const idx = h.findIndex(t => t.id === jobId);
                 if (idx !== -1) {
                     h[idx].status = status;
                     h[idx].completedAt = new Date().toISOString();
-                    if (err) h[idx].error = err.message;
+                    if (code !== 0) h[idx].error = `Exit code ${code}`;
                     saveTransferHistory(h);
                 }
                 console.log(`[Cloud Backup] Sync ${jobId} ${status}`);
