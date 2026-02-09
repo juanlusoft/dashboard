@@ -1215,6 +1215,15 @@ function switchView(viewName, skipRender = false) {
     Object.values(views).forEach(v => v.classList.remove('active'));
     if (views[viewName]) {
         views[viewName].classList.add('active');
+        
+        // Update URL for auth views to prevent confusion (e.g. user lands on /files but sees setup)
+        if (viewName === 'setup' || viewName === 'login' || viewName === 'storage') {
+            const targetPath = viewName === 'storage' ? '/setup/storage' : '/' + viewName;
+            if (window.location.pathname !== targetPath) {
+                history.replaceState({ path: targetPath }, '', targetPath);
+            }
+        }
+        
         if (viewName === 'dashboard' && !skipRender) renderContent('dashboard');
         // Update username display and avatar
         if (state.user) {
