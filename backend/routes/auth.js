@@ -339,4 +339,36 @@ router.post('/logout', (req, res) => {
     res.json({ success: true });
 });
 
+// Emergency reset (no auth required - for locked out users)
+// Protected by strict rate limiting (3 attempts per hour)
+const resetLimiter = require('express-rate-limit')({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 3,
+    message: { error: 'Too many reset attempts. Try again in 1 hour.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+router.post('/setup/reset', resetLimiter, (req, res) => {
+    const fs = require('fs');
+    const { DATA_FILE } = require('../utils/data');
+    const { clearAllSessions } = require('../utils/session');
+    
+    try {
+        logSecurityEvent('EMERGENCY_RESET', { source: 'setup-page' }, req.ip);
+        
+        if (fs.existsSync(DATA_FILE)) {
+            fs.unlinkSync(DATA_FILE);
+        }
+        
+        // Clear all sessions
+        clearAllSessions();
+        
+        res.json({ success: true, message: 'System configuration reset. Please reload the page.' });
+    } catch (e) {
+        console.error('Emergency reset error:', e);
+        res.status(500).json({ error: 'Reset failed: ' + e.message });
+    }
+});
+
 module.exports = router;

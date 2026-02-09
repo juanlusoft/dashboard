@@ -4486,7 +4486,16 @@ if (resetBtn) {
         resetBtn.disabled = true;
 
         try {
-            const res = await authFetch(`${API_BASE}/system/reset`, { method: 'POST' });
+            // Use setup/reset endpoint (no auth required) when not authenticated
+            // Use system/reset endpoint (auth required) when authenticated
+            const endpoint = state.isAuthenticated 
+                ? `${API_BASE}/system/reset` 
+                : `${API_BASE}/setup/reset`;
+            
+            const res = state.isAuthenticated
+                ? await authFetch(endpoint, { method: 'POST' })
+                : await fetch(endpoint, { method: 'POST' });
+            
             const data = await res.json();
 
             if (res.ok && data.success) {
