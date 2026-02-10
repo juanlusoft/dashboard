@@ -161,6 +161,15 @@ body {
     opacity: 1;
 }
 
+/* Hide sidebar when setup/login views are active */
+#setup-view.active ~ #dashboard-view .sidebar,
+#login-view.active ~ #dashboard-view .sidebar,
+body:has(#setup-view.active) .sidebar,
+body:has(#login-view.active) .sidebar {
+    display: none !important;
+    pointer-events: none !important;
+}
+
 /* Storage view needs scroll for many disks */
 #storage-view {
     justify-content: center;
@@ -3765,14 +3774,14 @@ body.fm-dragging .fm-tree-item {
 
 /* Wizard steps */
 .wizard-step {
-    display: none;
+    display: none !important;
     opacity: 0;
     transform: translateX(20px);
     transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
 .wizard-step.active {
-    display: block;
+    display: block !important;
     opacity: 1;
     transform: translateX(0);
     animation: wizardSlideIn 0.4s ease-out;

@@ -1351,16 +1351,27 @@ function initStorageSetup() {
     // Load any saved state
     const hasSavedState = loadWizardState();
     
+    // IMPORTANT: Reset all wizard steps to ensure only one is active
+    document.querySelectorAll('.wizard-step').forEach(step => {
+        step.classList.remove('active', 'exit');
+    });
+    
+    // Set only step 1 as active initially (or saved step)
+    const targetStep = (hasSavedState && wizardState.currentStep >= 1 && wizardState.currentStep <= 5) 
+        ? wizardState.currentStep 
+        : 1;
+    const targetStepEl = document.querySelector(`.wizard-step[data-step="${targetStep}"]`);
+    if (targetStepEl) {
+        targetStepEl.classList.add('active');
+    }
+    wizardState.currentStep = targetStep;
+    updateWizardProgress(targetStep);
+    
     // Start disk detection
     detectDisksForWizard();
     
     // Setup wizard navigation
     setupWizardNavigation();
-    
-    // If we have saved state and disks, restore to that step
-    if (hasSavedState && wizardState.currentStep > 1) {
-        // We'll navigate to the saved step after disk detection completes
-    }
 }
 
 // Detect disks and populate the wizard
@@ -2783,8 +2794,8 @@ async function renderStorageDashboard() {
     try {
         // Fetch disks and pool status
         const [disksRes, poolRes] = await Promise.all([
-            fetch(`${API_BASE}/system/disks`),
-            fetch(`${API_BASE}/storage/pool/status`)
+            authFetch(`${API_BASE}/system/disks`),
+            authFetch(`${API_BASE}/storage/pool/status`)
         ]);
         
         if (disksRes.ok) state.disks = await disksRes.json();
@@ -4486,16 +4497,8 @@ if (resetBtn) {
         resetBtn.disabled = true;
 
         try {
-            // Use setup/reset endpoint (no auth required) when not authenticated
-            // Use system/reset endpoint (auth required) when authenticated
-            const endpoint = state.isAuthenticated 
-                ? `${API_BASE}/system/reset` 
-                : `${API_BASE}/setup/reset`;
-            
-            const res = state.isAuthenticated
-                ? await authFetch(endpoint, { method: 'POST' })
-                : await fetch(endpoint, { method: 'POST' });
-            
+            // Use public factory-reset endpoint (no auth required - for login page)
+            const res = await fetch(`${API_BASE}/system/factory-reset`, { method: 'POST' });
             const data = await res.json();
 
             if (res.ok && data.success) {
@@ -6493,7 +6496,7 @@ async function setup2FA() {
                     <code id="totp-secret-display" style="display: block; background: var(--bg-hover); padding: 12px 16px; border-radius: 8px; font-size: 1.1rem; letter-spacing: 2px; word-break: break-all; user-select: all; cursor: text; color: var(--primary); font-weight: 600;">${escapeHtml(data.secret)}</code>
                     <button onclick="navigator.clipboard.writeText(document.getElementById('totp-secret-display').textContent).then(() => this.textContent = '\u2713 Copiado').catch(() => {})" style="margin-top: 10px; padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-hover); color: var(--text); cursor: pointer; font-size: 0.85rem;">Copiar clave</button>
                 </div>
-                <p style="font-size: 0.8rem; color: var(--text-dim); word-break: break-all; margin-bottom: 20px;">Account: ${escapeHtml(data.uri ? new URL(data.uri).pathname.replace(/^\\/\\/totp\\//, '') : '')}</p>
+                <p style="font-size: 0.8rem; color: var(--text-dim); word-break: break-all; margin-bottom: 20px;">Account: ${escapeHtml(data.uri ? new URL(data.uri).pathname.replace(/^\/\/totp\//, '') : '')}</p>
                 <div style="display: flex; gap: 10px; justify-content: center; align-items: center;">
                     <input type="text" id="totp-verify-code" placeholder="Código de 6 dígitos" maxlength="6" style="padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); width: 160px; text-align: center; font-size: 1.2rem; letter-spacing: 4px;">
                     <button class="btn-primary" id="verify-totp-btn">Verificar</button>

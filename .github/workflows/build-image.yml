@@ -1,88 +1,122 @@
 name: Build HomePiNAS Image
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g., v2.5.0)'
-        required: true
-        default: 'latest'
-  release:
-    types: [published]
+        description: 'Version (e.g., 2.6.0)'
+        required: false
+        default: ''
+
+env:
+  RPI_IMAGE_URL: https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2024-11-19/2024-11-19-raspios-bookworm-arm64-lite.img.xz
+  RPI_IMAGE_NAME: 2024-11-19-raspios-bookworm-arm64-lite
 
 jobs:
-  build-image:
+  build:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
-      
+
+      - name: Get version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION=$(grep '"version"' package.json | head -1 | sed 's/.*: "\(.*\)".*/\1/')
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y xz-utils fdisk parted qemu-user-static wget jq
-      
-      - name: Download latest Raspberry Pi OS
+          sudo apt-get install -y xz-utils parted fdisk kpartx qemu-user-static
+
+      - name: Download Raspberry Pi OS
         run: |
-          # Get latest image URL from Raspberry Pi downloads
-          echo "Fetching latest Raspberry Pi OS Lite (64-bit)..."
-          
-          # Method 1: Parse the downloads page for latest
-          DOWNLOAD_PAGE="https://downloads.raspberrypi.com/raspios_lite_arm64/images/"
-          LATEST_DIR=$(curl -s "$DOWNLOAD_PAGE" | grep -oP 'raspios_lite_arm64-\d{4}-\d{2}-\d{2}' | sort -r | head -1)
-          
-          if [ -z "$LATEST_DIR" ]; then
-            echo "Could not find latest image, using known good version"
-            LATEST_DIR="raspios_lite_arm64-2024-11-19"
-          fi
-          
-          echo "Latest directory: $LATEST_DIR"
-          
-          # Get the actual image filename
-          IMAGE_PAGE="https://downloads.raspberrypi.com/raspios_lite_arm64/images/${LATEST_DIR}/"
-          IMAGE_FILE=$(curl -s "$IMAGE_PAGE" | grep -oP '\d{4}-\d{2}-\d{2}-raspios-bookworm-arm64-lite\.img\.xz' | head -1)
-          
-          if [ -z "$IMAGE_FILE" ]; then
-            # Fallback: try trixie or other naming
-            IMAGE_FILE=$(curl -s "$IMAGE_PAGE" | grep -oP '\d{4}-\d{2}-\d{2}-raspios-[a-z]+-arm64-lite\.img\.xz' | head -1)
-          fi
-          
-          DOWNLOAD_URL="https://downloads.raspberrypi.com/raspios_lite_arm64/images/${LATEST_DIR}/${IMAGE_FILE}"
-          
-          echo "Downloading: $DOWNLOAD_URL"
-          wget -q --show-progress "$DOWNLOAD_URL" -O raspios.img.xz
-          
-          echo "Decompressing..."
-          xz -d raspios.img.xz
-          mv raspios.img base.img
-          
-          echo "Image ready: base.img"
-      
+          echo "Downloading Raspberry Pi OS Lite (arm64)..."
+          wget -q --show-progress "$RPI_IMAGE_URL" -O "${RPI_IMAGE_NAME}.img.xz"
+          echo "Extracting..."
+          xz -d "${RPI_IMAGE_NAME}.img.xz"
+          ls -lh "${RPI_IMAGE_NAME}.img"
+
       - name: Customize image
         run: |
-          sudo ./image-builder/customize-image.sh base.img
-      
+          chmod +x image-builder/customize-image.sh
+          sudo ./image-builder/customize-image.sh "${RPI_IMAGE_NAME}.img"
+          
+          # Find the output image
+          OUTPUT_IMG=$(ls -1 *-homepinas-*.img 2>/dev/null | head -1)
+          echo "OUTPUT_IMG=$OUTPUT_IMG" >> $GITHUB_ENV
+          ls -lh "$OUTPUT_IMG"
+
       - name: Compress image
         run: |
-          VERSION="${{ github.event.inputs.version || github.ref_name }}"
-          mv base-homepinas.img "HomePiNAS-${VERSION}-arm64.img"
-          xz -9 -T0 "HomePiNAS-${VERSION}-arm64.img"
-          sha256sum "HomePiNAS-${VERSION}-arm64.img.xz" > "HomePiNAS-${VERSION}-arm64.img.xz.sha256"
-      
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: homepinas-image
-          path: |
-            HomePiNAS-*.img.xz
-            HomePiNAS-*.sha256
-          retention-days: 30
-      
-      - name: Upload to Release
-        if: github.event_name == 'release'
+          echo "Compressing image..."
+          xz -9 -T0 "$OUTPUT_IMG"
+          COMPRESSED="${OUTPUT_IMG}.xz"
+          echo "COMPRESSED=$COMPRESSED" >> $GITHUB_ENV
+          ls -lh "$COMPRESSED"
+          
+          # Calculate checksum
+          sha256sum "$COMPRESSED" > "${COMPRESSED}.sha256"
+          cat "${COMPRESSED}.sha256"
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
+          name: HomePiNAS v${{ steps.version.outputs.version }}
+          body: |
+            ## HomePiNAS v${{ steps.version.outputs.version }}
+            
+            ### 📥 Instalación
+            
+            1. Descarga el archivo `.img.xz`
+            2. Flashea con [Raspberry Pi Imager](https://www.raspberrypi.com/software/) o [balenaEtcher](https://etcher.balena.io/)
+            3. Inserta la SD/USB en tu Raspberry Pi y enciende
+            4. Sigue el asistente de configuración en pantalla
+            5. El dashboard se instalará automáticamente
+            
+            ### 🔗 Acceso
+            
+            Una vez instalado, accede a: `https://homepinas.local` o `https://<IP>`
+            
+            ### 📋 Requisitos
+            
+            - Raspberry Pi 4 / Pi 5 / CM4 / CM5
+            - SD Card o USB de 8GB+ 
+            - Conexión a internet (para descarga del dashboard)
+            
+            ### ✅ Verificar integridad
+            
+            ```bash
+            sha256sum -c ${{ env.COMPRESSED }}.sha256
+            ```
           files: |
-            HomePiNAS-*.img.xz
-            HomePiNAS-*.sha256
+            ${{ env.COMPRESSED }}
+            ${{ env.COMPRESSED }}.sha256
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifact (non-release builds)
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: homepinas-image-v${{ steps.version.outputs.version }}
+          path: |
+            ${{ env.COMPRESSED }}
+            ${{ env.COMPRESSED }}.sha256
+          retention-days: 7
