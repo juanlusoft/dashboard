@@ -726,6 +726,24 @@ echo -e "${BLUE}[6/7] Deploying HomePiNAS application...${NC}"
 
 cd /tmp
 
+# Preserve existing config (users, sessions, settings) during reinstall
+CONFIG_BACKUP=""
+if [ -d "$TARGET_DIR/backend/config" ]; then
+    echo -e "${BLUE}Backing up existing configuration...${NC}"
+    CONFIG_BACKUP="/tmp/homepinas-config-backup-$$"
+    cp -r "$TARGET_DIR/backend/config" "$CONFIG_BACKUP"
+    echo -e "${GREEN}Config backed up to $CONFIG_BACKUP${NC}"
+fi
+
+# Also preserve stacks
+STACKS_BACKUP=""
+if [ -d "$TARGET_DIR/stacks" ]; then
+    echo -e "${BLUE}Backing up existing stacks...${NC}"
+    STACKS_BACKUP="/tmp/homepinas-stacks-backup-$$"
+    cp -r "$TARGET_DIR/stacks" "$STACKS_BACKUP"
+    echo -e "${GREEN}Stacks backed up to $STACKS_BACKUP${NC}"
+fi
+
 if [ -d "$TARGET_DIR" ]; then
     echo -e "${BLUE}Cleaning up old installation...${NC}"
     rm -rf "$TARGET_DIR"
@@ -741,6 +759,24 @@ echo -e "${BLUE}Cloning repository (branch: $BRANCH)...${NC}"
 git clone -b $BRANCH $REPO_URL $TARGET_DIR
 
 cd $TARGET_DIR
+
+# Restore backed up config if exists
+if [ -n "$CONFIG_BACKUP" ] && [ -d "$CONFIG_BACKUP" ]; then
+    echo -e "${BLUE}Restoring configuration...${NC}"
+    mkdir -p "$TARGET_DIR/backend/config"
+    cp -r "$CONFIG_BACKUP"/* "$TARGET_DIR/backend/config/"
+    rm -rf "$CONFIG_BACKUP"
+    echo -e "${GREEN}Configuration restored!${NC}"
+fi
+
+# Restore backed up stacks if exists
+if [ -n "$STACKS_BACKUP" ] && [ -d "$STACKS_BACKUP" ]; then
+    echo -e "${BLUE}Restoring stacks...${NC}"
+    mkdir -p "$TARGET_DIR/stacks"
+    cp -r "$STACKS_BACKUP"/* "$TARGET_DIR/stacks/"
+    rm -rf "$STACKS_BACKUP"
+    echo -e "${GREEN}Stacks restored!${NC}"
+fi
 
 # Update package.json version to match installer
 sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"${VERSION}\"/" package.json 2>/dev/null || true
