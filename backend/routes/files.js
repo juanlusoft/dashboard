@@ -122,6 +122,33 @@ if (fs.existsSync('/mnt/storage')) {
 }
 if (!fs.existsSync(tmpUploadDir)) fs.mkdirSync(tmpUploadDir, { recursive: true });
 
+// Cleanup abandoned uploads (older than 1 hour)
+function cleanupOldUploads() {
+  try {
+    if (!fs.existsSync(tmpUploadDir)) return;
+    const files = fs.readdirSync(tmpUploadDir);
+    const now = Date.now();
+    const maxAge = 60 * 60 * 1000; // 1 hour
+    
+    for (const file of files) {
+      try {
+        const filePath = path.join(tmpUploadDir, file);
+        const stat = fs.statSync(filePath);
+        if (now - stat.mtimeMs > maxAge) {
+          fs.unlinkSync(filePath);
+          console.log(`[Cleanup] Removed abandoned upload: ${file}`);
+        }
+      } catch (e) {}
+    }
+  } catch (e) {
+    console.error('[Cleanup] Error:', e.message);
+  }
+}
+
+// Run cleanup on startup and every hour
+cleanupOldUploads();
+setInterval(cleanupOldUploads, 60 * 60 * 1000);
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, tmpUploadDir);
@@ -160,10 +187,13 @@ router.get('/list', requirePermission('read'), (req, res) => {
       return res.status(400).json({ error: 'Path is not a directory' });
     }
 
+    const showHidden = req.query.showHidden === 'true';
     const entries = fs.readdirSync(dirPath);
     const items = [];
 
     for (const entry of entries) {
+      // Hide dotfiles/dotfolders unless explicitly requested
+      if (!showHidden && entry.startsWith('.')) continue;
       try {
         const fullPath = path.join(dirPath, entry);
         const stat = fs.statSync(fullPath);
