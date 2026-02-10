@@ -405,7 +405,8 @@ router.get('/disks', async (req, res) => {
                 let usage = 0;
                 try {
                     // Find mounted partition for this disk (e.g., sda1, sdb1)
-                    const dfOutput = execSync(`df -P /dev/${dev.name}* 2>/dev/null | tail -n +2 | head -1`, { encoding: 'utf8' }).trim();
+                    // Filter to only /dev/ lines to avoid udev entries
+                    const dfOutput = execSync(`df -P /dev/${dev.name}* 2>/dev/null | grep "^/dev/${dev.name}" | head -1`, { encoding: 'utf8' }).trim();
                     if (dfOutput) {
                         const parts = dfOutput.split(/\s+/);
                         if (parts.length >= 5) {
