@@ -128,9 +128,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: {
-    fileSize: 2 * 1024 * 1024 * 1024, // 2GB per file
-  },
+  // No file size limit - NAS can handle large files
 });
 
 // All routes require authentication
