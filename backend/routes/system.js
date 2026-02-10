@@ -432,7 +432,8 @@ router.get('/disks', requireAuth, async (req, res) => {
 });
 
 // System Status
-router.get('/status', requireAuth, async (req, res) => {
+// Status endpoint - public (needed by frontend to check if user exists)
+router.get('/status', async (req, res) => {
     const data = getData();
     res.json({
         user: data.user ? { username: data.user.username } : null,
