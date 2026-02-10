@@ -1194,7 +1194,32 @@ $REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart smbd
 $REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart nmbd
 $REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart homepinas
 
-# Disk management (restricted to specific operations)
+# Disk management - allow parted, partprobe, blkid, mkdir, mount, umount for storage setup
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/parted *
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/partprobe *
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/partprobe *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/blkid *
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/blkid *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/blkid *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/mkdir *
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/mkdir *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/rmdir *
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/rmdir *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/mount *
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/mount *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/umount *
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/umount *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/mkfs.ext4 *
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/mkfs.ext4 *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/mkfs.xfs *
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/mkfs.xfs *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/sed *
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/sed *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/snapraid *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/local/bin/snapraid *
+
+# Legacy disk management (keep for backwards compatibility)
 $REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted /dev/sd[a-z] --script mklabel gpt
 $REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted /dev/sd[a-z] --script mkpart primary ext4 0% 100%
 $REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted /dev/sd[a-z] --script print
@@ -1215,11 +1240,8 @@ $REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/pdbedit -L
 $REAL_USER ALL=(ALL) NOPASSWD: /bin/chown -R *\:sambashare /mnt/storage
 $REAL_USER ALL=(ALL) NOPASSWD: /bin/chmod -R 2775 /mnt/storage
 
-# SMART monitoring
-$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/smartctl -i /dev/sd[a-z]
-$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/smartctl -i /dev/nvme[0-9]n[0-9]
-$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/smartctl -A /dev/sd[a-z]
-$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/smartctl -A /dev/nvme[0-9]n[0-9]
+# SMART monitoring (allow all smartctl operations)
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/smartctl *
 
 # Samba config management
 $REAL_USER ALL=(ALL) NOPASSWD: /bin/cat /etc/samba/smb.conf
