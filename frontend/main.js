@@ -3104,8 +3104,8 @@ async function renderDockerManager() {
     let updateStatus = { lastCheck: null, updatesAvailable: 0 };
     try {
         const [containersRes, updateRes] = await Promise.all([
-            fetch(`${API_BASE}/docker/containers`),
-            fetch(`${API_BASE}/docker/update-status`)
+            authFetch(`${API_BASE}/docker/containers`),
+            authFetch(`${API_BASE}/docker/update-status`)
         ]);
         if (containersRes.ok) state.dockers = await containersRes.json();
         if (updateRes.ok) updateStatus = await updateRes.json();
@@ -3117,7 +3117,7 @@ async function renderDockerManager() {
     // Fetch compose files
     let composeFiles = [];
     try {
-        const composeRes = await fetch(`${API_BASE}/docker/compose/list`);
+        const composeRes = await authFetch(`${API_BASE}/docker/compose/list`);
         if (composeRes.ok) composeFiles = await composeRes.json();
     } catch (e) {
         console.error('Compose list error:', e);
