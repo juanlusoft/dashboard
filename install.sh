@@ -760,22 +760,26 @@ git clone -b $BRANCH $REPO_URL $TARGET_DIR
 
 cd $TARGET_DIR
 
-# Restore backed up config if exists
-if [ -n "$CONFIG_BACKUP" ] && [ -d "$CONFIG_BACKUP" ]; then
+# Restore backed up config if exists and has files
+if [ -n "$CONFIG_BACKUP" ] && [ -d "$CONFIG_BACKUP" ] && [ "$(ls -A "$CONFIG_BACKUP" 2>/dev/null)" ]; then
     echo -e "${BLUE}Restoring configuration...${NC}"
     mkdir -p "$TARGET_DIR/backend/config"
-    cp -r "$CONFIG_BACKUP"/* "$TARGET_DIR/backend/config/"
+    cp -r "$CONFIG_BACKUP"/. "$TARGET_DIR/backend/config/" 2>/dev/null || true
     rm -rf "$CONFIG_BACKUP"
     echo -e "${GREEN}Configuration restored!${NC}"
+elif [ -n "$CONFIG_BACKUP" ]; then
+    rm -rf "$CONFIG_BACKUP" 2>/dev/null || true
 fi
 
-# Restore backed up stacks if exists
-if [ -n "$STACKS_BACKUP" ] && [ -d "$STACKS_BACKUP" ]; then
+# Restore backed up stacks if exists and has files
+if [ -n "$STACKS_BACKUP" ] && [ -d "$STACKS_BACKUP" ] && [ "$(ls -A "$STACKS_BACKUP" 2>/dev/null)" ]; then
     echo -e "${BLUE}Restoring stacks...${NC}"
     mkdir -p "$TARGET_DIR/stacks"
-    cp -r "$STACKS_BACKUP"/* "$TARGET_DIR/stacks/"
+    cp -r "$STACKS_BACKUP"/. "$TARGET_DIR/stacks/" 2>/dev/null || true
     rm -rf "$STACKS_BACKUP"
     echo -e "${GREEN}Stacks restored!${NC}"
+elif [ -n "$STACKS_BACKUP" ]; then
+    rm -rf "$STACKS_BACKUP" 2>/dev/null || true
 fi
 
 # Update package.json version to match installer
