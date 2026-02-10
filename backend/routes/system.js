@@ -320,7 +320,8 @@ router.post('/fan/mode', requireAuth, (req, res) => {
 });
 
 // Real Disk Detection & SMART
-router.get('/disks', requireAuth, async (req, res) => {
+// Disks endpoint - public (needed by frontend for storage wizard)
+router.get('/disks', async (req, res) => {
     try {
         // Get disk info from lsblk (no sudo needed, includes serial)
         let lsblkData = {};
