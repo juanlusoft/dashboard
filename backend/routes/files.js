@@ -110,10 +110,16 @@ function searchFiles(dir, query, results, maxResults) {
   }
 }
 
-// Configure multer to use temp directory first, then move to target
-// (req.body.path may not be available when multer processes the file in multipart)
+// Configure multer to use storage temp directory for large files
+// Falls back to system tmp if storage not mounted
 const os = require('os');
-const tmpUploadDir = path.join(os.tmpdir(), 'homepinas-uploads');
+const storageTmpDir = '/mnt/storage/.uploads-tmp';
+const systemTmpDir = path.join(os.tmpdir(), 'homepinas-uploads');
+// Prefer storage temp dir (large capacity) over system tmp (limited eMMC)
+let tmpUploadDir = systemTmpDir;
+if (fs.existsSync('/mnt/storage')) {
+  tmpUploadDir = storageTmpDir;
+}
 if (!fs.existsSync(tmpUploadDir)) fs.mkdirSync(tmpUploadDir, { recursive: true });
 
 const storage = multer.diskStorage({
