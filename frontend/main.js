@@ -2789,6 +2789,9 @@ window.setFanMode = setFanMode;
 
 // Real Storage Telemetry
 async function renderStorageDashboard() {
+    // Clear content to prevent duplication on refresh
+    dashboardContent.innerHTML = '';
+    
     try {
         // Fetch disks and pool status
         const [disksRes, poolRes] = await Promise.all([

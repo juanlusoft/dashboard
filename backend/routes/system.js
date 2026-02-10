@@ -400,6 +400,19 @@ router.get('/disks', async (req, res) => {
                     }
                 } catch (e) {}
 
+                // Get disk usage from mounted partitions
+                let usage = 0;
+                try {
+                    // Find mounted partition for this disk (e.g., sda1, sdb1)
+                    const dfOutput = execSync(`df -P /dev/${dev.name}* 2>/dev/null | tail -n +2 | head -1`, { encoding: 'utf8' }).trim();
+                    if (dfOutput) {
+                        const parts = dfOutput.split(/\s+/);
+                        if (parts.length >= 5) {
+                            usage = parseInt(parts[4]) || 0; // Use% column
+                        }
+                    }
+                } catch (e) {}
+
                 return {
                     id: dev.name,
                     device: dev.device,
@@ -408,7 +421,7 @@ router.get('/disks', async (req, res) => {
                     model: finalModel,
                     serial: serial || 'N/A',
                     temp: temp || (35 + Math.floor(Math.random() * 10)),
-                    usage: 0
+                    usage
                 };
             });
         res.json(disks);
