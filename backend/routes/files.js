@@ -111,16 +111,38 @@ function searchFiles(dir, query, results, maxResults) {
 }
 
 // Configure multer to use storage temp directory for large files
-// Falls back to system tmp if storage not mounted
+// Falls back to system tmp if storage not mounted or not writable
 const os = require('os');
 const storageTmpDir = '/mnt/storage/.uploads-tmp';
 const systemTmpDir = path.join(os.tmpdir(), 'homepinas-uploads');
 // Prefer storage temp dir (large capacity) over system tmp (limited eMMC)
 let tmpUploadDir = systemTmpDir;
+
+// Try to use storage if available and writable
 if (fs.existsSync('/mnt/storage')) {
-  tmpUploadDir = storageTmpDir;
+  try {
+    if (!fs.existsSync(storageTmpDir)) {
+      fs.mkdirSync(storageTmpDir, { recursive: true });
+    }
+    // Test if writable
+    const testFile = path.join(storageTmpDir, '.write-test');
+    fs.writeFileSync(testFile, 'test');
+    fs.unlinkSync(testFile);
+    tmpUploadDir = storageTmpDir;
+  } catch (e) {
+    console.warn('[Upload] Storage not writable, using system tmp:', e.message);
+    tmpUploadDir = systemTmpDir;
+  }
 }
-if (!fs.existsSync(tmpUploadDir)) fs.mkdirSync(tmpUploadDir, { recursive: true });
+
+// Ensure tmp dir exists
+if (!fs.existsSync(tmpUploadDir)) {
+  try {
+    fs.mkdirSync(tmpUploadDir, { recursive: true });
+  } catch (e) {
+    console.error('[Upload] Cannot create temp dir:', e.message);
+  }
+}
 
 // Cleanup abandoned uploads (older than 1 hour)
 function cleanupOldUploads() {
