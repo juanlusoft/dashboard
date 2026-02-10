@@ -5774,6 +5774,11 @@ async function handleFileUpload(e) {
         formData.append('files', file);
         formData.append('path', currentFilePath);
 
+        // Speed calculation
+        let uploadStartTime = Date.now();
+        let lastLoaded = 0;
+        let lastTime = uploadStartTime;
+
         try {
             // Helper to perform upload with current CSRF token
             const doUpload = () => new Promise((resolve, reject) => {
@@ -5781,11 +5786,61 @@ async function handleFileUpload(e) {
                 xhr.open('POST', `${API_BASE}/files/upload`);
                 xhr.setRequestHeader('X-Session-Id', state.sessionId);
                 if (state.csrfToken) xhr.setRequestHeader('X-CSRF-Token', state.csrfToken);
+                uploadStartTime = Date.now();
+                lastTime = uploadStartTime;
+                lastLoaded = 0;
 
                 xhr.upload.addEventListener('progress', (ev) => {
                     if (ev.lengthComputable) {
                         const pct = Math.round((ev.loaded / ev.total) * 100);
-                        if (percentEl) percentEl.textContent = pct + '%';
+                        const now = Date.now();
+                        const elapsed = (now - lastTime) / 1000; // seconds
+                        
+                        // Calculate speed (use instant speed with smoothing)
+                        let speed = 0;
+                        if (elapsed > 0.1) { // Update every 100ms minimum
+                            const bytesDelta = ev.loaded - lastLoaded;
+                            speed = bytesDelta / elapsed; // bytes per second
+                            lastLoaded = ev.loaded;
+                            lastTime = now;
+                        }
+                        
+                        // Also calculate average speed for ETA
+                        const totalElapsed = (now - uploadStartTime) / 1000;
+                        const avgSpeed = totalElapsed > 0 ? ev.loaded / totalElapsed : 0;
+                        const remaining = ev.total - ev.loaded;
+                        const eta = avgSpeed > 0 ? remaining / avgSpeed : 0;
+                        
+                        // Format speed
+                        let speedStr = '';
+                        if (speed > 0 || avgSpeed > 0) {
+                            const displaySpeed = speed > 0 ? speed : avgSpeed;
+                            if (displaySpeed >= 1024 * 1024 * 1024) {
+                                speedStr = (displaySpeed / (1024 * 1024 * 1024)).toFixed(1) + ' GB/s';
+                            } else if (displaySpeed >= 1024 * 1024) {
+                                speedStr = (displaySpeed / (1024 * 1024)).toFixed(1) + ' MB/s';
+                            } else if (displaySpeed >= 1024) {
+                                speedStr = (displaySpeed / 1024).toFixed(0) + ' KB/s';
+                            } else {
+                                speedStr = displaySpeed.toFixed(0) + ' B/s';
+                            }
+                        }
+                        
+                        // Format ETA
+                        let etaStr = '';
+                        if (eta > 0 && eta < 86400) { // Less than 24h
+                            if (eta >= 3600) {
+                                etaStr = Math.floor(eta / 3600) + 'h ' + Math.floor((eta % 3600) / 60) + 'm';
+                            } else if (eta >= 60) {
+                                etaStr = Math.floor(eta / 60) + 'm ' + Math.floor(eta % 60) + 's';
+                            } else {
+                                etaStr = Math.floor(eta) + 's';
+                            }
+                        }
+                        
+                        if (percentEl) {
+                            percentEl.textContent = `${pct}%${speedStr ? ' • ' + speedStr : ''}${etaStr ? ' • ' + etaStr : ''}`;
+                        }
                         if (fillEl) fillEl.style.width = pct + '%';
                     }
                 });
