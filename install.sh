@@ -7,6 +7,17 @@
 # Version - CHANGE THIS FOR EACH RELEASE
 VERSION="2.6.0"
 
+# Parse command line arguments
+CLEAN_INSTALL=false
+for arg in "$@"; do
+    case $arg in
+        --clean)
+            CLEAN_INSTALL=true
+            echo "Clean install mode: will NOT preserve existing users/config"
+            ;;
+    esac
+done
+
 # Determine the real user early (before any operations that need it)
 REAL_USER=${SUDO_USER:-$USER}
 REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
@@ -728,20 +739,24 @@ cd /tmp
 
 # Preserve existing config (users, sessions, settings) during reinstall
 CONFIG_BACKUP=""
-if [ -d "$TARGET_DIR/backend/config" ]; then
-    echo -e "${BLUE}Backing up existing configuration...${NC}"
-    CONFIG_BACKUP="/tmp/homepinas-config-backup-$$"
-    cp -r "$TARGET_DIR/backend/config" "$CONFIG_BACKUP"
-    echo -e "${GREEN}Config backed up to $CONFIG_BACKUP${NC}"
-fi
-
-# Also preserve stacks
 STACKS_BACKUP=""
-if [ -d "$TARGET_DIR/stacks" ]; then
-    echo -e "${BLUE}Backing up existing stacks...${NC}"
-    STACKS_BACKUP="/tmp/homepinas-stacks-backup-$$"
-    cp -r "$TARGET_DIR/stacks" "$STACKS_BACKUP"
-    echo -e "${GREEN}Stacks backed up to $STACKS_BACKUP${NC}"
+if [ "$CLEAN_INSTALL" = false ]; then
+    if [ -d "$TARGET_DIR/backend/config" ]; then
+        echo -e "${BLUE}Backing up existing configuration...${NC}"
+        CONFIG_BACKUP="/tmp/homepinas-config-backup-$$"
+        cp -r "$TARGET_DIR/backend/config" "$CONFIG_BACKUP"
+        echo -e "${GREEN}Config backed up to $CONFIG_BACKUP${NC}"
+    fi
+
+    # Also preserve stacks
+    if [ -d "$TARGET_DIR/stacks" ]; then
+        echo -e "${BLUE}Backing up existing stacks...${NC}"
+        STACKS_BACKUP="/tmp/homepinas-stacks-backup-$$"
+        cp -r "$TARGET_DIR/stacks" "$STACKS_BACKUP"
+        echo -e "${GREEN}Stacks backed up to $STACKS_BACKUP${NC}"
+    fi
+else
+    echo -e "${YELLOW}Clean install: skipping config/stacks backup${NC}"
 fi
 
 if [ -d "$TARGET_DIR" ]; then
