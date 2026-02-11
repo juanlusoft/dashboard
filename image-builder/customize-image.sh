@@ -128,13 +128,13 @@ mkdir -p "$MOUNT_ROOT/etc/systemd/system/multi-user.target.wants"
 echo -e "${BLUE}Installing firstboot.sh...${NC}"
 cat > "$MOUNT_ROOT/usr/local/bin/homepinas-firstboot.sh" << 'FIRSTBOOT'
 #!/bin/bash
-# HomePiNAS First Boot Setup
-# Se ejecuta una sola vez en el primer arranque
+# HomePiNAS Installer
+# Instala el sistema desde USB a disco interno (eMMC, SSD, etc.)
 
 set -e
 
 FIRSTBOOT_MARKER="/etc/homepinas/.firstboot-done"
-LOG="/var/log/homepinas-firstboot.log"
+LOG="/var/log/homepinas-installer.log"
 
 # Si ya se ejecutó, salir
 if [[ -f "$FIRSTBOOT_MARKER" ]]; then
@@ -142,150 +142,233 @@ if [[ -f "$FIRSTBOOT_MARKER" ]]; then
 fi
 
 exec > >(tee -a "$LOG") 2>&1
-echo "=== HomePiNAS First Boot - $(date) ==="
+echo "=== HomePiNAS Installer - $(date) ==="
 
 # Esperar a que el sistema esté listo
-sleep 5
+sleep 3
 
-# Verificar que tenemos terminal
-if ! tty -s; then
-    echo "No TTY disponible, esperando..."
-    sleep 10
+# Obtener disco de origen (donde estamos corriendo)
+SOURCE_ROOT=$(findmnt -n -o SOURCE /)
+SOURCE_DISK=$(lsblk -no PKNAME "$SOURCE_ROOT" 2>/dev/null || echo "")
+if [[ -z "$SOURCE_DISK" ]]; then
+    SOURCE_DISK=$(echo "$SOURCE_ROOT" | sed 's/[0-9]*$//' | sed 's/p$//')
 fi
-
-# Función para mostrar dialogo
-show_dialog() {
-    if command -v dialog &>/dev/null; then
-        dialog "$@"
-    elif command -v whiptail &>/dev/null; then
-        whiptail "$@"
-    else
-        echo "ERROR: Se requiere dialog o whiptail"
-        exit 1
-    fi
-}
+SOURCE_DISK="/dev/$SOURCE_DISK"
 
 clear
-
-# Banner
 echo ""
 echo "  ╔═══════════════════════════════════════════════════════════╗"
 echo "  ║                                                           ║"
-echo "  ║   🏠 HomePiNAS - Configuración Inicial                    ║"
+echo "  ║   🏠 HomePiNAS - Instalador                               ║"
 echo "  ║                                                           ║"
 echo "  ╚═══════════════════════════════════════════════════════════╝"
 echo ""
 sleep 2
 
-# Deshabilitar eMMC boot (CM5 con eMMC)
-# Borra el sector de arranque para que siempre use USB
-if [[ -b /dev/mmcblk0 ]]; then
-    echo "Deshabilitando arranque desde eMMC..."
-    dd if=/dev/zero of=/dev/mmcblk0 bs=512 count=1 conv=notrunc 2>/dev/null || true
-    echo "  ✓ eMMC boot deshabilitado"
-fi
-
 # Instalar dialog si no está
 if ! command -v dialog &>/dev/null; then
-    echo "Instalando herramientas de configuración..."
-    apt-get update -qq && apt-get install -y -qq dialog
+    echo "Instalando herramientas..."
+    apt-get update -qq && apt-get install -y -qq dialog parted rsync
 fi
+
+# Función para obtener discos disponibles (excluyendo el USB de origen)
+get_available_disks() {
+    local disks=""
+    local count=0
+    
+    # Primero verificar eMMC
+    if [[ -b /dev/mmcblk0 ]] && [[ "$SOURCE_DISK" != "/dev/mmcblk0" ]]; then
+        local size=$(lsblk -dn -o SIZE /dev/mmcblk0 2>/dev/null || echo "??")
+        disks="$disks /dev/mmcblk0 \"eMMC interno ($size) [RECOMENDADO]\" on"
+        count=$((count+1))
+    fi
+    
+    # Luego otros discos
+    for disk in /dev/sd[a-z] /dev/nvme[0-9]n[0-9]; do
+        [[ -b "$disk" ]] || continue
+        [[ "$disk" == "$SOURCE_DISK" ]] && continue
+        
+        local size=$(lsblk -dn -o SIZE "$disk" 2>/dev/null || echo "??")
+        local model=$(lsblk -dn -o MODEL "$disk" 2>/dev/null | xargs || echo "Disco")
+        
+        # Ignorar discos sin tamaño (vacíos/desconectados)
+        [[ "$size" == "0B" ]] && continue
+        
+        if [[ $count -eq 0 ]]; then
+            disks="$disks $disk \"$model ($size)\" on"
+        else
+            disks="$disks $disk \"$model ($size)\" off"
+        fi
+        count=$((count+1))
+    done
+    
+    echo "$disks"
+    return $count
+}
 
 # Pantalla de bienvenida
-dialog --title "🏠 HomePiNAS" --msgbox "\n¡Bienvenido a HomePiNAS!\n\nEste asistente te ayudará a configurar tu NAS.\n\nNecesitarás:\n  • Un nombre para tu NAS\n  • Un nombre de usuario\n  • Una contraseña segura" 15 50
+dialog --title "🏠 HomePiNAS Installer" --msgbox "\n¡Bienvenido al instalador de HomePiNAS!\n\nEste asistente instalará el sistema en el\ndisco interno de tu NAS.\n\nEl USB de instalación podrá retirarse\nuna vez completada la instalación." 14 55
 
-# Configurar hostname
-HOSTNAME=$(dialog --title "Nombre del NAS" --inputbox "\nIntroduce el nombre para tu NAS:\n(solo letras, números y guiones)" 10 50 "homepinas" 3>&1 1>&2 2>&3)
+# Obtener discos disponibles
+DISK_OPTIONS=$(get_available_disks)
+DISK_COUNT=$?
 
-if [[ -z "$HOSTNAME" ]]; then
-    HOSTNAME="homepinas"
-fi
-
-# Validar hostname
-HOSTNAME=$(echo "$HOSTNAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]//g')
-
-# Configurar usuario
-USERNAME=$(dialog --title "Usuario Administrador" --inputbox "\nIntroduce el nombre de usuario:\n(será el administrador del NAS)" 10 50 "admin" 3>&1 1>&2 2>&3)
-
-if [[ -z "$USERNAME" ]]; then
-    USERNAME="admin"
-fi
-
-# Validar username
-USERNAME=$(echo "$USERNAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_]//g')
-
-# Configurar contraseña
-while true; do
-    PASSWORD=$(dialog --title "Contraseña" --insecure --passwordbox "\nIntroduce la contraseña para '$USERNAME':\n(mínimo 8 caracteres)" 10 50 3>&1 1>&2 2>&3)
-    
-    if [[ ${#PASSWORD} -lt 8 ]]; then
-        dialog --title "Error" --msgbox "La contraseña debe tener al menos 8 caracteres." 8 45
-        continue
-    fi
-    
-    PASSWORD2=$(dialog --title "Confirmar Contraseña" --insecure --passwordbox "\nRepite la contraseña:" 10 50 3>&1 1>&2 2>&3)
-    
-    if [[ "$PASSWORD" != "$PASSWORD2" ]]; then
-        dialog --title "Error" --msgbox "Las contraseñas no coinciden. Inténtalo de nuevo." 8 45
-        continue
-    fi
-    
-    break
-done
-
-# Confirmación
-dialog --title "Confirmar Configuración" --yesno "\n¿Es correcta esta configuración?\n\n  Nombre del NAS: $HOSTNAME\n  Usuario: $USERNAME\n  Contraseña: ********" 12 50
-
-if [[ $? -ne 0 ]]; then
-    dialog --title "Cancelado" --msgbox "Configuración cancelada. Reinicia para volver a intentarlo." 8 50
+if [[ $DISK_COUNT -eq 0 ]] || [[ -z "$DISK_OPTIONS" ]]; then
+    dialog --title "Error" --msgbox "\nNo se encontraron discos disponibles para instalar.\n\nAsegúrate de que el NAS tenga:\n  • eMMC interno, o\n  • Un SSD/HDD conectado" 12 55
     exit 1
 fi
 
-# Aplicar configuración
-dialog --title "Aplicando..." --infobox "\nConfigurando el sistema...\n\nEsto puede tardar unos minutos." 8 45
+# Seleccionar disco destino
+TARGET_DISK=$(eval "dialog --title 'Seleccionar Disco' --radiolist '\nSelecciona el disco donde instalar HomePiNAS:\n\n(El disco seleccionado será BORRADO)' 18 65 6 $DISK_OPTIONS" 3>&1 1>&2 2>&3)
 
-# 1. Cambiar hostname
-echo "$HOSTNAME" > /etc/hostname
-sed -i "s/127.0.1.1.*/127.0.1.1\t$HOSTNAME/" /etc/hosts
-hostnamectl set-hostname "$HOSTNAME" 2>/dev/null || true
-
-# 2. Crear usuario si no existe
-if ! id "$USERNAME" &>/dev/null; then
-    useradd -m -s /bin/bash -G sudo,adm "$USERNAME"
+if [[ -z "$TARGET_DISK" ]]; then
+    dialog --title "Cancelado" --msgbox "Instalación cancelada." 7 40
+    exit 1
 fi
 
-# 3. Establecer contraseña
-echo "$USERNAME:$PASSWORD" | chpasswd
+# Confirmar borrado
+TARGET_SIZE=$(lsblk -dn -o SIZE "$TARGET_DISK" 2>/dev/null || echo "??")
+dialog --title "⚠️ ADVERTENCIA" --yesno "\n¡ATENCIÓN!\n\nTodos los datos en:\n  $TARGET_DISK ($TARGET_SIZE)\n\nserán BORRADOS permanentemente.\n\n¿Continuar con la instalación?" 14 50
 
-# 4. Guardar config para HomePiNAS dashboard
+if [[ $? -ne 0 ]]; then
+    dialog --title "Cancelado" --msgbox "Instalación cancelada." 7 40
+    exit 1
+fi
+
+# Obtener particiones de origen
+SOURCE_BOOT=$(findmnt -n -o SOURCE /boot/firmware 2>/dev/null || findmnt -n -o SOURCE /boot 2>/dev/null || echo "")
+
+# Calcular tamaños
+BOOT_SIZE=512  # MB
+ROOT_SIZE=$(df -BM --output=used / | tail -1 | tr -d 'M ')
+ROOT_SIZE=$((ROOT_SIZE + 500))  # +500MB margen
+
+# Iniciar instalación
+(
+echo "10"; echo "# Preparando disco..."
+sleep 1
+
+# Desmontar particiones del disco destino si existen
+umount ${TARGET_DISK}* 2>/dev/null || true
+umount ${TARGET_DISK}p* 2>/dev/null || true
+
+echo "20"; echo "# Creando tabla de particiones..."
+
+# Crear tabla de particiones
+parted -s "$TARGET_DISK" mklabel gpt
+parted -s "$TARGET_DISK" mkpart primary fat32 1MiB ${BOOT_SIZE}MiB
+parted -s "$TARGET_DISK" set 1 boot on
+parted -s "$TARGET_DISK" mkpart primary ext4 ${BOOT_SIZE}MiB 100%
+
+# Esperar a que aparezcan las particiones
+sleep 2
+partprobe "$TARGET_DISK" 2>/dev/null || true
+sleep 2
+
+# Determinar nombres de particiones
+if [[ "$TARGET_DISK" == /dev/mmcblk* ]] || [[ "$TARGET_DISK" == /dev/nvme* ]]; then
+    TARGET_BOOT="${TARGET_DISK}p1"
+    TARGET_ROOT="${TARGET_DISK}p2"
+else
+    TARGET_BOOT="${TARGET_DISK}1"
+    TARGET_ROOT="${TARGET_DISK}2"
+fi
+
+# Esperar a que las particiones existan
+for i in {1..10}; do
+    [[ -b "$TARGET_BOOT" ]] && [[ -b "$TARGET_ROOT" ]] && break
+    sleep 1
+    partprobe "$TARGET_DISK" 2>/dev/null || true
+done
+
+echo "30"; echo "# Formateando particiones..."
+
+# Formatear
+mkfs.vfat -F 32 -n BOOT "$TARGET_BOOT"
+mkfs.ext4 -F -L rootfs "$TARGET_ROOT"
+
+echo "40"; echo "# Montando particiones..."
+
+# Montar destino
+mkdir -p /mnt/target /mnt/target-boot
+mount "$TARGET_ROOT" /mnt/target
+mkdir -p /mnt/target/boot/firmware
+mount "$TARGET_BOOT" /mnt/target/boot/firmware
+
+echo "50"; echo "# Copiando sistema (esto tardará varios minutos)..."
+
+# Copiar sistema con rsync
+rsync -aAXH --info=progress2 \
+    --exclude='/mnt/*' \
+    --exclude='/proc/*' \
+    --exclude='/sys/*' \
+    --exclude='/dev/*' \
+    --exclude='/run/*' \
+    --exclude='/tmp/*' \
+    --exclude='/var/tmp/*' \
+    --exclude='/var/cache/apt/archives/*.deb' \
+    --exclude='/lost+found' \
+    / /mnt/target/ 2>/dev/null || true
+
+echo "80"; echo "# Copiando partición de arranque..."
+
+# Copiar boot
+rsync -aAXH /boot/firmware/ /mnt/target/boot/firmware/
+
+echo "85"; echo "# Configurando arranque..."
+
+# Obtener UUIDs nuevos
+NEW_BOOT_UUID=$(blkid -s UUID -o value "$TARGET_BOOT")
+NEW_ROOT_UUID=$(blkid -s UUID -o value "$TARGET_ROOT")
+NEW_ROOT_PARTUUID=$(blkid -s PARTUUID -o value "$TARGET_ROOT")
+
+# Actualizar fstab
+cat > /mnt/target/etc/fstab << FSTAB
+# HomePiNAS fstab
+UUID=$NEW_ROOT_UUID  /               ext4    defaults,noatime  0  1
+UUID=$NEW_BOOT_UUID  /boot/firmware  vfat    defaults          0  2
+FSTAB
+
+# Actualizar cmdline.txt
+sed -i "s|root=[^ ]*|root=PARTUUID=$NEW_ROOT_PARTUUID|" /mnt/target/boot/firmware/cmdline.txt
+
+echo "90"; echo "# Creando directorios necesarios..."
+
+# Crear directorios que excluimos
+mkdir -p /mnt/target/{proc,sys,dev,run,tmp,mnt}
+chmod 1777 /mnt/target/tmp
+
+echo "95"; echo "# Finalizando..."
+
+# Marcar instalación como completada
+mkdir -p /mnt/target/etc/homepinas
+touch /mnt/target/etc/homepinas/.installed-from-usb
+
+# Desmontar
+sync
+umount /mnt/target/boot/firmware
+umount /mnt/target
+
+echo "100"; echo "# ¡Instalación completada!"
+
+) | dialog --title "Instalando HomePiNAS" --gauge "\nPreparando instalación..." 10 60 0
+
+# Éxito
+dialog --title "✅ Instalación Completada" --msgbox "\n¡HomePiNAS se ha instalado correctamente!\n\nDisco: $TARGET_DISK\n\nAhora:\n  1. Retira el USB de instalación\n  2. El sistema se reiniciará automáticamente\n  3. Arrancará desde el disco interno" 14 55
+
+# Marcar como completado en el USB también (para que no vuelva a ejecutar)
 mkdir -p /etc/homepinas
-cat > /etc/homepinas/setup.json << EOF
-{
-    "hostname": "$HOSTNAME",
-    "adminUser": "$USERNAME",
-    "setupCompleted": true,
-    "setupDate": "$(date -Iseconds)"
-}
-EOF
-chmod 600 /etc/homepinas/setup.json
-
-# 5. Marcar como completado
 touch "$FIRSTBOOT_MARKER"
-
-# 6. Deshabilitar este servicio para futuros arranques
-systemctl disable homepinas-firstboot.service 2>/dev/null || true
-
-dialog --title "✅ Configuración Completa" --msgbox "\n¡HomePiNAS está configurado!\n\n  Hostname: $HOSTNAME\n  Usuario: $USERNAME\n\nEl sistema se reiniciará para aplicar los cambios.\n\nDespués el dashboard se instalará automáticamente." 14 55
 
 # Limpiar pantalla
 clear
 echo ""
-echo "  ✅ HomePiNAS configurado correctamente"
+echo "  ✅ HomePiNAS instalado correctamente"
 echo ""
-echo "  Reiniciando en 5 segundos..."
+echo "  Retira el USB y el sistema reiniciará en 10 segundos..."
 echo ""
 
-sleep 5
+sleep 10
 reboot
 FIRSTBOOT
 
@@ -572,6 +655,21 @@ SERVICE
 # Enable services
 ln -sf /etc/systemd/system/homepinas-firstboot.service "$MOUNT_ROOT/etc/systemd/system/multi-user.target.wants/"
 ln -sf /etc/systemd/system/homepinas-install.service "$MOUNT_ROOT/etc/systemd/system/multi-user.target.wants/"
+
+# Auto-reboot after first login (before firstboot runs)
+cat > "$MOUNT_ROOT/etc/profile.d/homepinas-autoreboot.sh" << 'AUTOREBOOT'
+#!/bin/bash
+# Auto-reboot after first user creation to trigger firstboot service
+if [[ ! -f /etc/homepinas/.firstboot-done ]] && [[ ! -f /tmp/.homepinas-rebooting ]]; then
+    echo ""
+    echo "  🏠 HomePiNAS - Reiniciando para comenzar setup..."
+    echo ""
+    sleep 2
+    touch /tmp/.homepinas-rebooting
+    sudo reboot
+fi
+AUTOREBOOT
+chmod +x "$MOUNT_ROOT/etc/profile.d/homepinas-autoreboot.sh"
 
 echo -e "${GREEN}✓ Systemd services configured${NC}"
 
