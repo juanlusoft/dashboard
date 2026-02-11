@@ -177,6 +177,14 @@ echo "  ╚═══════════════════════
 echo ""
 sleep 2
 
+# Deshabilitar eMMC boot (CM5 con eMMC)
+# Borra el sector de arranque para que siempre use USB
+if [[ -b /dev/mmcblk0 ]]; then
+    echo "Deshabilitando arranque desde eMMC..."
+    dd if=/dev/zero of=/dev/mmcblk0 bs=512 count=1 conv=notrunc 2>/dev/null || true
+    echo "  ✓ eMMC boot deshabilitado"
+fi
+
 # Instalar dialog si no está
 if ! command -v dialog &>/dev/null; then
     echo "Instalando herramientas de configuración..."
