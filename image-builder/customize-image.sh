@@ -323,11 +323,10 @@ NEW_ROOT_UUID=$(blkid -s UUID -o value "$TARGET_ROOT")
 NEW_ROOT_PARTUUID=$(blkid -s PARTUUID -o value "$TARGET_ROOT")
 
 # Actualizar fstab
-cat > /mnt/target/etc/fstab << FSTAB
-# HomePiNAS fstab
-UUID=$NEW_ROOT_UUID  /               ext4    defaults,noatime  0  1
-UUID=$NEW_BOOT_UUID  /boot/firmware  vfat    defaults          0  2
-FSTAB
+# Escribir fstab (evitar heredoc anidado)
+echo "# HomePiNAS fstab" > /mnt/target/etc/fstab
+echo "UUID=$NEW_ROOT_UUID  /               ext4    defaults,noatime  0  1" >> /mnt/target/etc/fstab
+echo "UUID=$NEW_BOOT_UUID  /boot/firmware  vfat    defaults          0  2" >> /mnt/target/etc/fstab
 
 # Actualizar cmdline.txt
 sed -i "s|root=[^ ]*|root=PARTUUID=$NEW_ROOT_PARTUUID|" /mnt/target/boot/firmware/cmdline.txt
