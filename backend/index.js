@@ -58,6 +58,7 @@ const cloudSyncRoutes = require('./routes/cloud-sync');
 const cloudBackupRoutes = require('./routes/cloud-backup');
 const homestoreRoutes = require('./routes/homestore');
 const stacksRoutes = require('./routes/stacks');
+const activeDirectoryRoutes = require('./routes/active-directory');
 
 // Import terminal WebSocket handler
 let setupTerminalWebSocket;
@@ -327,6 +328,7 @@ app.use('/api/active-backup', activeBackupRoutes);
 // HomeStore - App marketplace
 app.use('/api/homestore', homestoreRoutes);
 app.use('/api/stacks', stacksRoutes);
+app.use('/api/ad', activeDirectoryRoutes);
 
 // =============================================================================
 // GLOBAL ERROR HANDLER
