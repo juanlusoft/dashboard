@@ -9137,63 +9137,243 @@ async function renderADContent() {
         const groups = Array.isArray(groupsData) ? groupsData : [];
         
         container.innerHTML = `
-            <!-- Status Card -->
-            <div class="card">
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
-                    <div>
-                        <h3 style="margin: 0;">
-                            ${status.running ? '🟢' : '🔴'} Dominio: ${escapeHtml(status.domain)}
-                        </h3>
-                        <p style="color: var(--text-secondary); margin: 5px 0 0 0;">
-                            Realm: ${escapeHtml(status.realm)} | 
+            <style>
+                .ad-dashboard { max-width: 1400px; }
+                .ad-header-card {
+                    background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
+                    border-radius: 16px;
+                    padding: 24px 28px;
+                    color: white;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 20px;
+                    box-shadow: 0 4px 20px rgba(30, 58, 95, 0.3);
+                }
+                .ad-header-info { display: flex; align-items: center; gap: 16px; }
+                .ad-header-icon {
+                    width: 56px; height: 56px;
+                    background: rgba(255,255,255,0.15);
+                    border-radius: 14px;
+                    display: flex; align-items: center; justify-content: center;
+                    font-size: 28px;
+                }
+                .ad-header-text h2 { margin: 0; font-size: 1.5rem; font-weight: 600; }
+                .ad-header-text p { margin: 4px 0 0; opacity: 0.85; font-size: 0.95rem; }
+                .ad-header-status {
+                    display: flex; align-items: center; gap: 8px;
+                    background: rgba(255,255,255,0.1); padding: 6px 14px;
+                    border-radius: 20px; font-size: 0.85rem;
+                }
+                .ad-header-status .dot {
+                    width: 10px; height: 10px; border-radius: 50%;
+                    background: ${status.running ? '#4ade80' : '#f87171'};
+                    box-shadow: 0 0 8px ${status.running ? '#4ade80' : '#f87171'};
+                }
+                .ad-header-actions { display: flex; gap: 10px; }
+                .ad-header-actions button {
+                    padding: 10px 18px; border-radius: 8px; border: none;
+                    font-weight: 500; cursor: pointer; transition: all 0.2s;
+                    display: flex; align-items: center; gap: 6px;
+                }
+                .ad-btn-stop { background: rgba(248,113,113,0.9); color: white; }
+                .ad-btn-stop:hover { background: #f87171; }
+                .ad-btn-start { background: rgba(74,222,128,0.9); color: #166534; }
+                .ad-btn-start:hover { background: #4ade80; }
+                .ad-btn-restart { background: rgba(255,255,255,0.15); color: white; }
+                .ad-btn-restart:hover { background: rgba(255,255,255,0.25); }
+                .ad-btn-restart:disabled { opacity: 0.4; cursor: not-allowed; }
+                
+                .ad-stats-grid {
+                    display: grid;
+                    grid-template-columns: repeat(3, 1fr);
+                    gap: 16px;
+                    margin-top: 20px;
+                }
+                @media (max-width: 700px) { .ad-stats-grid { grid-template-columns: 1fr; } }
+                .ad-stat-card {
+                    background: var(--card-bg, #fff);
+                    border-radius: 12px;
+                    padding: 20px 24px;
+                    display: flex;
+                    align-items: center;
+                    gap: 16px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+                    border: 1px solid var(--border-color, #e5e7eb);
+                }
+                .ad-stat-icon {
+                    width: 48px; height: 48px;
+                    border-radius: 12px;
+                    display: flex; align-items: center; justify-content: center;
+                    font-size: 22px;
+                }
+                .ad-stat-icon.users { background: #dbeafe; }
+                .ad-stat-icon.computers { background: #fce7f3; }
+                .ad-stat-icon.groups { background: #d1fae5; }
+                .ad-stat-value { font-size: 1.75rem; font-weight: 700; color: var(--text-primary, #1f2937); }
+                .ad-stat-label { font-size: 0.85rem; color: var(--text-secondary, #6b7280); margin-top: 2px; }
+                
+                .ad-tabs {
+                    display: flex;
+                    gap: 4px;
+                    margin-top: 24px;
+                    background: var(--bg-secondary, #f3f4f6);
+                    padding: 4px;
+                    border-radius: 12px;
+                    width: fit-content;
+                }
+                .ad-tab {
+                    padding: 10px 20px;
+                    border: none;
+                    background: transparent;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: 500;
+                    color: var(--text-secondary, #6b7280);
+                    transition: all 0.2s;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+                .ad-tab:hover { color: var(--text-primary, #1f2937); }
+                .ad-tab.active {
+                    background: var(--card-bg, #fff);
+                    color: #3b82f6;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                }
+                
+                .ad-content-card {
+                    background: var(--card-bg, #fff);
+                    border-radius: 12px;
+                    padding: 24px;
+                    margin-top: 16px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+                    border: 1px solid var(--border-color, #e5e7eb);
+                }
+                .ad-content-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 20px;
+                    flex-wrap: wrap;
+                    gap: 12px;
+                }
+                .ad-content-header h3 { margin: 0; font-size: 1.1rem; font-weight: 600; }
+                .ad-add-btn {
+                    padding: 8px 16px;
+                    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    transition: transform 0.15s, box-shadow 0.15s;
+                }
+                .ad-add-btn:hover {
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+                }
+                
+                .ad-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+                .ad-table th {
+                    text-align: left;
+                    padding: 12px 16px;
+                    font-weight: 600;
+                    font-size: 0.8rem;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    color: var(--text-secondary, #6b7280);
+                    border-bottom: 2px solid var(--border-color, #e5e7eb);
+                }
+                .ad-table td {
+                    padding: 14px 16px;
+                    border-bottom: 1px solid var(--border-color, #f3f4f6);
+                    color: var(--text-primary, #1f2937);
+                }
+                .ad-table tr:hover { background: var(--bg-secondary, #f9fafb); }
+                .ad-table-empty {
+                    text-align: center;
+                    padding: 40px;
+                    color: var(--text-secondary, #9ca3af);
+                }
+                .ad-table-empty-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+            </style>
+            
+            <div class="ad-dashboard">
+                <!-- Header -->
+                <div class="ad-header-card">
+                    <div class="ad-header-info">
+                        <div class="ad-header-icon">🏢</div>
+                        <div class="ad-header-text">
+                            <h2>${escapeHtml(status.domain || 'HOMELABS')}</h2>
+                            <p>${escapeHtml(status.realm || 'homelabs.local')}</p>
+                        </div>
+                        <div class="ad-header-status">
+                            <span class="dot"></span>
                             ${status.running ? 'Activo' : 'Detenido'}
-                        </p>
+                        </div>
                     </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button class="btn btn-sm ${status.running ? 'btn-danger' : 'btn-success'}" id="ad-toggle-btn">
+                    <div class="ad-header-actions">
+                        <button class="${status.running ? 'ad-btn-stop' : 'ad-btn-start'}" id="ad-toggle-btn">
                             ${status.running ? '⏹️ Detener' : '▶️ Iniciar'}
                         </button>
-                        <button class="btn btn-sm btn-secondary" id="ad-restart-btn" ${!status.running ? 'disabled' : ''}>
+                        <button class="ad-btn-restart" id="ad-restart-btn" ${!status.running ? 'disabled' : ''}>
                             🔄 Reiniciar
                         </button>
                     </div>
                 </div>
-            </div>
-            
-            <!-- Stats -->
-            <div class="stats-grid" style="margin-top: 20px;">
-                <div class="stat-card">
-                    <div class="stat-value">${users.length || 0}</div>
-                    <div class="stat-label">Usuarios</div>
+                
+                <!-- Stats -->
+                <div class="ad-stats-grid">
+                    <div class="ad-stat-card">
+                        <div class="ad-stat-icon users">👤</div>
+                        <div>
+                            <div class="ad-stat-value">${users.length}</div>
+                            <div class="ad-stat-label">Usuarios</div>
+                        </div>
+                    </div>
+                    <div class="ad-stat-card">
+                        <div class="ad-stat-icon computers">💻</div>
+                        <div>
+                            <div class="ad-stat-value">${computers.length}</div>
+                            <div class="ad-stat-label">Equipos unidos</div>
+                        </div>
+                    </div>
+                    <div class="ad-stat-card">
+                        <div class="ad-stat-icon groups">👥</div>
+                        <div>
+                            <div class="ad-stat-value">${groups.length}</div>
+                            <div class="ad-stat-label">Grupos</div>
+                        </div>
+                    </div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-value">${computers.length || 0}</div>
-                    <div class="stat-label">Equipos</div>
+                
+                <!-- Tabs -->
+                <div class="ad-tabs">
+                    <button class="ad-tab active" data-tab="ad-users">👤 Usuarios</button>
+                    <button class="ad-tab" data-tab="ad-computers">💻 Equipos</button>
+                    <button class="ad-tab" data-tab="ad-groups">👥 Grupos</button>
+                    <button class="ad-tab" data-tab="ad-join">📋 Unir Equipo</button>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-value">${groups.length || 0}</div>
-                    <div class="stat-label">Grupos</div>
+                
+                <!-- Tab Content -->
+                <div id="ad-tab-content" class="ad-content-card">
+                    <!-- Content rendered here -->
                 </div>
-            </div>
-            
-            <!-- Tabs -->
-            <div class="tabs" style="margin-top: 20px;">
-                <button class="tab-btn active" data-tab="ad-users">👤 Usuarios</button>
-                <button class="tab-btn" data-tab="ad-computers">💻 Equipos</button>
-                <button class="tab-btn" data-tab="ad-groups">👥 Grupos</button>
-                <button class="tab-btn" data-tab="ad-join">📋 Unir Equipo</button>
-            </div>
-            
-            <!-- Tab Content -->
-            <div id="ad-tab-content" class="card" style="margin-top: 0; border-top-left-radius: 0;">
-                <!-- Content will be rendered here -->
             </div>
         `;
         
         // Tab switching
-        container.querySelectorAll('.tab-btn').forEach(btn => {
+        container.querySelectorAll('.ad-tab').forEach(btn => {
             btn.addEventListener('click', () => {
-                container.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                container.querySelectorAll('.ad-tab').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 renderADTab(btn.dataset.tab, { users, computers, groups, status });
             });
@@ -9244,33 +9424,48 @@ function renderADTab(tab, data) {
     switch (tab) {
         case 'ad-users':
             container.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h4 style="margin: 0;">👤 Usuarios del Dominio</h4>
-                    <button class="btn btn-sm btn-primary" id="ad-add-user-btn">➕ Nuevo Usuario</button>
+                <div class="ad-content-header">
+                    <h3>👤 Usuarios del Dominio</h3>
+                    <button class="ad-add-btn" id="ad-add-user-btn">➕ Nuevo Usuario</button>
                 </div>
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Usuario</th>
-                            <th>Nombre</th>
-                            <th>Estado</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${users.map(u => `
+                ${users.length === 0 ? `
+                    <div class="ad-table-empty">
+                        <div class="ad-table-empty-icon">👤</div>
+                        <p>No hay usuarios en el dominio</p>
+                        <p style="font-size: 0.85rem;">Haz clic en "Nuevo Usuario" para crear el primero</p>
+                    </div>
+                ` : `
+                    <table class="ad-table">
+                        <thead>
                             <tr>
-                                <td><strong>${escapeHtml(u.username)}</strong></td>
-                                <td>${escapeHtml(u.displayName || '-')}</td>
-                                <td>${u.enabled !== false ? '<span class="badge badge-success">Activo</span>' : '<span class="badge badge-danger">Deshabilitado</span>'}</td>
-                                <td>
-                                    <button class="btn btn-xs btn-secondary ad-reset-pwd" data-user="${escapeHtml(u.username)}" ${u.username.toLowerCase() === 'administrator' ? '' : ''}>🔑</button>
-                                    <button class="btn btn-xs btn-danger ad-delete-user" data-user="${escapeHtml(u.username)}" ${u.username.toLowerCase() === 'administrator' ? 'disabled title="No se puede eliminar"' : ''}>🗑️</button>
-                                </td>
+                                <th>Usuario</th>
+                                <th>Nombre</th>
+                                <th>Estado</th>
+                                <th style="width: 120px;">Acciones</th>
                             </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            ${users.map(u => `
+                                <tr>
+                                    <td><strong>${escapeHtml(u.username)}</strong></td>
+                                    <td>${escapeHtml(u.displayName || '-')}</td>
+                                    <td>
+                                        <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 500; ${u.enabled !== false ? 'background: #dcfce7; color: #166534;' : 'background: #fee2e2; color: #991b1b;'}">
+                                            <span style="width: 6px; height: 6px; border-radius: 50%; background: currentColor;"></span>
+                                            ${u.enabled !== false ? 'Activo' : 'Deshabilitado'}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div style="display: flex; gap: 6px;">
+                                            <button class="ad-reset-pwd" data-user="${escapeHtml(u.username)}" title="Cambiar contraseña" style="padding: 6px 10px; border: 1px solid var(--border-color, #e5e7eb); background: var(--card-bg, #fff); border-radius: 6px; cursor: pointer;">🔑</button>
+                                            <button class="ad-delete-user" data-user="${escapeHtml(u.username)}" title="Eliminar usuario" style="padding: 6px 10px; border: 1px solid #fecaca; background: #fef2f2; border-radius: 6px; cursor: pointer; ${u.username.toLowerCase() === 'administrator' ? 'opacity: 0.4; cursor: not-allowed;' : ''}" ${u.username.toLowerCase() === 'administrator' ? 'disabled' : ''}>🗑️</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `}
             `;
             
             // Add user button
@@ -9300,22 +9495,33 @@ function renderADTab(tab, data) {
             
         case 'ad-computers':
             container.innerHTML = `
-                <h4 style="margin-bottom: 15px;">💻 Equipos Unidos al Dominio</h4>
+                <div class="ad-content-header">
+                    <h3>💻 Equipos Unidos al Dominio</h3>
+                </div>
                 ${computers.length === 0 ? `
-                    <p style="color: var(--text-secondary); text-align: center; padding: 20px;">
-                        No hay equipos unidos al dominio todavía.
-                    </p>
+                    <div class="ad-table-empty">
+                        <div class="ad-table-empty-icon">💻</div>
+                        <p>No hay equipos unidos al dominio</p>
+                        <p style="font-size: 0.85rem;">Ve a la pestaña "Unir Equipo" para ver las instrucciones</p>
+                    </div>
                 ` : `
-                    <table class="data-table">
+                    <table class="ad-table">
                         <thead>
                             <tr>
                                 <th>Nombre del Equipo</th>
+                                <th>Sistema</th>
+                                <th>Unido</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${computers.map(c => `
                                 <tr>
-                                    <td>💻 ${escapeHtml(c.name)}</td>
+                                    <td style="display: flex; align-items: center; gap: 10px;">
+                                        <span style="width: 36px; height: 36px; background: #fce7f3; border-radius: 8px; display: flex; align-items: center; justify-content: center;">💻</span>
+                                        <strong>${escapeHtml(c.name)}</strong>
+                                    </td>
+                                    <td>${escapeHtml(c.os || 'Windows')}</td>
+                                    <td style="color: var(--text-secondary);">${escapeHtml(c.joined || '-')}</td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -9326,24 +9532,36 @@ function renderADTab(tab, data) {
             
         case 'ad-groups':
             container.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h4 style="margin: 0;">👥 Grupos del Dominio</h4>
-                    <button class="btn btn-sm btn-primary" id="ad-add-group-btn">➕ Nuevo Grupo</button>
+                <div class="ad-content-header">
+                    <h3>👥 Grupos del Dominio</h3>
+                    <button class="ad-add-btn" id="ad-add-group-btn">➕ Nuevo Grupo</button>
                 </div>
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Nombre del Grupo</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${groups.map(g => `
+                ${groups.length === 0 ? `
+                    <div class="ad-table-empty">
+                        <div class="ad-table-empty-icon">👥</div>
+                        <p>No hay grupos en el dominio</p>
+                    </div>
+                ` : `
+                    <table class="ad-table">
+                        <thead>
                             <tr>
-                                <td>👥 ${escapeHtml(g.name)}</td>
+                                <th>Nombre del Grupo</th>
+                                <th>Miembros</th>
                             </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            ${groups.map(g => `
+                                <tr>
+                                    <td style="display: flex; align-items: center; gap: 10px;">
+                                        <span style="width: 36px; height: 36px; background: #d1fae5; border-radius: 8px; display: flex; align-items: center; justify-content: center;">👥</span>
+                                        <strong>${escapeHtml(g.name)}</strong>
+                                    </td>
+                                    <td style="color: var(--text-secondary);">${g.members || 0} miembros</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `}
             `;
             
             document.getElementById('ad-add-group-btn')?.addEventListener('click', () => showADGroupModal());
@@ -9351,35 +9569,63 @@ function renderADTab(tab, data) {
             
         case 'ad-join':
             container.innerHTML = `
-                <h4 style="margin-bottom: 15px;">📋 Cómo Unir un Equipo Windows al Dominio</h4>
-                
-                <div class="info-box" style="background: var(--bg-tertiary); padding: 20px; border-radius: 8px; line-height: 1.8;">
-                    <p><strong>1. Configura el DNS del equipo Windows:</strong></p>
-                    <ul>
-                        <li>Ir a Configuración de Red → Cambiar opciones del adaptador</li>
-                        <li>Propiedades → IPv4 → Usar las siguientes direcciones de servidor DNS</li>
-                        <li>DNS preferido: <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;">${window.location.hostname}</code> (IP de este NAS)</li>
-                    </ul>
-                    
-                    <p style="margin-top: 15px;"><strong>2. Une el equipo al dominio:</strong></p>
-                    <ul>
-                        <li>Clic derecho en Este equipo → Propiedades → Cambiar configuración</li>
-                        <li>Clic en "Cambiar..." junto al nombre del equipo</li>
-                        <li>Seleccionar "Dominio" e introducir: <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;">${escapeHtml(status.realm)}</code></li>
-                        <li>Usar las credenciales: <code>Administrator</code> y la contraseña del dominio</li>
-                    </ul>
-                    
-                    <p style="margin-top: 15px;"><strong>3. Reinicia el equipo Windows</strong></p>
-                    <p>Después del reinicio, podrás iniciar sesión con usuarios del dominio.</p>
+                <div class="ad-content-header">
+                    <h3>📋 Unir Equipo Windows al Dominio</h3>
                 </div>
                 
-                <div class="card" style="margin-top: 20px; background: var(--bg-tertiary);">
-                    <h5>🔧 Datos del Dominio</h5>
-                    <table style="width: 100%;">
-                        <tr><td><strong>Dominio:</strong></td><td>${escapeHtml(status.domain)}</td></tr>
-                        <tr><td><strong>Realm:</strong></td><td>${escapeHtml(status.realm)}</td></tr>
-                        <tr><td><strong>Servidor DNS:</strong></td><td>${window.location.hostname}</td></tr>
-                    </table>
+                <!-- Domain Info Card -->
+                <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); border-radius: 12px; padding: 20px; color: white; margin-bottom: 24px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+                    <div style="text-align: center;">
+                        <div style="font-size: 0.8rem; opacity: 0.85; margin-bottom: 4px;">DOMINIO</div>
+                        <div style="font-size: 1.25rem; font-weight: 600;">${escapeHtml(status.domain)}</div>
+                    </div>
+                    <div style="text-align: center; border-left: 1px solid rgba(255,255,255,0.2); border-right: 1px solid rgba(255,255,255,0.2);">
+                        <div style="font-size: 0.8rem; opacity: 0.85; margin-bottom: 4px;">REALM</div>
+                        <div style="font-size: 1.25rem; font-weight: 600;">${escapeHtml(status.realm)}</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 0.8rem; opacity: 0.85; margin-bottom: 4px;">SERVIDOR DNS</div>
+                        <div style="font-size: 1.25rem; font-weight: 600;">${window.location.hostname}</div>
+                    </div>
+                </div>
+                
+                <!-- Steps -->
+                <div style="display: grid; gap: 16px;">
+                    <div style="display: flex; gap: 16px; padding: 20px; background: var(--bg-secondary, #f9fafb); border-radius: 12px; border: 1px solid var(--border-color, #e5e7eb);">
+                        <div style="width: 40px; height: 40px; background: #dbeafe; color: #1d4ed8; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">1</div>
+                        <div>
+                            <h4 style="margin: 0 0 8px 0; font-size: 1rem;">Configurar DNS del equipo Windows</h4>
+                            <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary, #6b7280); line-height: 1.7;">
+                                <li>Panel de Control → Redes → Cambiar opciones del adaptador</li>
+                                <li>Clic derecho en tu conexión → Propiedades → IPv4</li>
+                                <li>Usar servidor DNS: <code style="background: white; padding: 2px 8px; border-radius: 4px; font-weight: 600;">${window.location.hostname}</code></li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 16px; padding: 20px; background: var(--bg-secondary, #f9fafb); border-radius: 12px; border: 1px solid var(--border-color, #e5e7eb);">
+                        <div style="width: 40px; height: 40px; background: #dbeafe; color: #1d4ed8; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">2</div>
+                        <div>
+                            <h4 style="margin: 0 0 8px 0; font-size: 1rem;">Unir el equipo al dominio</h4>
+                            <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary, #6b7280); line-height: 1.7;">
+                                <li>Clic derecho en "Este equipo" → Propiedades → Configuración avanzada</li>
+                                <li>Pestaña "Nombre de equipo" → Cambiar</li>
+                                <li>Seleccionar <strong>Dominio</strong> e introducir: <code style="background: white; padding: 2px 8px; border-radius: 4px; font-weight: 600;">${escapeHtml(status.realm)}</code></li>
+                                <li>Credenciales: <code style="background: white; padding: 2px 8px; border-radius: 4px;">Administrator</code> + contraseña del dominio</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 16px; padding: 20px; background: var(--bg-secondary, #f9fafb); border-radius: 12px; border: 1px solid var(--border-color, #e5e7eb);">
+                        <div style="width: 40px; height: 40px; background: #d1fae5; color: #166534; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">3</div>
+                        <div>
+                            <h4 style="margin: 0 0 8px 0; font-size: 1rem;">Reiniciar y listo ✓</h4>
+                            <p style="margin: 0; color: var(--text-secondary, #6b7280);">
+                                Tras reiniciar, podrás hacer login con cualquier usuario del dominio.<br>
+                                Formato: <code style="background: white; padding: 2px 8px; border-radius: 4px;">${escapeHtml(status.domain)}\\usuario</code> o <code style="background: white; padding: 2px 8px; border-radius: 4px;">usuario@${escapeHtml(status.realm)}</code>
+                            </p>
+                        </div>
+                    </div>
                 </div>
             `;
             break;
