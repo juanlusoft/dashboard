@@ -8836,52 +8836,245 @@ async function renderADContent() {
         if (!status.provisioned) {
             // Installed but not provisioned - show provision form
             container.innerHTML = `
-                <div class="card">
-                    <h3>🔧 Configurar Dominio</h3>
-                    <p style="color: var(--text-secondary); margin-bottom: 20px;">
-                        Samba AD DC está instalado. Configura tu dominio para empezar.
-                    </p>
-                    
-                    <form id="ad-provision-form" class="form-grid">
-                        <div class="form-group">
-                            <label>Nombre del dominio (NetBIOS)</label>
-                            <input type="text" id="ad-domain" placeholder="HOMELABS" 
-                                   pattern="[A-Za-z][A-Za-z0-9]{0,14}" required
-                                   style="text-transform: uppercase;">
-                            <small>Máx 15 caracteres, solo letras y números</small>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>Realm (FQDN)</label>
-                            <input type="text" id="ad-realm" placeholder="homelabs.local" required>
-                            <small>Ejemplo: empresa.local, homelabs.lan</small>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>Contraseña de Administrator</label>
-                            <input type="password" id="ad-password" minlength="8" required>
-                            <small>Mínimo 8 caracteres (será la contraseña del admin del dominio)</small>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>Confirmar contraseña</label>
-                            <input type="password" id="ad-password-confirm" minlength="8" required>
-                        </div>
-                        
-                        <button type="submit" class="btn btn-primary" style="grid-column: 1 / -1;">
-                            🚀 Crear Dominio
-                        </button>
-                    </form>
-                </div>
+                <style>
+                    .ad-setup-container {
+                        display: grid;
+                        grid-template-columns: 1fr 1fr;
+                        gap: 24px;
+                        max-width: 1200px;
+                    }
+                    @media (max-width: 900px) {
+                        .ad-setup-container { grid-template-columns: 1fr; }
+                    }
+                    .ad-form-card {
+                        background: var(--card-bg, #fff);
+                        border-radius: 12px;
+                        padding: 28px;
+                        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+                        border: 1px solid var(--border-color, #e0e0e0);
+                    }
+                    .ad-form-header {
+                        display: flex;
+                        align-items: center;
+                        gap: 12px;
+                        margin-bottom: 8px;
+                    }
+                    .ad-form-header-icon {
+                        width: 48px;
+                        height: 48px;
+                        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                        border-radius: 12px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 24px;
+                    }
+                    .ad-form-header h3 {
+                        margin: 0;
+                        font-size: 1.25rem;
+                        font-weight: 600;
+                    }
+                    .ad-form-header p {
+                        margin: 4px 0 0 0;
+                        color: var(--text-secondary, #666);
+                        font-size: 0.875rem;
+                    }
+                    .ad-form-field {
+                        margin-bottom: 20px;
+                    }
+                    .ad-form-field label {
+                        display: block;
+                        font-weight: 500;
+                        margin-bottom: 6px;
+                        color: var(--text-primary, #333);
+                        font-size: 0.9rem;
+                    }
+                    .ad-form-field input {
+                        width: 100%;
+                        padding: 12px 14px;
+                        border: 1px solid var(--border-color, #d1d5db);
+                        border-radius: 8px;
+                        font-size: 0.95rem;
+                        transition: border-color 0.2s, box-shadow 0.2s;
+                        background: var(--input-bg, #fff);
+                        color: var(--text-primary, #333);
+                        box-sizing: border-box;
+                    }
+                    .ad-form-field input:focus {
+                        outline: none;
+                        border-color: #3b82f6;
+                        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+                    }
+                    .ad-form-field input::placeholder {
+                        color: var(--text-tertiary, #9ca3af);
+                    }
+                    .ad-form-field small {
+                        display: block;
+                        margin-top: 6px;
+                        color: var(--text-secondary, #666);
+                        font-size: 0.8rem;
+                    }
+                    .ad-form-row {
+                        display: grid;
+                        grid-template-columns: 1fr 1fr;
+                        gap: 16px;
+                    }
+                    @media (max-width: 500px) {
+                        .ad-form-row { grid-template-columns: 1fr; }
+                    }
+                    .ad-submit-btn {
+                        width: 100%;
+                        padding: 14px 24px;
+                        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        font-size: 1rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: transform 0.15s, box-shadow 0.15s;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 8px;
+                    }
+                    .ad-submit-btn:hover {
+                        transform: translateY(-1px);
+                        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+                    }
+                    .ad-submit-btn:disabled {
+                        opacity: 0.6;
+                        cursor: not-allowed;
+                        transform: none;
+                    }
+                    .ad-info-card {
+                        background: var(--card-bg, #fff);
+                        border-radius: 12px;
+                        padding: 28px;
+                        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+                        border: 1px solid var(--border-color, #e0e0e0);
+                    }
+                    .ad-info-card h4 {
+                        margin: 0 0 16px 0;
+                        font-size: 1rem;
+                        font-weight: 600;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                    }
+                    .ad-info-item {
+                        display: flex;
+                        gap: 12px;
+                        padding: 14px 0;
+                        border-bottom: 1px solid var(--border-color, #e5e7eb);
+                    }
+                    .ad-info-item:last-child {
+                        border-bottom: none;
+                    }
+                    .ad-info-icon {
+                        width: 36px;
+                        height: 36px;
+                        background: var(--bg-tertiary, #f3f4f6);
+                        border-radius: 8px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 16px;
+                        flex-shrink: 0;
+                    }
+                    .ad-info-content strong {
+                        display: block;
+                        font-weight: 500;
+                        margin-bottom: 2px;
+                        color: var(--text-primary, #333);
+                    }
+                    .ad-info-content span {
+                        color: var(--text-secondary, #666);
+                        font-size: 0.85rem;
+                    }
+                </style>
                 
-                <div class="card" style="margin-top: 20px;">
-                    <h4>ℹ️ Información</h4>
-                    <ul style="color: var(--text-secondary); line-height: 1.8;">
-                        <li><strong>Nombre del dominio:</strong> Nombre corto tipo "EMPRESA" o "HOMELABS"</li>
-                        <li><strong>Realm:</strong> Nombre completo tipo "empresa.local" - usado para Kerberos</li>
-                        <li><strong>DNS:</strong> Samba incluye servidor DNS integrado</li>
-                        <li>Después de crear el dominio, podrás unir equipos Windows</li>
-                    </ul>
+                <div class="ad-setup-container">
+                    <div class="ad-form-card">
+                        <div class="ad-form-header">
+                            <div class="ad-form-header-icon">🏢</div>
+                            <div>
+                                <h3>Configurar Dominio</h3>
+                                <p>Samba AD DC instalado — configura tu dominio</p>
+                            </div>
+                        </div>
+                        
+                        <form id="ad-provision-form" style="margin-top: 24px;">
+                            <div class="ad-form-field">
+                                <label>Nombre del dominio (NetBIOS)</label>
+                                <input type="text" id="ad-domain" placeholder="HOMELABS" 
+                                       pattern="[A-Za-z][A-Za-z0-9]{0,14}" required
+                                       style="text-transform: uppercase;">
+                                <small>Máx 15 caracteres, solo letras y números</small>
+                            </div>
+                            
+                            <div class="ad-form-field">
+                                <label>Realm (FQDN)</label>
+                                <input type="text" id="ad-realm" placeholder="homelabs.local" required>
+                                <small>Nombre completo del dominio para Kerberos</small>
+                            </div>
+                            
+                            <div class="ad-form-row">
+                                <div class="ad-form-field">
+                                    <label>Contraseña Administrator</label>
+                                    <input type="password" id="ad-password" minlength="8" required
+                                           placeholder="••••••••">
+                                    <small>Mínimo 8 caracteres</small>
+                                </div>
+                                
+                                <div class="ad-form-field">
+                                    <label>Confirmar contraseña</label>
+                                    <input type="password" id="ad-password-confirm" minlength="8" required
+                                           placeholder="••••••••">
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="ad-submit-btn">
+                                <span>🚀</span> Crear Dominio
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <div class="ad-info-card">
+                        <h4>📘 ¿Qué es Active Directory?</h4>
+                        
+                        <div class="ad-info-item">
+                            <div class="ad-info-icon">🏷️</div>
+                            <div class="ad-info-content">
+                                <strong>Nombre NetBIOS</strong>
+                                <span>Nombre corto del dominio (ej: HOMELABS, EMPRESA)</span>
+                            </div>
+                        </div>
+                        
+                        <div class="ad-info-item">
+                            <div class="ad-info-icon">🌐</div>
+                            <div class="ad-info-content">
+                                <strong>Realm (FQDN)</strong>
+                                <span>Nombre completo usado por Kerberos (ej: homelabs.local)</span>
+                            </div>
+                        </div>
+                        
+                        <div class="ad-info-item">
+                            <div class="ad-info-icon">🖥️</div>
+                            <div class="ad-info-content">
+                                <strong>Unir equipos Windows</strong>
+                                <span>Los PCs podrán unirse al dominio con login centralizado</span>
+                            </div>
+                        </div>
+                        
+                        <div class="ad-info-item">
+                            <div class="ad-info-icon">🔐</div>
+                            <div class="ad-info-content">
+                                <strong>DNS integrado</strong>
+                                <span>Samba incluye servidor DNS para el dominio</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             `;
             
