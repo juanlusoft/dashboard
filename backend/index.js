@@ -254,7 +254,7 @@ allowedRootFiles.forEach(file => {
 app.use('/frontend/i18n', express.static(path.join(__dirname, '../frontend/i18n')));
 
 // SPA routes - serve index.html for frontend views
-const spaRoutes = ['/', '/dashboard', '/docker', '/storage', '/files', '/network', '/system', '/terminal', '/shortcuts', '/backup', '/logs', '/users', '/active-backup', '/cloud-sync', '/cloud-backup', '/homestore', '/stacks', '/setup', '/login', '/setup/storage'];
+const spaRoutes = ['/', '/dashboard', '/docker', '/storage', '/files', '/network', '/system', '/terminal', '/shortcuts', '/backup', '/logs', '/users', '/active-backup', '/active-directory', '/cloud-sync', '/cloud-backup', '/homestore', '/stacks', '/setup', '/login', '/setup/storage'];
 spaRoutes.forEach(route => {
     app.get(route, (req, res) => {
         res.sendFile(path.join(__dirname, '../index.html'));
