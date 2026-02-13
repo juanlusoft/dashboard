@@ -176,15 +176,16 @@ router.post('/provision', async (req, res) => {
         }
         
         // Stop existing Samba services
-        await execAsync('systemctl stop smbd nmbd winbind 2>/dev/null || true');
-        await execAsync('systemctl disable smbd nmbd winbind 2>/dev/null || true');
+        await execAsync('sudo systemctl stop smbd nmbd winbind 2>/dev/null || true');
+        await execAsync('sudo systemctl disable smbd nmbd winbind 2>/dev/null || true');
         
-        // Backup existing smb.conf
-        await execAsync(`[ -f ${SAMBA_CONF} ] && mv ${SAMBA_CONF} ${SAMBA_CONF}.backup.$(date +%Y%m%d%H%M%S) || true`);
+        // Backup and REMOVE existing smb.conf (samba-tool requires it to not exist)
+        await execAsync(`sudo mv ${SAMBA_CONF} ${SAMBA_CONF}.backup.$(date +%Y%m%d%H%M%S) 2>/dev/null || true`);
+        await execAsync(`sudo rm -f ${SAMBA_CONF}`);
         
         // Provision the domain
         const provisionCmd = [
-            'samba-tool domain provision',
+            'sudo samba-tool domain provision',
             '--use-rfc2307',
             `--realm=${realm.toUpperCase()}`,
             `--domain=${domain.toUpperCase()}`,
@@ -196,20 +197,21 @@ router.post('/provision', async (req, res) => {
         await execAsync(provisionCmd, { timeout: 300000 }); // 5 minutes
         
         // Copy Kerberos config
-        await execAsync(`cp ${SAMBA_PRIVATE}/krb5.conf /etc/krb5.conf`);
+        await execAsync(`sudo cp ${SAMBA_PRIVATE}/krb5.conf /etc/krb5.conf`);
         
         // Enable and start samba-ad-dc
-        await execAsync('systemctl unmask samba-ad-dc');
-        await execAsync('systemctl enable samba-ad-dc');
-        await execAsync('systemctl start samba-ad-dc');
+        await execAsync('sudo systemctl unmask samba-ad-dc');
+        await execAsync('sudo systemctl enable samba-ad-dc');
+        await execAsync('sudo systemctl start samba-ad-dc');
         
         // Mark as provisioned
-        await fs.mkdir('/etc/homepinas', { recursive: true });
-        await fs.writeFile(AD_PROVISIONED_FLAG, JSON.stringify({
+        await execAsync('sudo mkdir -p /etc/homepinas');
+        const flagData = JSON.stringify({
             domain: domain.toUpperCase(),
             realm: realm.toUpperCase(),
             provisionedAt: new Date().toISOString()
-        }));
+        });
+        await execAsync(`echo '${flagData}' | sudo tee ${AD_PROVISIONED_FLAG} > /dev/null`);
         
         res.json({ 
             success: true, 
