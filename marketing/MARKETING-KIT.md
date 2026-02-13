@@ -79,6 +79,8 @@ marketing/
 - 🌡️ Hardware/Temperatura
 - 🏠 Home/NAS
 - ⚡ Velocidad/Instalación
+- 🏢 Active Directory
+- 💼 Enterprise/Oficina
 
 ---
 

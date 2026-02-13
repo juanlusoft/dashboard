@@ -156,6 +156,51 @@ Don't overpay for Synology.
 
 ---
 
+### Feature highlight - Active Directory
+🏢 NEW: Active Directory in HomePiNAS v2.7
+
+Turn your Pi into a Domain Controller:
+- Join Windows PCs to domain
+- Centralized user management
+- Group policies ready
+- Beautiful web UI
+
+Synology charges extra for this. We include it FREE.
+
+[SCREENSHOT del dashboard AD]
+
+#ActiveDirectory #Windows #homelab
+
+---
+
+### Active Directory - Español
+🏢 NUEVO: Active Directory en HomePiNAS
+
+Tu Raspberry Pi ahora es un controlador de dominio:
+
+✅ Une equipos Windows al dominio
+✅ Gestiona usuarios desde el dashboard
+✅ Login centralizado
+✅ Incluido gratis (Synology cobra aparte)
+
+Perfecto para pequeñas oficinas.
+
+github.com/juanlusoft/homepinas-v2
+
+---
+
+### Active Directory comparison
+Synology Directory Server: Pago extra 💰
+QNAP AD: Complejo de configurar 😤
+TrueNAS: No tiene ❌
+
+HomePiNAS: Incluido + 2 clics ✅
+
+Domain Controller on a Raspberry Pi.
+The future is now.
+
+---
+
 # Hashtags recomendados:
 
 Principales:
