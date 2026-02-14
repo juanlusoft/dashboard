@@ -51,7 +51,7 @@ When the Raspberry Pi boots for the first time:
 
 After installation completes:
 
-- **Dashboard:** `https://<ip-address>:3001`
+- **Dashboard:** `https://<ip-address>`
 - **SSH:** `ssh user@<ip-address>`
 - **SMB Share:** `\\<ip-address>\Storage`
 

@@ -4,7 +4,7 @@ App standalone para descubrir dispositivos HomePiNAS en tu red local.
 
 ## Características
 
-- 🔍 **Escaneo automático** via mDNS, puerto 3001 y hostnames conocidos
+- 🔍 **Escaneo automático** via mDNS, puerto 443 y hostnames conocidos
 - 📋 **Lista de dispositivos** con nombre, IP y versión
 - 🚀 **Un clic para conectar** - abre el navegador directamente
 - 🎨 **UI moderna** y minimalista
@@ -54,7 +54,7 @@ Puedes generar los formatos desde un PNG con herramientas como [electron-icon-bu
 ## Métodos de descubrimiento
 
 1. **mDNS/Bonjour** - Busca servicios `_http._tcp` que contengan "homepinas"
-2. **Subnet scan** - Escanea el puerto 3001 en toda la subred local
+2. **Subnet scan** - Escanea el puerto 443 en toda la subred local
 3. **Hostnames conocidos** - Prueba `pinas.local`, `homepinas.local`, etc.
 
 ## Estructura

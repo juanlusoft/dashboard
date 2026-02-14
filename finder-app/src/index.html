@@ -338,7 +338,7 @@
           </div>
           <div class="device-info">
             <div class="device-name">${escapeHtml(device.name)}</div>
-            <div class="device-ip">${device.ip}:3001</div>
+            <div class="device-ip">${device.ip}</div>
             ${device.version ? `<div class="device-version">v${device.version}</div>` : ''}
           </div>
           <div class="device-arrow">
@@ -351,7 +351,7 @@
     }
     
     function openNAS(ip) {
-      window.finder.openNAS(`http://${ip}:3001`);
+      window.finder.openNAS(`https://${ip}`);
     }
     
     function escapeHtml(text) {

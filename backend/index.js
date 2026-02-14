@@ -55,6 +55,10 @@ const upsRoutes = require('./routes/ups');
 const ddnsRoutes = require('./routes/ddns');
 const activeBackupRoutes = require('./routes/active-backup');
 const cloudSyncRoutes = require('./routes/cloud-sync');
+const cloudBackupRoutes = require('./routes/cloud-backup');
+const homestoreRoutes = require('./routes/homestore');
+const stacksRoutes = require('./routes/stacks');
+const activeDirectoryRoutes = require('./routes/active-directory');
 
 // Import terminal WebSocket handler
 let setupTerminalWebSocket;
@@ -67,10 +71,74 @@ try {
 
 // Configuration
 const VERSION = '2.3.0';
-const HTTPS_PORT = process.env.HTTPS_PORT || 3001;
-const HTTP_PORT = process.env.HTTP_PORT || 3000;
+const HTTPS_PORT = process.env.HTTPS_PORT || 443;
+const HTTP_PORT = process.env.HTTP_PORT || 80;
 const SSL_CERT_PATH = path.join(__dirname, 'certs', 'server.crt');
 const SSL_KEY_PATH = path.join(__dirname, 'certs', 'server.key');
+
+// Auto-generate SSL certificates if they don't exist
+function ensureSSLCerts() {
+    const certsDir = path.join(__dirname, 'certs');
+    if (!fs.existsSync(certsDir)) {
+        fs.mkdirSync(certsDir, { recursive: true });
+    }
+    
+    if (!fs.existsSync(SSL_CERT_PATH) || !fs.existsSync(SSL_KEY_PATH)) {
+        console.log('[SSL] Certificates not found, generating self-signed certificates...');
+        try {
+            const { execSync } = require('child_process');
+            const os = require('os');
+            const hostname = os.hostname();
+            const interfaces = os.networkInterfaces();
+            let localIP = '127.0.0.1';
+            for (const iface of Object.values(interfaces)) {
+                for (const addr of iface) {
+                    if (addr.family === 'IPv4' && !addr.internal) {
+                        localIP = addr.address;
+                        break;
+                    }
+                }
+            }
+            
+            const sslConfig = `[req]
+distinguished_name = req_distinguished_name
+x509_extensions = v3_req
+prompt = no
+
+[req_distinguished_name]
+C = ES
+ST = Local
+L = HomeLab
+O = HomePiNAS
+OU = NAS
+CN = ${hostname}
+
+[v3_req]
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = ${hostname}
+DNS.2 = homepinas.local
+DNS.3 = localhost
+IP.1 = ${localIP}
+IP.2 = 127.0.0.1
+`;
+            const configPath = '/mnt/storage/.tmp/homepinas-ssl.cnf';
+            fs.writeFileSync(configPath, sslConfig);
+            
+            execSync(`openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout "${SSL_KEY_PATH}" -out "${SSL_CERT_PATH}" -config "${configPath}"`, { stdio: 'pipe' });
+            fs.chmodSync(SSL_KEY_PATH, 0o600);
+            fs.unlinkSync(configPath);
+            
+            console.log('[SSL] Self-signed certificates generated successfully');
+        } catch (e) {
+            console.error('[SSL] Failed to generate certificates:', e.message);
+        }
+    }
+}
+ensureSSLCerts();
 
 // Initialize Express app
 const app = express();
@@ -83,6 +151,18 @@ startSessionCleanup();
 const configDir = path.join(__dirname, 'config');
 if (!fs.existsSync(configDir)) {
     fs.mkdirSync(configDir, { recursive: true });
+}
+
+// Ensure temp directories exist on storage (not eMMC)
+const storageTmpDirs = ['/mnt/storage/.tmp', '/mnt/storage/.uploads-tmp'];
+for (const dir of storageTmpDirs) {
+    try {
+        if (fs.existsSync('/mnt/storage') && !fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+    } catch (e) {
+        console.warn(`[WARN] Could not create ${dir}:`, e.message);
+    }
 }
 
 // =============================================================================
@@ -98,8 +178,9 @@ app.use(helmet({
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
             imgSrc: ["'self'", "data:", "https://api.qrserver.com"],
-            connectSrc: ["'self'", "ws:", "wss:"],
+            connectSrc: ["'self'", "ws:", "wss:", "https://cdn.jsdelivr.net"],
             frameAncestors: ["'none'"], // Prevent clickjacking
+            upgradeInsecureRequests: null, // Allow HTTP for local network
         },
     },
     hsts: false, // Disabled for local network (self-signed certs)
@@ -117,7 +198,7 @@ app.use(cors({
         // Allow requests with no origin (same-origin, mobile apps, curl, etc.)
         if (!origin) return callback(null, true);
         
-        // Allow local network IPs and localhost
+        // Allow local network IPs, localhost, and mDNS (.local) hostnames
         const allowedPatterns = [
             /^https?:\/\/localhost(:\d+)?$/,
             /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
@@ -125,6 +206,7 @@ app.use(cors({
             /^https?:\/\/10\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/,
             /^https?:\/\/172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}(:\d+)?$/,
             /^https?:\/\/\[::1\](:\d+)?$/,
+            /^https?:\/\/[a-zA-Z0-9-]+\.local(:\d+)?$/,  // mDNS hostnames (homepinas.local, etc.)
         ];
         
         const isAllowed = allowedPatterns.some(pattern => pattern.test(origin));
@@ -144,25 +226,35 @@ app.use(generalLimiter);
 // Body parsing
 app.use(express.json({ limit: '10kb' }));
 
-// Cloud Sync routes (before CSRF - uses session auth only)
-app.use('/api/cloud-sync', cloudSyncRoutes);
-
 // CSRF protection for state-changing requests
 app.use(csrfProtection);
+
+// Cloud Sync/Backup routes (after CSRF for proper protection)
+app.use('/api/cloud-sync', cloudSyncRoutes);
+app.use('/api/cloud-backup', cloudBackupRoutes);
 
 // =============================================================================
 // STATIC FILES
 // =============================================================================
 
-// Serve frontend files
-app.use(express.static(path.join(__dirname, '../')));
+// SECURITY: Serve only specific directories - NOT the project root
+// This prevents exposure of backend source, config, package.json, etc.
 app.use('/frontend', express.static(path.join(__dirname, '../frontend')));
+app.use('/icons', express.static(path.join(__dirname, '../icons')));
+
+// Serve only specific root-level files needed by the browser
+const allowedRootFiles = ['index.html', 'manifest.json', 'service-worker.js'];
+allowedRootFiles.forEach(file => {
+    app.get(`/${file}`, (req, res) => {
+        res.sendFile(path.join(__dirname, '..', file));
+    });
+});
 
 // Serve i18n files
 app.use('/frontend/i18n', express.static(path.join(__dirname, '../frontend/i18n')));
 
 // SPA routes - serve index.html for frontend views
-const spaRoutes = ['/', '/dashboard', '/docker', '/storage', '/files', '/network', '/system', '/terminal', '/shortcuts', '/backup', '/logs', '/users', '/active-backup', '/cloud-sync'];
+const spaRoutes = ['/', '/dashboard', '/docker', '/storage', '/files', '/network', '/system', '/terminal', '/shortcuts', '/backup', '/logs', '/users', '/active-backup', '/active-directory', '/cloud-sync', '/cloud-backup', '/homestore', '/stacks', '/setup', '/login', '/setup/storage'];
 spaRoutes.forEach(route => {
     app.get(route, (req, res) => {
         res.sendFile(path.join(__dirname, '../index.html'));
@@ -233,7 +325,20 @@ app.use('/api/ddns', ddnsRoutes);
 // Active Backup for Business
 app.use('/api/active-backup', activeBackupRoutes);
 
-// Cloud Sync routes registered before CSRF middleware
+// HomeStore - App marketplace
+app.use('/api/homestore', homestoreRoutes);
+app.use('/api/stacks', stacksRoutes);
+app.use('/api/ad', activeDirectoryRoutes);
+
+// =============================================================================
+// GLOBAL ERROR HANDLER
+// =============================================================================
+
+// Catch unhandled errors - prevent stack traces from leaking to client
+app.use((err, req, res, next) => {
+    console.error(`[ERROR] ${req.method} ${req.path}:`, err.message);
+    res.status(err.status || 500).json({ error: 'Internal server error' });
+});
 
 // =============================================================================
 // SERVER STARTUP
@@ -270,10 +375,11 @@ if (httpsServer) {
     // Create a simple redirect app for HTTP
     httpApp = express();
     httpApp.use((req, res) => {
-        // Redirect to HTTPS with same host but different port
+        // Redirect to HTTPS (omit port if using standard 443)
         const host = req.headers.host?.split(':')[0] || req.hostname;
-        const httpsUrl = `https://${host}:${HTTPS_PORT}${req.url}`;
-        res.redirect(301, httpsUrl);
+        const portSuffix = HTTPS_PORT == 443 ? '' : `:${HTTPS_PORT}`;
+        const httpsUrl = `https://${host}${portSuffix}${req.url}`;
+        res.redirect(302, httpsUrl);
     });
     console.log(`[HTTP]  Will redirect all traffic to HTTPS`);
 } else {

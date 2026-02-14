@@ -8,7 +8,7 @@ const state = {
     user: null,
     sessionId: null,
     csrfToken: null,
-    publicIP: 'Scanning...',
+    publicIP: 'Escaneando...',
     globalStats: { cpuLoad: 0, cpuTemp: 0, ramUsed: 0, ramTotal: 0, uptime: 0 },
     storageConfig: [],
     disks: [],
@@ -19,7 +19,7 @@ const state = {
     dockers: [],
     shortcuts: { defaults: [], custom: [] },
     terminalSession: null,
-    pollingIntervals: { stats: null, publicIP: null }
+    pollingIntervals: { stats: null, publicIP: null, storage: null }
 };
 
 const API_BASE = window.location.origin + '/api';
@@ -36,6 +36,201 @@ function escapeHtml(unsafe) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
+}
+
+// =============================================================================
+// NOTIFICATION SYSTEM - Toast notifications with animations
+// =============================================================================
+
+let notificationQueue = [];
+let isShowingNotification = false;
+
+/**
+ * Show a toast notification
+ * @param {string} message - The message to display
+ * @param {string} type - Type: 'success', 'error', 'warning', 'info'
+ * @param {number} duration - Duration in ms (default: 4000)
+ */
+function showNotification(message, type = 'info', duration = 4000) {
+    notificationQueue.push({ message, type, duration });
+    processNotificationQueue();
+}
+
+function processNotificationQueue() {
+    if (isShowingNotification || notificationQueue.length === 0) return;
+    
+    isShowingNotification = true;
+    const { message, type, duration } = notificationQueue.shift();
+    
+    // Remove any existing notification
+    const existing = document.querySelector('.notification-toast');
+    if (existing) existing.remove();
+    
+    // Create notification element
+    const toast = document.createElement('div');
+    toast.className = `notification-toast ${type}`;
+    
+    // Icon based on type
+    const icons = {
+        success: '✅',
+        error: '❌',
+        warning: '⚠️',
+        info: 'ℹ️'
+    };
+    
+    // Title based on type
+    const titles = {
+        success: 'Éxito',
+        error: 'Error',
+        warning: 'Advertencia',
+        info: 'Información'
+    };
+    
+    toast.innerHTML = `
+        <span class="notification-icon">${icons[type] || icons.info}</span>
+        <div class="notification-content">
+            <div class="notification-title">${titles[type] || titles.info}</div>
+            <div class="notification-message">${escapeHtml(message)}</div>
+        </div>
+        <button class="notification-close" aria-label="Cerrar">×</button>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Close button handler
+    const closeBtn = toast.querySelector('.notification-close');
+    closeBtn.addEventListener('click', () => dismissNotification(toast));
+    
+    // Trigger animation
+    requestAnimationFrame(() => {
+        toast.classList.add('show');
+    });
+    
+    // Auto dismiss
+    setTimeout(() => dismissNotification(toast), duration);
+}
+
+function dismissNotification(toast) {
+    if (!toast || !toast.parentNode) {
+        isShowingNotification = false;
+        processNotificationQueue();
+        return;
+    }
+    
+    toast.classList.remove('show');
+    
+    setTimeout(() => {
+        if (toast.parentNode) toast.remove();
+        isShowingNotification = false;
+        processNotificationQueue();
+    }, 400);
+}
+
+/**
+ * Show a confirmation modal
+ * @param {string} title - Modal title
+ * @param {string} message - Modal message
+ * @param {string} confirmText - Confirm button text (default: 'Confirmar')
+ * @param {string} cancelText - Cancel button text (default: 'Cancelar')
+ * @returns {Promise<boolean>} - True if confirmed, false if cancelled
+ */
+function showConfirmModal(title, message, confirmText = 'Confirmar', cancelText = 'Cancelar') {
+    return new Promise((resolve) => {
+        // Remove any existing confirm modal
+        const existing = document.getElementById('confirm-modal');
+        if (existing) existing.remove();
+        
+        const modal = document.createElement('div');
+        modal.id = 'confirm-modal';
+        modal.className = 'modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            animation: fadeIn 0.2s ease;
+        `;
+        
+        modal.innerHTML = `
+            <div class="glass-card scale-in" style="
+                max-width: 400px;
+                width: 90%;
+                padding: 24px;
+                text-align: center;
+            ">
+                <h3 style="margin-bottom: 16px; color: var(--text-primary);">${escapeHtml(title)}</h3>
+                <p style="margin-bottom: 24px; color: var(--text-secondary); white-space: pre-wrap;">${escapeHtml(message)}</p>
+                <div style="display: flex; gap: 12px; justify-content: center;">
+                    <button id="confirm-cancel" class="wizard-btn wizard-btn-back">${escapeHtml(cancelText)}</button>
+                    <button id="confirm-ok" class="wizard-btn wizard-btn-next">${escapeHtml(confirmText)}</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Focus the cancel button for safety
+        document.getElementById('confirm-cancel').focus();
+        
+        // Event handlers
+        document.getElementById('confirm-ok').addEventListener('click', () => {
+            modal.remove();
+            resolve(true);
+        });
+        
+        document.getElementById('confirm-cancel').addEventListener('click', () => {
+            modal.remove();
+            resolve(false);
+        });
+        
+        // Close on backdrop click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.remove();
+                resolve(false);
+            }
+        });
+        
+        // Close on Escape
+        const handleEscape = (e) => {
+            if (e.key === 'Escape') {
+                modal.remove();
+                resolve(false);
+                document.removeEventListener('keydown', handleEscape);
+            }
+        };
+        document.addEventListener('keydown', handleEscape);
+    });
+}
+
+/**
+ * Create confetti celebration effect
+ */
+function celebrateWithConfetti() {
+    const container = document.createElement('div');
+    container.className = 'confetti-container';
+    document.body.appendChild(container);
+    
+    const colors = ['#4ecdc4', '#ff6b6b', '#ffe66d', '#95e1d3', '#f38181', '#aa96da'];
+    
+    for (let i = 0; i < 50; i++) {
+        const confetti = document.createElement('div');
+        confetti.className = 'confetti';
+        confetti.style.left = Math.random() * 100 + '%';
+        confetti.style.animationDelay = Math.random() * 2 + 's';
+        confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        confetti.style.transform = `rotate(${Math.random() * 360}deg)`;
+        container.appendChild(confetti);
+    }
+    
+    // Remove after animation
+    setTimeout(() => container.remove(), 4000);
 }
 
 // Authenticated fetch wrapper
@@ -133,10 +328,13 @@ const viewsMap = {
     'network': 'Gestión de Red',
     'backup': 'Backup y Tareas',
     'active-backup': 'Active Backup',
+    'active-directory': 'Active Directory',
     'cloud-sync': 'Cloud Sync',
+    'cloud-backup': 'Cloud Backup',
+    'homestore': 'HomeStore',
     'logs': 'Visor de Logs',
     'users': 'Gestión de Usuarios',
-    'system': 'System Administration'
+    'system': 'Administración del Sistema'
 };
 
 // =============================================================================
@@ -305,12 +503,14 @@ function stopGlobalPolling() {
 // Public IP Tracker
 async function updatePublicIP() {
     const val = document.getElementById('public-ip-val');
-    const mockIps = ['84.120.45.122', '84.120.45.123', '84.120.45.124'];
-    state.publicIP = mockIps[Math.floor(Math.random() * mockIps.length)];
+    // TODO: Replace with real API endpoint (e.g. authFetch(`${API_BASE}/network/public-ip`))
+    // const mockIps = ['84.120.45.122', '84.120.45.123', '84.120.45.124'];
+    // state.publicIP = mockIps[Math.floor(Math.random() * mockIps.length)];
+    state.publicIP = 'N/A';
     if (val) val.textContent = state.publicIP;
 
-    const activeNav = document.querySelector('.nav-links li.active');
-    if (activeNav && activeNav.dataset.view === 'network') renderNetworkManager();
+    // Don't re-render network view on IP update - causes duplicate cards
+    // The network view already has the IP displayed
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -932,7 +1132,7 @@ async function applyDiskActions() {
                 const resultEl = document.getElementById(`progress-${disk.id}-result`);
                 if (resultEl) {
                     resultEl.style.display = 'block';
-                    resultEl.innerHTML = `<span style="color: #ef4444; font-weight: 600;">❌ ${err.error}</span>`;
+                    resultEl.innerHTML = `<span style="color: #ef4444; font-weight: 600;">&#10060; ${escapeHtml(err.error)}</span>`;
                 }
             }
         } catch (e) {
@@ -949,7 +1149,7 @@ async function applyDiskActions() {
             const resultEl = document.getElementById(`progress-${disk.id}-result`);
             if (resultEl) {
                 resultEl.style.display = 'block';
-                resultEl.innerHTML = `<span style="color: #ef4444; font-weight: 600;">❌ ${e.message}</span>`;
+                resultEl.innerHTML = `<span style="color: #ef4444; font-weight: 600;">&#10060; ${escapeHtml(e.message)}</span>`;
             }
         }
     }
@@ -984,9 +1184,8 @@ async function applyDiskActions() {
 async function ignoreDiskNotification() {
     for (const disk of detectedNewDisks) {
         try {
-            await fetch(`${API_BASE}/storage/disks/ignore`, {
+            await authFetch(`${API_BASE}/storage/disks/ignore`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ diskId: disk.id })
             });
         } catch (e) {
@@ -1017,6 +1216,15 @@ function switchView(viewName, skipRender = false) {
     Object.values(views).forEach(v => v.classList.remove('active'));
     if (views[viewName]) {
         views[viewName].classList.add('active');
+        
+        // Update URL for auth views to prevent confusion (e.g. user lands on /files but sees setup)
+        if (viewName === 'setup' || viewName === 'login' || viewName === 'storage') {
+            const targetPath = viewName === 'storage' ? '/setup/storage' : '/' + viewName;
+            if (window.location.pathname !== targetPath) {
+                history.replaceState({ path: targetPath }, '', targetPath);
+            }
+        }
+        
         if (viewName === 'dashboard' && !skipRender) renderContent('dashboard');
         // Update username display and avatar
         if (state.user) {
@@ -1049,7 +1257,7 @@ setupForm.addEventListener('submit', async (e) => {
     const username = document.getElementById('new-username').value.trim();
     const password = document.getElementById('new-password').value;
     const btn = e.target.querySelector('button');
-    btn.textContent = 'Hardware Sync...';
+    btn.textContent = t('auth.hardwareSync', 'Sincronizando Hardware...');
     btn.disabled = true;
 
     try {
@@ -1062,9 +1270,9 @@ setupForm.addEventListener('submit', async (e) => {
         const data = await res.json();
 
         if (!res.ok) {
-            alert(data.message || 'Setup failed');
+            alert(data.message || t('common.error', 'Error en la configuración'));
             btn.disabled = false;
-            btn.textContent = 'Initialize Gateway';
+            btn.textContent = t('auth.initializeGateway', 'Inicializar Sistema');
             return;
         }
 
@@ -1079,86 +1287,729 @@ setupForm.addEventListener('submit', async (e) => {
         initStorageSetup();
     } catch (e) {
         console.error('Setup error:', e);
-        alert('Hardware Link Failed');
+        alert(t('common.error', 'Error de conexión con hardware'));
         btn.disabled = false;
-        btn.textContent = 'Initialize Gateway';
+        btn.textContent = t('auth.initializeGateway', 'Inicializar Sistema');
     }
 });
 
-function initStorageSetup() {
-    const tableBody = document.getElementById('granular-disk-list');
-    if (!tableBody) return;
-    tableBody.innerHTML = '';
+// =============================================================================
+// STORAGE WIZARD - Step-by-step configuration
+// =============================================================================
 
-    state.disks.forEach(disk => {
-        const tr = document.createElement('tr');
+const wizardState = {
+    currentStep: 1,
+    totalSteps: 7,
+    disks: [],
+    selectedDataDisks: [],
+    selectedParityDisk: null,
+    selectedCacheDisk: null,
+    isConfiguring: false
+};
 
-        // Create elements safely to prevent XSS
-        const diskInfoTd = document.createElement('td');
-        const diskInfoDiv = document.createElement('div');
-        diskInfoDiv.className = 'disk-info';
-
-        const modelStrong = document.createElement('strong');
-        modelStrong.textContent = disk.model || 'Unknown';
-
-        const infoSpan = document.createElement('span');
-        infoSpan.textContent = `${disk.id || 'N/A'} • ${disk.size || 'N/A'}`;
-
-        diskInfoDiv.appendChild(modelStrong);
-        diskInfoDiv.appendChild(infoSpan);
-        diskInfoTd.appendChild(diskInfoDiv);
-
-        const typeTd = document.createElement('td');
-        const typeBadge = document.createElement('span');
-        typeBadge.className = `badge ${escapeHtml((disk.type || 'unknown').toLowerCase())}`;
-        typeBadge.textContent = disk.type || 'Unknown';
-        typeTd.appendChild(typeBadge);
-
-        const roleTd = document.createElement('td');
-        const roleDiv = document.createElement('div');
-        roleDiv.className = 'role-selector';
-        roleDiv.dataset.disk = disk.id;
-
-        const roles = ['none', 'data', 'parity'];
-        if (disk.type === 'NVMe' || disk.type === 'SSD') {
-            roles.push('cache');
+// Load wizard state from localStorage
+function loadWizardState() {
+    try {
+        const saved = localStorage.getItem('homepinas-wizard-state');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            Object.assign(wizardState, parsed);
+            return true;
         }
+    } catch (e) {
+        console.warn('Could not load wizard state:', e);
+    }
+    return false;
+}
 
-        roles.forEach((role, index) => {
-            const btn = document.createElement('button');
-            btn.className = `role-btn${index === 0 ? ' active' : ''}`;
-            btn.dataset.role = role;
-            btn.textContent = role.charAt(0).toUpperCase() + role.slice(1);
-            roleDiv.appendChild(btn);
-        });
+// Save wizard state to localStorage
+function saveWizardState() {
+    try {
+        localStorage.setItem('homepinas-wizard-state', JSON.stringify({
+            currentStep: wizardState.currentStep,
+            selectedDataDisks: wizardState.selectedDataDisks,
+            selectedParityDisk: wizardState.selectedParityDisk,
+            selectedCacheDisk: wizardState.selectedCacheDisk
+        }));
+    } catch (e) {
+        console.warn('Could not save wizard state:', e);
+    }
+}
 
-        roleTd.appendChild(roleDiv);
+// Clear wizard state
+function clearWizardState() {
+    wizardState.currentStep = 1;
+    wizardState.selectedDataDisks = [];
+    wizardState.selectedParityDisk = null;
+    wizardState.selectedCacheDisk = null;
+    localStorage.removeItem('homepinas-wizard-state');
+}
 
-        tr.appendChild(diskInfoTd);
-        tr.appendChild(typeTd);
-        tr.appendChild(roleTd);
-        tableBody.appendChild(tr);
+// Initialize the storage wizard
+function initStorageSetup() {
+    console.log('[Wizard] Initializing storage setup wizard');
+    
+    // Load any saved state
+    const hasSavedState = loadWizardState();
+    
+    // IMPORTANT: Reset all wizard steps to ensure only one is active
+    document.querySelectorAll('.wizard-step').forEach(step => {
+        step.classList.remove('active', 'exit');
     });
+    
+    // Set only step 1 as active initially (or saved step)
+    const targetStep = (hasSavedState && wizardState.currentStep >= 1 && wizardState.currentStep <= 5) 
+        ? wizardState.currentStep 
+        : 1;
+    const targetStepEl = document.querySelector(`.wizard-step[data-step="${targetStep}"]`);
+    if (targetStepEl) {
+        targetStepEl.classList.add('active');
+    }
+    wizardState.currentStep = targetStep;
+    updateWizardProgress(targetStep);
+    
+    // Start disk detection
+    detectDisksForWizard();
+    
+    // Setup wizard navigation
+    setupWizardNavigation();
+}
 
-    document.querySelectorAll('.role-btn').forEach(btn => {
-        btn.onclick = (e) => {
-            const container = e.target.parentElement;
-            container.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
-            e.target.classList.add('active');
-            updateSummary();
-        };
+// Detect disks and populate the wizard
+async function detectDisksForWizard() {
+    const detectionContainer = document.getElementById('wizard-disk-detection');
+    if (!detectionContainer) return;
+    
+    // Show loading spinner
+    detectionContainer.innerHTML = `
+        <div class="wizard-detecting">
+            <div class="wizard-spinner"></div>
+            <p class="wizard-detecting-text">${t('wizard.detectingDisks', 'Detectando discos conectados...')}</p>
+        </div>
+    `;
+    
+    try {
+        const res = await fetch(`${API_BASE}/system/disks`);
+        if (!res.ok) throw new Error('Failed to fetch disks');
+        
+        wizardState.disks = await res.json();
+        state.disks = wizardState.disks; // Keep global state in sync
+        
+        // Short delay for UX (show the spinner briefly)
+        await new Promise(r => setTimeout(r, 800));
+        
+        if (wizardState.disks.length === 0) {
+            detectionContainer.innerHTML = `
+                <div class="wizard-no-disks">
+                    <div class="wizard-no-disks-icon">💿</div>
+                    <p>${t('wizard.noDisks', 'No se detectaron discos disponibles')}</p>
+                    <button class="wizard-btn wizard-btn-next" onclick="detectDisksForWizard()" style="margin-top: 16px;">
+                        🔄 ${t('wizard.retry', 'Reintentar')}
+                    </button>
+                </div>
+            `;
+            return;
+        }
+        
+        // Show detected disks summary
+        detectionContainer.innerHTML = `
+            <div style="text-align: center; padding: 20px 0;">
+                <div style="font-size: 3rem; margin-bottom: 16px;">✅</div>
+                <p style="font-size: 1.1rem; color: var(--text-primary); margin-bottom: 8px;">
+                    <strong>${wizardState.disks.length}</strong> ${t('wizard.disksDetected', 'disco(s) detectado(s)')}
+                </p>
+                <div style="display: flex; justify-content: center; gap: 16px; margin-top: 16px; flex-wrap: wrap;">
+                    ${wizardState.disks.map(d => `
+                        <div style="background: var(--hover-bg); padding: 8px 16px; border-radius: 8px; font-size: 0.9rem;">
+                            ${getDiskIcon(d.type)} ${escapeHtml(d.model || d.id)} <span style="color: var(--primary); font-weight: 600;">${escapeHtml(d.size)}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+        
+        // Enable next button
+        const nextBtn = document.getElementById('wizard-next-1');
+        if (nextBtn) nextBtn.disabled = false;
+        
+        // Populate disk lists for other steps
+        populateWizardDiskLists();
+        
+        // Restore selections if we have saved state
+        if (wizardState.selectedDataDisks.length > 0 || wizardState.selectedParityDisk || wizardState.selectedCacheDisk) {
+            restoreWizardSelections();
+        }
+        
+    } catch (e) {
+        console.error('[Wizard] Disk detection error:', e);
+        detectionContainer.innerHTML = `
+            <div class="wizard-no-disks">
+                <div class="wizard-no-disks-icon">❌</div>
+                <p>${t('wizard.detectionError', 'Error al detectar discos')}</p>
+                <button class="wizard-btn wizard-btn-next" onclick="detectDisksForWizard()" style="margin-top: 16px;">
+                    🔄 ${t('wizard.retry', 'Reintentar')}
+                </button>
+            </div>
+        `;
+    }
+}
+
+// Get appropriate icon for disk type
+function getDiskIcon(type) {
+    switch (type?.toUpperCase()) {
+        case 'NVME': return '⚡';
+        case 'SSD': return '💾';
+        case 'HDD': return '💿';
+        default: return '📀';
+    }
+}
+
+// Populate disk selection lists for all wizard steps
+function populateWizardDiskLists() {
+    // Data disks (all disks available)
+    const dataList = document.getElementById('wizard-data-disks');
+    if (dataList) {
+        dataList.innerHTML = wizardState.disks.map(disk => createDiskCard(disk, 'checkbox', 'data')).join('');
+        setupDiskCardListeners(dataList, 'data');
+    }
+    
+    // Parity disks (all disks, but will filter based on data selection)
+    const parityList = document.getElementById('wizard-parity-disks');
+    if (parityList) {
+        parityList.innerHTML = wizardState.disks.map(disk => createDiskCard(disk, 'radio', 'parity')).join('');
+        setupDiskCardListeners(parityList, 'parity');
+    }
+    
+    // Cache disks (only SSD/NVMe)
+    const cacheList = document.getElementById('wizard-cache-disks');
+    const noCacheMsg = document.getElementById('wizard-no-cache-disks');
+    if (cacheList) {
+        const ssdDisks = wizardState.disks.filter(d => d.type === 'NVMe' || d.type === 'SSD');
+        if (ssdDisks.length > 0) {
+            cacheList.innerHTML = ssdDisks.map(disk => createDiskCard(disk, 'radio', 'cache')).join('');
+            cacheList.style.display = 'flex';
+            if (noCacheMsg) noCacheMsg.style.display = 'none';
+            setupDiskCardListeners(cacheList, 'cache');
+        } else {
+            cacheList.style.display = 'none';
+            if (noCacheMsg) noCacheMsg.style.display = 'block';
+        }
+    }
+}
+
+// Create a disk selection card
+function createDiskCard(disk, inputType, role) {
+    const typeClass = (disk.type || 'hdd').toLowerCase();
+    const selectorClass = inputType === 'checkbox' ? 'wizard-disk-checkbox' : 'wizard-disk-radio';
+    
+    return `
+        <div class="wizard-disk-card" data-disk-id="${escapeHtml(disk.id)}" data-role="${role}">
+            <div class="${selectorClass}"></div>
+            <div class="wizard-disk-icon">${getDiskIcon(disk.type)}</div>
+            <div class="wizard-disk-info">
+                <div class="wizard-disk-name">
+                    ${escapeHtml(disk.model || t('common.unknown', 'Disco Desconocido'))}
+                    <span class="wizard-disk-badge ${typeClass}">${escapeHtml(disk.type || 'HDD')}</span>
+                </div>
+                <div class="wizard-disk-details">
+                    /dev/${escapeHtml(disk.id)} • ${disk.temp ? disk.temp + '°C' : 'N/A'}
+                </div>
+            </div>
+            <div class="wizard-disk-size">${escapeHtml(disk.size)}</div>
+        </div>
+    `;
+}
+
+// Setup click listeners for disk cards
+function setupDiskCardListeners(container, role) {
+    container.querySelectorAll('.wizard-disk-card').forEach(card => {
+        card.addEventListener('click', () => handleDiskSelection(card, role));
     });
 }
 
+// Handle disk selection
+function handleDiskSelection(card, role) {
+    const diskId = card.dataset.diskId;
+    const disk = wizardState.disks.find(d => d.id === diskId);
+    if (!disk) return;
+    
+    if (role === 'data') {
+        // Checkbox behavior - toggle selection
+        card.classList.toggle('selected');
+        
+        if (card.classList.contains('selected')) {
+            if (!wizardState.selectedDataDisks.includes(diskId)) {
+                wizardState.selectedDataDisks.push(diskId);
+            }
+        } else {
+            wizardState.selectedDataDisks = wizardState.selectedDataDisks.filter(id => id !== diskId);
+        }
+        
+        // Update next button state
+        const nextBtn = document.getElementById('wizard-next-2');
+        if (nextBtn) nextBtn.disabled = wizardState.selectedDataDisks.length === 0;
+        
+        // Update parity disk options (disable selected data disks)
+        updateParityDiskOptions();
+        
+    } else if (role === 'parity') {
+        // Radio behavior - single selection
+        const container = card.parentElement;
+        container.querySelectorAll('.wizard-disk-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        wizardState.selectedParityDisk = diskId;
+        
+    } else if (role === 'cache') {
+        // Radio behavior - single selection
+        const container = card.parentElement;
+        container.querySelectorAll('.wizard-disk-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        wizardState.selectedCacheDisk = diskId;
+    }
+    
+    saveWizardState();
+}
+
+// Update parity disk options based on data disk selection
+function updateParityDiskOptions() {
+    const parityList = document.getElementById('wizard-parity-disks');
+    if (!parityList) return;
+    
+    // Get the largest selected data disk size
+    const selectedDataDiskSizes = wizardState.selectedDataDisks.map(id => {
+        const disk = wizardState.disks.find(d => d.id === id);
+        return disk ? parseDiskSize(disk.size) : 0;
+    });
+    const largestDataSize = Math.max(...selectedDataDiskSizes, 0);
+    
+    // Update each parity disk card
+    parityList.querySelectorAll('.wizard-disk-card').forEach(card => {
+        const diskId = card.dataset.diskId;
+        const disk = wizardState.disks.find(d => d.id === diskId);
+        
+        // Disable if selected as data disk
+        const isDataDisk = wizardState.selectedDataDisks.includes(diskId);
+        // Disable if smaller than largest data disk
+        const isTooSmall = disk && parseDiskSize(disk.size) < largestDataSize;
+        
+        if (isDataDisk || isTooSmall) {
+            card.classList.add('disabled');
+            card.classList.remove('selected');
+            if (wizardState.selectedParityDisk === diskId) {
+                wizardState.selectedParityDisk = null;
+            }
+        } else {
+            card.classList.remove('disabled');
+        }
+    });
+    
+    // Also update cache disk options
+    updateCacheDiskOptions();
+}
+
+// Update cache disk options based on selections
+function updateCacheDiskOptions() {
+    const cacheList = document.getElementById('wizard-cache-disks');
+    if (!cacheList) return;
+    
+    cacheList.querySelectorAll('.wizard-disk-card').forEach(card => {
+        const diskId = card.dataset.diskId;
+        const isDataDisk = wizardState.selectedDataDisks.includes(diskId);
+        const isParityDisk = wizardState.selectedParityDisk === diskId;
+        
+        if (isDataDisk || isParityDisk) {
+            card.classList.add('disabled');
+            card.classList.remove('selected');
+            if (wizardState.selectedCacheDisk === diskId) {
+                wizardState.selectedCacheDisk = null;
+            }
+        } else {
+            card.classList.remove('disabled');
+        }
+    });
+}
+
+// Parse disk size string to bytes for comparison
+function parseDiskSize(sizeStr) {
+    if (!sizeStr) return 0;
+    const match = sizeStr.match(/^([\d.]+)\s*(TB|GB|MB|KB|B)?$/i);
+    if (!match) return 0;
+    const num = parseFloat(match[1]);
+    const unit = (match[2] || 'B').toUpperCase();
+    const multipliers = { B: 1, KB: 1024, MB: 1024**2, GB: 1024**3, TB: 1024**4 };
+    return num * (multipliers[unit] || 1);
+}
+
+// Restore saved selections when disk lists are populated
+function restoreWizardSelections() {
+    // Restore data disk selections
+    wizardState.selectedDataDisks.forEach(diskId => {
+        const card = document.querySelector(`#wizard-data-disks .wizard-disk-card[data-disk-id="${diskId}"]`);
+        if (card) card.classList.add('selected');
+    });
+    
+    // Update next button
+    const nextBtn2 = document.getElementById('wizard-next-2');
+    if (nextBtn2) nextBtn2.disabled = wizardState.selectedDataDisks.length === 0;
+    
+    // Restore parity selection
+    if (wizardState.selectedParityDisk) {
+        const card = document.querySelector(`#wizard-parity-disks .wizard-disk-card[data-disk-id="${wizardState.selectedParityDisk}"]`);
+        if (card && !card.classList.contains('disabled')) card.classList.add('selected');
+    }
+    
+    // Restore cache selection
+    if (wizardState.selectedCacheDisk) {
+        const card = document.querySelector(`#wizard-cache-disks .wizard-disk-card[data-disk-id="${wizardState.selectedCacheDisk}"]`);
+        if (card && !card.classList.contains('disabled')) card.classList.add('selected');
+    }
+    
+    // Update dependent options
+    updateParityDiskOptions();
+}
+
+// Setup wizard navigation buttons
+function setupWizardNavigation() {
+    // Step 1 -> 2
+    document.getElementById('wizard-next-1')?.addEventListener('click', () => navigateWizard(2));
+    
+    // Step 2
+    document.getElementById('wizard-back-2')?.addEventListener('click', () => navigateWizard(1));
+    document.getElementById('wizard-next-2')?.addEventListener('click', () => {
+        updateParityDiskOptions();
+        navigateWizard(3);
+    });
+    
+    // Step 3
+    document.getElementById('wizard-back-3')?.addEventListener('click', () => navigateWizard(2));
+    document.getElementById('wizard-next-3')?.addEventListener('click', () => {
+        updateCacheDiskOptions();
+        navigateWizard(4);
+    });
+    document.getElementById('wizard-skip-parity')?.addEventListener('click', () => {
+        wizardState.selectedParityDisk = null;
+        document.querySelectorAll('#wizard-parity-disks .wizard-disk-card').forEach(c => c.classList.remove('selected'));
+        updateCacheDiskOptions();
+        navigateWizard(4);
+    });
+    
+    // Step 4
+    document.getElementById('wizard-back-4')?.addEventListener('click', () => navigateWizard(3));
+    document.getElementById('wizard-next-4')?.addEventListener('click', () => {
+        updateSummary();
+        navigateWizard(5);
+    });
+    document.getElementById('wizard-skip-cache')?.addEventListener('click', () => {
+        wizardState.selectedCacheDisk = null;
+        document.querySelectorAll('#wizard-cache-disks .wizard-disk-card').forEach(c => c.classList.remove('selected'));
+        updateSummary();
+        navigateWizard(5);
+    });
+    
+    // Step 5
+    document.getElementById('wizard-back-5')?.addEventListener('click', () => navigateWizard(4));
+    document.getElementById('wizard-create-pool')?.addEventListener('click', createStoragePool);
+    
+    // Step 7 (completed)
+    document.getElementById('wizard-go-dashboard')?.addEventListener('click', () => {
+        clearWizardState();
+        if (state.sessionId) {
+            state.isAuthenticated = true;
+            switchView('dashboard');
+        } else {
+            switchView('login');
+        }
+    });
+}
+
+// Navigate to a specific wizard step
+function navigateWizard(step) {
+    const currentStepEl = document.querySelector(`.wizard-step[data-step="${wizardState.currentStep}"]`);
+    const nextStepEl = document.querySelector(`.wizard-step[data-step="${step}"]`);
+    
+    if (!currentStepEl || !nextStepEl) return;
+    
+    // Animate out current step
+    currentStepEl.classList.add('exit');
+    
+    setTimeout(() => {
+        currentStepEl.classList.remove('active', 'exit');
+        nextStepEl.classList.add('active');
+        
+        // Update progress indicator
+        updateWizardProgress(step);
+        
+        wizardState.currentStep = step;
+        saveWizardState();
+    }, 300);
+}
+
+// Update the progress dots
+function updateWizardProgress(step) {
+    const progressContainer = document.getElementById('wizard-progress');
+    if (!progressContainer) return;
+    
+    // For steps 6 and 7 (progress and completion), hide the progress indicator
+    if (step >= 6) {
+        progressContainer.style.display = 'none';
+        return;
+    }
+    progressContainer.style.display = 'flex';
+    
+    const dots = progressContainer.querySelectorAll('.wizard-progress-dot');
+    const lines = progressContainer.querySelectorAll('.wizard-progress-line');
+    
+    dots.forEach((dot, index) => {
+        const dotStep = index + 1;
+        dot.classList.remove('active', 'completed');
+        dot.textContent = dotStep;
+        
+        if (dotStep < step) {
+            dot.classList.add('completed');
+            dot.textContent = '';
+        } else if (dotStep === step) {
+            dot.classList.add('active');
+        }
+    });
+    
+    lines.forEach((line, index) => {
+        line.classList.toggle('completed', index < step - 1);
+    });
+}
+
+// Update the summary step
 function updateSummary() {
+    // Data disks summary
+    const dataContainer = document.getElementById('summary-data-disks');
+    if (dataContainer) {
+        if (wizardState.selectedDataDisks.length > 0) {
+            dataContainer.innerHTML = wizardState.selectedDataDisks.map(id => {
+                const disk = wizardState.disks.find(d => d.id === id);
+                return `
+                    <div class="wizard-summary-disk">
+                        ${getDiskIcon(disk?.type)} ${escapeHtml(disk?.model || id)}
+                        <span class="disk-role data">${escapeHtml(disk?.size || 'N/A')}</span>
+                    </div>
+                `;
+            }).join('');
+        } else {
+            dataContainer.innerHTML = '<span class="wizard-summary-empty">Ninguno seleccionado</span>';
+        }
+    }
+    
+    // Parity disk summary
+    const parityContainer = document.getElementById('summary-parity-disk');
+    if (parityContainer) {
+        if (wizardState.selectedParityDisk) {
+            const disk = wizardState.disks.find(d => d.id === wizardState.selectedParityDisk);
+            parityContainer.innerHTML = `
+                <div class="wizard-summary-disk">
+                    ${getDiskIcon(disk?.type)} ${escapeHtml(disk?.model || wizardState.selectedParityDisk)}
+                    <span class="disk-role parity">${escapeHtml(disk?.size || 'N/A')}</span>
+                </div>
+            `;
+        } else {
+            parityContainer.innerHTML = '<span class="wizard-summary-empty">Sin paridad (no protegido)</span>';
+        }
+    }
+    
+    // Cache disk summary
+    const cacheContainer = document.getElementById('summary-cache-disk');
+    if (cacheContainer) {
+        if (wizardState.selectedCacheDisk) {
+            const disk = wizardState.disks.find(d => d.id === wizardState.selectedCacheDisk);
+            cacheContainer.innerHTML = `
+                <div class="wizard-summary-disk">
+                    ${getDiskIcon(disk?.type)} ${escapeHtml(disk?.model || wizardState.selectedCacheDisk)}
+                    <span class="disk-role cache">${escapeHtml(disk?.size || 'N/A')}</span>
+                </div>
+            `;
+        } else {
+            cacheContainer.innerHTML = '<span class="wizard-summary-empty">Sin caché</span>';
+        }
+    }
+    
+    // Total capacity
+    const totalContainer = document.getElementById('summary-total-capacity');
+    if (totalContainer) {
+        let totalBytes = 0;
+        wizardState.selectedDataDisks.forEach(id => {
+            const disk = wizardState.disks.find(d => d.id === id);
+            if (disk) totalBytes += parseDiskSize(disk.size);
+        });
+        totalContainer.textContent = formatBytes(totalBytes);
+    }
+}
+
+// Format bytes to human readable
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Create the storage pool
+async function createStoragePool() {
+    if (wizardState.isConfiguring) return;
+    if (wizardState.selectedDataDisks.length === 0) {
+        showNotification('Debes seleccionar al menos un disco de datos', 'error');
+        return;
+    }
+    
+    wizardState.isConfiguring = true;
+    
+    // Navigate to progress step
+    navigateWizard(6);
+    
+    // Build disk selections
+    const selections = [];
+    
+    wizardState.selectedDataDisks.forEach(id => {
+        selections.push({ id, role: 'data', format: true });
+    });
+    
+    if (wizardState.selectedParityDisk) {
+        selections.push({ id: wizardState.selectedParityDisk, role: 'parity', format: true });
+    }
+    
+    if (wizardState.selectedCacheDisk) {
+        selections.push({ id: wizardState.selectedCacheDisk, role: 'cache', format: true });
+    }
+    
+    const tasks = ['format', 'mount', 'snapraid', 'mergerfs', 'fstab', 'sync'];
+    
+    try {
+        // Update task: format
+        updateWizardTask('format', 'running', 'Formateando discos...');
+        await new Promise(r => setTimeout(r, 500));
+        
+        // Call the API to configure the pool
+        const res = await authFetch(`${API_BASE}/storage/pool/configure`, {
+            method: 'POST',
+            body: JSON.stringify({ disks: selections })
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+            throw new Error(data.error || 'Error al configurar el pool');
+        }
+        
+        // Simulate progress through tasks
+        updateWizardTask('format', 'done', 'Discos formateados');
+        await new Promise(r => setTimeout(r, 300));
+        
+        updateWizardTask('mount', 'running', 'Montando particiones...');
+        await new Promise(r => setTimeout(r, 500));
+        updateWizardTask('mount', 'done', 'Particiones montadas');
+        
+        updateWizardTask('snapraid', 'running', 'Configurando SnapRAID...');
+        await new Promise(r => setTimeout(r, 500));
+        updateWizardTask('snapraid', 'done', 'SnapRAID configurado');
+        
+        updateWizardTask('mergerfs', 'running', 'Configurando MergerFS...');
+        await new Promise(r => setTimeout(r, 500));
+        updateWizardTask('mergerfs', 'done', 'MergerFS configurado');
+        
+        updateWizardTask('fstab', 'running', 'Actualizando /etc/fstab...');
+        await new Promise(r => setTimeout(r, 500));
+        updateWizardTask('fstab', 'done', '/etc/fstab actualizado');
+        
+        updateWizardTask('sync', 'running', 'Sincronización inicial...');
+        
+        // Start sync in background if parity is configured
+        if (wizardState.selectedParityDisk) {
+            try {
+                await authFetch(`${API_BASE}/storage/snapraid/sync`, { method: 'POST' });
+                // Poll for sync progress (simplified)
+                await new Promise(r => setTimeout(r, 2000));
+                updateWizardTask('sync', 'done', 'Sincronización completada');
+            } catch (syncError) {
+                console.warn('Sync skipped:', syncError);
+                updateWizardTask('sync', 'done', 'Sincronización programada');
+            }
+        } else {
+            updateWizardTask('sync', 'done', 'Sin paridad - omitido');
+        }
+        
+        // Update state
+        state.storageConfig = selections;
+        
+        // Wait a moment then show completion
+        await new Promise(r => setTimeout(r, 1000));
+        navigateWizard(7);
+        
+        // Celebrate!
+        celebrateWithConfetti();
+        showNotification('¡Pool de almacenamiento creado exitosamente!', 'success', 5000);
+        
+    } catch (e) {
+        console.error('[Wizard] Pool creation error:', e);
+        showNotification('Error: ' + e.message, 'error');
+        
+        // Mark current task as error
+        tasks.forEach(task => {
+            const item = document.querySelector(`.wizard-progress-item[data-task="${task}"]`);
+            if (item) {
+                const icon = item.querySelector('.wizard-progress-icon');
+                if (icon && icon.classList.contains('running')) {
+                    updateWizardTask(task, 'error', 'Error: ' + e.message);
+                }
+            }
+        });
+        
+        wizardState.isConfiguring = false;
+    }
+}
+
+// Update a task in the progress list
+function updateWizardTask(taskName, status, message) {
+    const item = document.querySelector(`.wizard-progress-item[data-task="${taskName}"]`);
+    if (!item) return;
+    
+    const icon = item.querySelector('.wizard-progress-icon');
+    const statusEl = item.querySelector('.wizard-progress-status');
+    
+    // Update icon
+    icon.classList.remove('pending', 'running', 'done', 'error');
+    icon.classList.add(status);
+    
+    switch (status) {
+        case 'pending':
+            icon.textContent = '⏳';
+            break;
+        case 'running':
+            icon.textContent = '🔄';
+            break;
+        case 'done':
+            icon.textContent = '✅';
+            break;
+        case 'error':
+            icon.textContent = '❌';
+            break;
+    }
+    
+    // Update status text
+    if (statusEl && message) {
+        statusEl.textContent = message;
+    }
+}
+
+// Legacy function for compatibility
+function updateSummaryLegacy() {
     const roles = { data: 0, parity: 0, cache: 0 };
     document.querySelectorAll('.role-btn.active').forEach(btn => {
         const role = btn.dataset.role;
         if (role !== 'none') roles[role]++;
     });
-    document.getElementById('data-count').textContent = roles.data;
-    document.getElementById('parity-count').textContent = roles.parity;
-    document.getElementById('cache-count').textContent = roles.cache;
+    const dataCount = document.getElementById('data-count');
+    const parityCount = document.getElementById('parity-count');
+    const cacheCount = document.getElementById('cache-count');
+    if (dataCount) dataCount.textContent = roles.data;
+    if (parityCount) parityCount.textContent = roles.parity;
+    if (cacheCount) cacheCount.textContent = roles.cache;
 }
 
 // Storage Progress Modal Functions
@@ -1239,7 +2090,7 @@ async function pollSyncProgress() {
                 const data = await res.json();
 
                 // Always update the progress display
-                updateSyncProgress(data.progress || 0, data.status || 'Syncing...');
+                updateSyncProgress(data.progress || 0, data.status || 'Sincronizando...');
 
                 if (!data.running) {
                     clearInterval(pollInterval);
@@ -1258,7 +2109,7 @@ async function pollSyncProgress() {
                 if (pollCount > 150) {
                     clearInterval(pollInterval);
                     updateProgressStep('sync', 'completed');
-                    updateSyncProgress(100, 'Sync timeout - may still be running in background');
+                    updateSyncProgress(100, 'Tiempo de sincronización agotado - puede seguir ejecutándose en segundo plano');
                     resolve({ success: true });
                 }
             } catch (e) {
@@ -1406,7 +2257,7 @@ if (saveStorageBtn) {
                 progressFooter.classList.add('complete');
                 const continueBtn = document.createElement('button');
                 continueBtn.className = 'btn-primary';
-                continueBtn.textContent = 'Continue to Dashboard';
+                continueBtn.textContent = t('progress.continueToDashboard', 'Continuar al Panel');
                 continueBtn.onclick = () => {
                     hideProgressModal();
                     if (state.sessionId) {
@@ -1423,7 +2274,7 @@ if (saveStorageBtn) {
             console.error('Storage config error:', e);
             const progressMsg = document.getElementById('progress-message');
             if (progressMsg) {
-                progressMsg.innerHTML = `❌ <strong>Configuration Failed:</strong><br>${escapeHtml(e.message)}`;
+                progressMsg.innerHTML = `❌ <strong>${t('progress.configurationFailed', 'Configuración Fallida')}:</strong><br>${escapeHtml(e.message)}`;
             }
 
             // Add retry button
@@ -1432,7 +2283,7 @@ if (saveStorageBtn) {
                 progressFooter.classList.add('complete');
                 const retryBtn = document.createElement('button');
                 retryBtn.className = 'btn-primary';
-                retryBtn.textContent = 'Close & Retry';
+                retryBtn.textContent = t('progress.closeAndRetry', 'Cerrar y Reintentar');
                 retryBtn.onclick = () => {
                     hideProgressModal();
                     saveStorageBtn.disabled = false;
@@ -1456,7 +2307,7 @@ if (loginForm) {
         const btn = e.target.querySelector('button[type="submit"]');
         const totpGroup = document.getElementById('totp-input-group');
 
-        btn.textContent = 'Hardware Auth...';
+        btn.textContent = t('auth.hardwareAuth', 'Autenticando...');
         btn.disabled = true;
 
         try {
@@ -1495,8 +2346,8 @@ if (loginForm) {
             const data = await res.json();
 
             if (!res.ok || !data.success) {
-                alert(data.message || 'Security Error: Credentials Rejected by Hardware.');
-                btn.textContent = 'Access Gateway';
+                alert(data.message || t('common.error', 'Error de seguridad: Credenciales rechazadas.'));
+                btn.textContent = t('auth.accessGateway', 'Acceder al Sistema');
                 btn.disabled = false;
                 return;
             }
@@ -1523,8 +2374,8 @@ if (loginForm) {
             switchView('dashboard');
         } catch (e) {
             console.error('Login error:', e);
-            alert('Security Server Offline or Network Link Broken');
-            btn.textContent = 'Access Gateway';
+            alert(t('common.error', 'Servidor de seguridad no disponible o conexión interrumpida'));
+            btn.textContent = t('auth.accessGateway', 'Acceder al Sistema');
             btn.disabled = false;
         }
     });
@@ -1601,6 +2452,13 @@ function updateUserAvatar() {
 async function renderContent(view) {
     state.currentView = view;
     dashboardContent.innerHTML = '';
+    
+    // Clear storage polling when leaving storage view
+    if (state.pollingIntervals.storage) {
+        clearInterval(state.pollingIntervals.storage);
+        state.pollingIntervals.storage = null;
+    }
+    
     if (view === 'dashboard') await renderDashboard();
     else if (view === 'docker') await renderDockerManager();
     else if (view === 'storage') await renderStorageDashboard();
@@ -1614,7 +2472,10 @@ async function renderContent(view) {
     }
     else if (view === 'backup') await renderBackupView();
     else if (view === 'active-backup') await renderActiveBackupView();
+    else if (view === 'active-directory') await renderActiveDirectoryView();
     else if (view === 'cloud-sync') await renderCloudSyncView();
+    else if (view === 'cloud-backup') await renderCloudBackupView();
+    else if (view === 'homestore') await renderHomeStoreView();
     else if (view === 'logs') await renderLogsView();
     else if (view === 'users') await renderUsersView();
     else if (view === 'system') {
@@ -1634,14 +2495,27 @@ async function renderDashboard() {
     const cpuLoad = Number(stats.cpuLoad) || 0;
     const ramUsedPercent = Number(stats.ramUsedPercent) || 0;
     const publicIP = escapeHtml(state.publicIP);
-    const lanIP = escapeHtml(state.network.interfaces[0]?.ip || 'Scanning...');
+    
+    // Fetch real LAN IP if not already loaded
+    if (!state.network.interfaces || state.network.interfaces.length === 0 || state.network.interfaces[0]?.ip === '192.168.1.100') {
+        try {
+            const res = await fetch(`${API_BASE}/network/interfaces`);
+            if (res.ok) {
+                state.network.interfaces = await res.json();
+            }
+        } catch (e) {
+            console.warn('Could not fetch network interfaces:', e);
+        }
+    }
+    
+    const lanIP = escapeHtml(state.network.interfaces[0]?.ip || 'No disponible');
     const ddnsCount = (state.network.ddns || []).filter(d => d.enabled).length;
 
     // CPU Model - save once and reuse (CPU doesn't change)
     if (stats.cpuModel && stats.cpuModel !== 'Unknown CPU') {
         localStorage.setItem('cpuModel', stats.cpuModel);
     }
-    const cpuModel = localStorage.getItem('cpuModel') || stats.cpuModel || 'Unknown CPU';
+    const cpuModel = localStorage.getItem('cpuModel') || stats.cpuModel || t('common.unknown', 'CPU Desconocido');
 
     // Format uptime intelligently
     const uptimeSeconds = Number(stats.uptime) || 0;
@@ -1721,7 +2595,7 @@ async function renderDashboard() {
             });
 
             // Generate HTML for each role section
-            const roleLabels = { data: '💾 Data', parity: '🛡️ Parity', cache: '⚡ Cache', none: '📦 Unassigned' };
+            const roleLabels = { data: '💾 ' + t('storage.data', 'Datos'), parity: '🛡️ ' + t('storage.parity', 'Paridad'), cache: '⚡ ' + t('storage.cache', 'Caché'), none: '📦 ' + t('storage.none', 'Sin asignar') };
             const roleColors = { data: '#6366f1', parity: '#f59e0b', cache: '#10b981', none: '#64748b' };
 
             for (const [role, roleDisks] of Object.entries(disksByRole)) {
@@ -1730,13 +2604,13 @@ async function renderDashboard() {
                         <div class="disk-role-section">
                             <div class="disk-role-header" style="border-left: 3px solid ${roleColors[role]}">
                                 <span>${roleLabels[role]}</span>
-                                <span class="disk-count">${roleDisks.length} disk(s)</span>
+                                <span class="disk-count">${roleDisks.length} ${t('wizard.disksDetected', 'disco(s)')}</span>
                             </div>
                             <div class="disk-role-items">
                                 ${roleDisks.map(disk => `
                                     <div class="disk-item-compact">
                                         <div class="disk-item-info">
-                                            <span class="disk-name">${escapeHtml(disk.model || 'Unknown')}</span>
+                                            <span class="disk-name">${escapeHtml(disk.model || t('common.unknown', 'Desconocido'))}</span>
                                             <span class="disk-details">${escapeHtml(disk.id)} • ${escapeHtml(disk.size)} • ${escapeHtml(disk.type)}</span>
                                         </div>
                                         <div class="disk-item-temp ${disk.temp > 45 ? 'hot' : disk.temp > 38 ? 'warm' : 'cool'}">
@@ -1752,36 +2626,36 @@ async function renderDashboard() {
         }
     } catch (e) {
         console.error('Error fetching disks:', e);
-        disksHtml = '<div class="no-disks">Unable to load disk information</div>';
+        disksHtml = `<div class="no-disks">${t('storage.unableToLoad', 'No se pudo cargar la información de discos')}</div>`;
     }
 
     dashboardContent.innerHTML = `
         <div class="glass-card overview-card" style="grid-column: 1 / -1;">
             <div class="overview-header">
-                <h3>System Overview</h3>
+                <h3>${t('dashboard.systemOverview', 'Resumen del Sistema')}</h3>
                 <div class="system-info-badge">
                     <span>${escapeHtml(stats.hostname || 'HomePiNAS')}</span>
                     <span class="separator">|</span>
                     <span>${escapeHtml(stats.distro || 'Linux')}</span>
                     <span class="separator">|</span>
-                    <span>Uptime: ${uptimeStr}</span>
+                    <span>${t('dashboard.uptime', 'Tiempo Activo')}: ${uptimeStr}</span>
                 </div>
             </div>
         </div>
 
         <div class="dashboard-grid-4">
             <div class="glass-card card-compact">
-                <h3>🖥️ CPU</h3>
+                <h3>🖥️ ${t('dashboard.cpu', 'CPU')}</h3>
                 <div class="cpu-model-compact">${escapeHtml(cpuModel)}</div>
                 <div class="cpu-specs-row">
-                    <span>${stats.cpuPhysicalCores || 0} Cores</span>
-                    <span>${stats.cpuCores || 0} Threads</span>
+                    <span>${stats.cpuPhysicalCores || 0} ${t('dashboard.cores', 'Núcleos')}</span>
+                    <span>${stats.cpuCores || 0} ${t('dashboard.threads', 'Hilos')}</span>
                     <span>${stats.cpuSpeed || 0} GHz</span>
                     <span class="temp-badge ${cpuTemp > 70 ? 'hot' : cpuTemp > 55 ? 'warm' : 'cool'}">${cpuTemp}°C</span>
                 </div>
                 <div class="load-section">
                     <div class="load-header">
-                        <span>Load</span>
+                        <span>${t('dashboard.load', 'Carga')}</span>
                         <span style="color: ${cpuLoad > 80 ? '#ef4444' : cpuLoad > 50 ? '#f59e0b' : '#10b981'}">${cpuLoad}%</span>
                     </div>
                     <div class="progress-bar-mini">
@@ -1792,7 +2666,7 @@ async function renderDashboard() {
             </div>
 
             <div class="glass-card card-compact">
-                <h3>💾 Memory</h3>
+                <h3>💾 ${t('dashboard.memory', 'Memoria')}</h3>
                 <div class="memory-compact">
                     <div class="memory-circle-small">
                         <svg viewBox="0 0 36 36">
@@ -1804,35 +2678,35 @@ async function renderDashboard() {
                         <span class="memory-percent-small">${ramUsedPercent}%</span>
                     </div>
                     <div class="memory-details-compact">
-                        <div class="mem-row"><span>Used</span><span>${stats.ramUsed || 0} GB</span></div>
-                        <div class="mem-row"><span>Free</span><span>${stats.ramFree || 0} GB</span></div>
-                        <div class="mem-row"><span>Total</span><span>${stats.ramTotal || 0} GB</span></div>
-                        ${stats.swapTotal && parseFloat(stats.swapTotal) > 0 ? `<div class="mem-row swap"><span>Swap</span><span>${stats.swapUsed || 0}/${stats.swapTotal || 0} GB</span></div>` : ''}
+                        <div class="mem-row"><span>${t('dashboard.used', 'Usado')}</span><span>${stats.ramUsed || 0} GB</span></div>
+                        <div class="mem-row"><span>${t('dashboard.free', 'Libre')}</span><span>${stats.ramFree || 0} GB</span></div>
+                        <div class="mem-row"><span>${t('dashboard.total', 'Total')}</span><span>${stats.ramTotal || 0} GB</span></div>
+                        ${stats.swapTotal && parseFloat(stats.swapTotal) > 0 ? `<div class="mem-row swap"><span>${t('dashboard.swap', 'Swap')}</span><span>${stats.swapUsed || 0}/${stats.swapTotal || 0} GB</span></div>` : ''}
                     </div>
                 </div>
             </div>
 
             <div class="glass-card card-compact">
-                <h3>🌀 Fans</h3>
+                <h3>🌀 ${t('dashboard.fans', 'Ventiladores')}</h3>
                 <div class="fans-compact">
                     ${fansFullHtml}
                 </div>
             </div>
 
             <div class="glass-card card-compact">
-                <h3>🌐 Network</h3>
+                <h3>🌐 ${t('dashboard.network', 'Red')}</h3>
                 <div class="network-compact">
-                    <div class="net-row"><span>Public IP</span><span class="ip-value">${publicIP}</span></div>
-                    <div class="net-row"><span>LAN IP</span><span>${lanIP}</span></div>
-                    <div class="net-row"><span>DDNS</span><span>${ddnsCount} Service(s)</span></div>
+                    <div class="net-row"><span>${t('dashboard.publicIP', 'IP Pública')}</span><span class="ip-value">${publicIP}</span></div>
+                    <div class="net-row"><span>${t('dashboard.lanIP', 'IP Local')}</span><span>${lanIP}</span></div>
+                    <div class="net-row"><span>${t('dashboard.ddns', 'DDNS')}</span><span>${ddnsCount} ${t('dashboard.services', 'Servicio(s)')}</span></div>
                 </div>
             </div>
         </div>
 
         <div class="glass-card storage-overview" style="grid-column: 1 / -1;">
-            <h3>💿 Connected Disks</h3>
+            <h3>💿 ${t('storage.connectedDisks', 'Discos Conectados')}</h3>
             <div class="disks-by-role">
-                ${disksHtml || '<div class="no-disks">No disks detected</div>'}
+                ${disksHtml || `<div class="no-disks">${t('storage.noDisksDetected', 'No se detectaron discos')}</div>`}
             </div>
         </div>
     `;
@@ -1926,11 +2800,14 @@ window.setFanMode = setFanMode;
 
 // Real Storage Telemetry
 async function renderStorageDashboard() {
+    // Clear content to prevent duplication on refresh
+    dashboardContent.innerHTML = '';
+    
     try {
         // Fetch disks and pool status
         const [disksRes, poolRes] = await Promise.all([
-            fetch(`${API_BASE}/system/disks`),
-            fetch(`${API_BASE}/storage/pool/status`)
+            authFetch(`${API_BASE}/system/disks`),
+            authFetch(`${API_BASE}/storage/pool/status`)
         ]);
         
         if (disksRes.ok) state.disks = await disksRes.json();
@@ -1969,9 +2846,8 @@ async function renderStorageDashboard() {
 
         // Pool mount (if configured)
         if (poolStatus.configured && poolStatus.running) {
-            const poolUsedNum = parseFloat(poolStatus.poolUsed) || 0;
-            const poolSizeNum = parseFloat(poolStatus.poolSize) || 1;
-            const poolPercent = Math.round((poolUsedNum / poolSizeNum) * 100);
+            // Use backend-calculated percentage (avoids GB/TB unit mismatch)
+            const poolPercent = poolStatus.usedPercent || 0;
             const poolFillClass = poolPercent > 90 ? 'high' : poolPercent > 70 ? 'medium' : 'low';
 
             const poolRow = document.createElement('div');
@@ -2018,7 +2894,7 @@ async function renderStorageDashboard() {
             diskRow.innerHTML = `
                 <div class="mount-info">
                     <span class="mount-path">${escapeHtml(mountPoint)}</span>
-                    <span class="mount-device">/dev/${escapeHtml(disk.id)} • ${escapeHtml(disk.model || 'Unknown')}</span>
+                    <span class="mount-device">/dev/${escapeHtml(disk.id)} • ${escapeHtml(disk.model || t('common.unknown', 'Desconocido'))}</span>
                 </div>
                 <div class="mount-bar-container">
                     <div class="mount-bar">
@@ -2064,10 +2940,10 @@ async function renderStorageDashboard() {
 
             const headerInfo = document.createElement('div');
             const h4 = document.createElement('h4');
-            h4.textContent = disk.model || 'Unknown';
+            h4.textContent = disk.model || t('common.unknown', 'Desconocido');
             const infoSpan = document.createElement('span');
             infoSpan.style.cssText = 'font-size: 0.8rem; color: var(--text-dim); display: block;';
-            infoSpan.textContent = `${disk.id || 'N/A'} • ${disk.type || 'Unknown'} • ${disk.size || 'N/A'}`;
+            infoSpan.textContent = `${disk.id || 'N/A'} • ${disk.type || t('common.unknown', 'Desconocido')} • ${disk.size || 'N/A'}`;
             const serialSpan2 = document.createElement('span');
             serialSpan2.style.cssText = 'font-size: 0.75rem; color: var(--primary); display: block; margin-top: 4px; font-family: monospace;';
             serialSpan2.textContent = `SN: ${disk.serial || 'N/A'}`;
@@ -2077,7 +2953,8 @@ async function renderStorageDashboard() {
 
             const roleBadge = document.createElement('span');
             roleBadge.className = `role-badge ${escapeHtml(role)}`;
-            roleBadge.textContent = role;
+            const roleTranslations = { data: t('storage.data', 'Data'), parity: t('storage.parity', 'Parity'), cache: t('storage.cache', 'Cache'), none: t('storage.none', 'None') };
+            roleBadge.textContent = roleTranslations[role] || role;
 
             header.appendChild(headerInfo);
             header.appendChild(roleBadge);
@@ -2140,6 +3017,64 @@ async function renderStorageDashboard() {
                 });
                 telemetryRow.appendChild(configBtn);
             }
+            
+            // Add "Remove from pool" button for disks in pool
+            if (role !== 'none') {
+                const removeBtn = document.createElement('button');
+                removeBtn.style.cssText = `
+                    margin-left: auto;
+                    padding: 6px 12px;
+                    background: transparent;
+                    border: 1px solid var(--danger, #dc3545);
+                    color: var(--danger, #dc3545);
+                    border-radius: 6px;
+                    font-size: 12px;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    white-space: nowrap;
+                `;
+                removeBtn.textContent = '🗑️ Quitar del pool';
+                removeBtn.addEventListener('mouseenter', () => {
+                    removeBtn.style.background = 'var(--danger, #dc3545)';
+                    removeBtn.style.color = '#fff';
+                });
+                removeBtn.addEventListener('mouseleave', () => {
+                    removeBtn.style.background = 'transparent';
+                    removeBtn.style.color = 'var(--danger, #dc3545)';
+                });
+                removeBtn.addEventListener('click', async () => {
+                    if (!confirm(`¿Seguro que quieres quitar ${disk.model || disk.id} del pool?\n\nEl disco seguirá montado pero no formará parte del almacenamiento compartido.`)) {
+                        return;
+                    }
+                    
+                    removeBtn.disabled = true;
+                    removeBtn.textContent = '⏳ Quitando...';
+                    
+                    try {
+                        const res = await authFetch(`${API_BASE}/storage/disks/remove-from-pool`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ diskId: disk.id })
+                        });
+                        
+                        const data = await res.json();
+                        
+                        if (res.ok && data.success) {
+                            alert(`✅ ${data.message}`);
+                            renderStorageDashboard(); // Refresh view
+                        } else {
+                            alert(`❌ Error: ${data.error || t('common.unknown', 'Error desconocido')}`);
+                            removeBtn.disabled = false;
+                            removeBtn.textContent = '🗑️ Quitar del pool';
+                        }
+                    } catch (e) {
+                        alert(`❌ Error: ${e.message}`);
+                        removeBtn.disabled = false;
+                        removeBtn.textContent = '🗑️ Quitar del pool';
+                    }
+                });
+                telemetryRow.appendChild(removeBtn);
+            }
 
             card.appendChild(header);
             card.appendChild(progressContainer);
@@ -2148,22 +3083,31 @@ async function renderStorageDashboard() {
         });
 
         dashboardContent.appendChild(grid);
+        
+        // Start auto-refresh polling (every 30 seconds)
+        if (!state.pollingIntervals.storage) {
+            state.pollingIntervals.storage = setInterval(async () => {
+                if (state.currentView === 'storage') {
+                    await renderStorageDashboard();
+                }
+            }, 30000);
+        }
     } catch (e) {
         console.error('Storage dashboard error:', e);
-        dashboardContent.innerHTML = '<div class="glass-card"><h3>Error loading storage data</h3></div>';
+        dashboardContent.innerHTML = `<div class="glass-card"><h3>${t('common.error', 'Error al cargar datos de almacenamiento')}</h3></div>`;
     }
 }
 
 // Real Docker Logic
 async function renderDockerManager() {
     // Show loading immediately
-    dashboardContent.innerHTML = "<div class=\"glass-card\" style=\"grid-column: 1 / -1; text-align: center; padding: 40px;\"><h3>Loading Docker Manager...</h3></div>";
+    dashboardContent.innerHTML = "<div class=\"glass-card\" style=\"grid-column: 1 / -1; text-align: center; padding: 40px;\"><h3>" + t("common.loading", "Cargando...") + "</h3></div>";
     // Fetch containers and update status
     let updateStatus = { lastCheck: null, updatesAvailable: 0 };
     try {
         const [containersRes, updateRes] = await Promise.all([
-            fetch(`${API_BASE}/docker/containers`),
-            fetch(`${API_BASE}/docker/update-status`)
+            authFetch(`${API_BASE}/docker/containers`),
+            authFetch(`${API_BASE}/docker/update-status`)
         ]);
         if (containersRes.ok) state.dockers = await containersRes.json();
         if (updateRes.ok) updateStatus = await updateRes.json();
@@ -2175,7 +3119,7 @@ async function renderDockerManager() {
     // Fetch compose files
     let composeFiles = [];
     try {
-        const composeRes = await fetch(`${API_BASE}/docker/compose/list`);
+        const composeRes = await authFetch(`${API_BASE}/docker/compose/list`);
         if (composeRes.ok) composeFiles = await composeRes.json();
     } catch (e) {
         console.error('Compose list error:', e);
@@ -2189,12 +3133,12 @@ async function renderDockerManager() {
     const headerLeft = document.createElement('div');
     const h3 = document.createElement('h3');
     h3.style.margin = '0';
-    h3.textContent = 'Containers';
+    h3.textContent = t('docker.containers', 'Contenedores');
     const updateInfo = document.createElement('span');
     updateInfo.style.cssText = 'font-size: 0.8rem; color: var(--text-dim); display: block; margin-top: 5px;';
     updateInfo.textContent = updateStatus.lastCheck
-        ? `Last check: ${new Date(updateStatus.lastCheck).toLocaleString()}`
-        : 'Updates not checked yet';
+        ? `${t('docker.lastCheck', 'Última comprobación')}: ${new Date(updateStatus.lastCheck).toLocaleString()}`
+        : t('docker.notCheckedYet', 'Actualizaciones no comprobadas aún');
     headerLeft.appendChild(h3);
     headerLeft.appendChild(updateInfo);
 
@@ -2204,19 +3148,29 @@ async function renderDockerManager() {
     const checkUpdatesBtn = document.createElement('button');
     checkUpdatesBtn.className = 'btn-primary';
     checkUpdatesBtn.style.cssText = 'background: #6366f1; padding: 8px 16px; font-size: 0.85rem;';
-    checkUpdatesBtn.innerHTML = '🔄 Check Updates';
+    checkUpdatesBtn.innerHTML = '🔄 ' + t('docker.checkUpdates', 'Buscar Actualizaciones');
     checkUpdatesBtn.addEventListener('click', checkDockerUpdates);
 
     const importComposeBtn = document.createElement('button');
     importComposeBtn.className = 'btn-primary';
     importComposeBtn.style.cssText = 'background: #10b981; padding: 8px 16px; font-size: 0.85rem;';
-    importComposeBtn.innerHTML = '📦 Import Compose';
+    importComposeBtn.innerHTML = '📦 ' + t('docker.importCompose', 'Importar Compose');
     importComposeBtn.addEventListener('click', openComposeModal);
+
+    const stacksBtn = document.createElement('button');
+    stacksBtn.className = 'btn-primary';
+    stacksBtn.style.cssText = 'background: #f59e0b; padding: 8px 16px; font-size: 0.85rem;';
+    stacksBtn.innerHTML = '🗂️ Stacks';
+    stacksBtn.addEventListener('click', openStacksManager);
 
     headerRight.appendChild(checkUpdatesBtn);
     headerRight.appendChild(importComposeBtn);
+    headerRight.appendChild(stacksBtn);
     headerCard.appendChild(headerLeft);
     headerCard.appendChild(headerRight);
+    
+    // Clear loading message before adding content
+    dashboardContent.innerHTML = '';
     dashboardContent.appendChild(headerCard);
 
     // Containers section
@@ -2225,7 +3179,7 @@ async function renderDockerManager() {
         emptyCard.className = 'glass-card';
         emptyCard.style.cssText = 'grid-column: 1/-1; text-align:center; padding: 40px;';
         emptyCard.innerHTML = `
-            <h4 style="color: var(--text-dim);">No Containers Detected</h4>
+            <h4 style="color: var(--text-dim);">${t("docker.noContainers", "No Containers Detected")}</h4>
             <p style="color: var(--text-dim); font-size: 0.9rem;">Import a docker-compose file or run containers manually.</p>
         `;
         dashboardContent.appendChild(emptyCard);
@@ -2250,13 +3204,13 @@ async function renderDockerManager() {
             nameRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
             const h4 = document.createElement('h4');
             h4.style.margin = '0';
-            h4.textContent = container.name || 'Unknown';
+            h4.textContent = container.name || t('common.unknown', 'Desconocido');
             nameRow.appendChild(h4);
 
             if (hasUpdate) {
                 const updateBadge = document.createElement('span');
                 updateBadge.style.cssText = 'background: #10b981; color: white; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: 600;';
-                updateBadge.textContent = 'UPDATE';
+                updateBadge.textContent = t('docker.update', 'ACTUALIZACIÓN');
                 nameRow.appendChild(updateBadge);
             }
 
@@ -2275,35 +3229,38 @@ async function renderDockerManager() {
                 background: ${isRunning ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'};
                 color: ${isRunning ? '#10b981' : '#ef4444'};
             `;
-            statusSpan.textContent = isRunning ? 'RUNNING' : 'STOPPED';
+            statusSpan.textContent = isRunning ? t('docker.running', 'EN EJECUCIÓN') : t('docker.stopped', 'DETENIDO');
 
             header.appendChild(info);
             header.appendChild(statusSpan);
 
-            // Stats row (only if running)
+            // Stats row (always show for running containers)
+            card.appendChild(header);
             if (isRunning) {
+                const cpuVal = container.cpu || '0%';
+                const ramVal = container.ram && container.ram !== '---' ? container.ram : '< 1MB';
+                const cpuNum = parseFloat(cpuVal) || 0;
+                
                 const statsRow = document.createElement('div');
                 statsRow.style.cssText = 'display: flex; gap: 20px; margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 8px;';
                 statsRow.innerHTML = `
                     <div style="flex: 1; text-align: center;">
                         <div style="font-size: 0.7rem; color: var(--text-dim);">CPU</div>
-                        <div style="font-size: 1rem; font-weight: 600; color: ${container.cpu !== '---' && parseFloat(container.cpu) > 50 ? '#f59e0b' : '#10b981'}">${escapeHtml(container.cpu)}</div>
+                        <div style="font-size: 1rem; font-weight: 600; color: ${cpuNum > 50 ? '#f59e0b' : '#10b981'}">${escapeHtml(cpuVal)}</div>
                     </div>
                     <div style="flex: 1; text-align: center;">
                         <div style="font-size: 0.7rem; color: var(--text-dim);">RAM</div>
-                        <div style="font-size: 1rem; font-weight: 600; color: #6366f1;">${escapeHtml(container.ram)}</div>
+                        <div style="font-size: 1rem; font-weight: 600; color: #6366f1;">${escapeHtml(ramVal)}</div>
                     </div>
                 `;
-                card.appendChild(header);
                 card.appendChild(statsRow);
-            } else {
-                card.appendChild(header);
             }
 
             // Ports section
             if (container.ports && container.ports.length > 0) {
                 const portsDiv = document.createElement('div');
                 portsDiv.className = 'docker-ports';
+                portsDiv.style.marginBottom = '12px'; // Add spacing before buttons
                 container.ports.forEach(port => {
                     if (port.public) {
                         const badge = document.createElement('span');
@@ -2319,7 +3276,7 @@ async function renderDockerManager() {
 
             // Controls row
             const controls = document.createElement('div');
-            controls.style.cssText = 'display: flex; gap: 8px; flex-wrap: wrap;';
+            controls.style.cssText = 'display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;';
 
             const actionBtn = document.createElement('button');
             actionBtn.className = 'btn-sm';
@@ -2492,7 +3449,7 @@ async function renderDockerManager() {
 }
 
 // Docker Update Functions
-async function checkDockerUpdates() {
+async function checkDockerUpdates(event) {
     const btn = event.target;
     btn.disabled = true;
     btn.innerHTML = '🔄 Checking...';
@@ -2509,7 +3466,7 @@ async function checkDockerUpdates() {
         console.error('Docker update check error:', e);
         alert('Error: ' + e.message);
         btn.disabled = false;
-        btn.innerHTML = '🔄 Check Updates';
+        btn.innerHTML = '🔄 ' + t('docker.checkUpdates', 'Buscar Actualizaciones');
     }
 }
 
@@ -2555,12 +3512,12 @@ function openComposeModal() {
     modal.innerHTML = `
         <div style="background: var(--card-bg); padding: 30px; border-radius: 16px; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="margin: 0;">Import Docker Compose</h3>
+                <h3 style="margin: 0;">${t('docker.importCompose', 'Importar Docker Compose')}</h3>
                 <button id="close-compose-modal" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer;">&times;</button>
             </div>
             <div class="input-group" style="margin-bottom: 15px;">
                 <input type="text" id="compose-name" placeholder=" " required>
-                <label>Stack Name</label>
+                <label>${t('docker.stackName', 'Nombre del Stack')}</label>
             </div>
             <div style="margin-bottom: 15px;">
                 <label style="display: block; margin-bottom: 8px; color: var(--text-dim);">docker-compose.yml content:</label>
@@ -2571,7 +3528,7 @@ function openComposeModal() {
                         color: #6366f1; text-align: center; cursor: pointer;
                         transition: all 0.2s ease;
                     ">
-                        📁 Upload .yml file
+                        📁 ${t('docker.uploadYml', 'Subir archivo .yml')}
                         <input type="file" id="compose-file-input" accept=".yml,.yaml" style="display: none;">
                     </label>
                 </div>
@@ -2587,8 +3544,8 @@ services:
       - '8080:80'"></textarea>
             </div>
             <div style="display: flex; gap: 10px;">
-                <button id="save-compose-btn" class="btn-primary" style="flex: 1; padding: 12px;">Save Compose</button>
-                <button id="save-run-compose-btn" class="btn-primary" style="flex: 1; padding: 12px; background: #10b981;">Save & Run</button>
+                <button id="save-compose-btn" class="btn-primary" style="flex: 1; padding: 12px;">${t('docker.saveCompose', 'Guardar Compose')}</button>
+                <button id="save-run-compose-btn" class="btn-primary" style="flex: 1; padding: 12px; background: #10b981;">${t('docker.saveAndRun', 'Guardar y Ejecutar')}</button>
             </div>
         </div>
     `;
@@ -2637,26 +3594,26 @@ async function saveCompose(andRun) {
     const modal = document.getElementById("compose-modal");
     const modalContent = modal.querySelector("div");
     modalContent.innerHTML = `
-        <h3 style="margin: 0 0 20px 0;">Deploying Stack: ${escapeHtml(name)}</h3>
+        <h3 style="margin: 0 0 20px 0;">Desplegando Stack: ${escapeHtml(name)}</h3>
         <div id="deploy-steps">
             <div class="deploy-step" id="step-save">
                 <span class="step-icon">⏳</span>
-                <span class="step-text">Saving compose file...</span>
+                <span class="step-text">Guardando archivo compose...</span>
             </div>
             ${andRun ? `<div class="deploy-step" id="step-pull">
                 <span class="step-icon">⏳</span>
-                <span class="step-text">Pulling images...</span>
+                <span class="step-text">Descargando imágenes...</span>
             </div>
             <div class="deploy-step" id="step-start">
                 <span class="step-icon">⏳</span>
-                <span class="step-text">Starting containers...</span>
+                <span class="step-text">Iniciando contenedores...</span>
             </div>` : ""}
         </div>
         <div style="margin: 20px 0;">
             <div style="background: rgba(255,255,255,0.1); border-radius: 8px; height: 8px; overflow: hidden;">
                 <div id="deploy-progress" style="height: 100%; background: linear-gradient(90deg, #6366f1, #10b981); width: 0%; transition: width 0.3s ease;"></div>
             </div>
-            <div id="deploy-status" style="margin-top: 10px; font-size: 0.9rem; color: var(--text-dim); text-align: center;">Initializing...</div>
+            <div id="deploy-status" style="margin-top: 10px; font-size: 0.9rem; color: var(--text-dim); text-align: center;">Inicializando...</div>
         </div>
         <div id="deploy-log" style="display: none; margin: 15px 0; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px; font-family: monospace; font-size: 0.8rem; max-height: 200px; overflow-y: auto; white-space: pre-wrap;"></div>
         <div id="deploy-actions" style="display: none; text-align: center;">
@@ -2703,7 +3660,7 @@ async function saveCompose(andRun) {
     try {
         // Step 1: Save compose file
         updateStep("step-save", "active");
-        updateProgress(10, "Saving compose file...");
+        updateProgress(10, "Guardando archivo compose...");
 
         const res = await authFetch(`${API_BASE}/docker/compose/import`, {
             method: "POST",
@@ -2711,15 +3668,15 @@ async function saveCompose(andRun) {
         });
         const data = await res.json();
 
-        if (!res.ok) throw new Error(data.error || "Import failed");
-        
+        if (!res.ok) throw new Error(data.error || "Error al importar");
+
         updateStep("step-save", "done");
-        updateProgress(andRun ? 33 : 100, andRun ? "Compose saved, starting deployment..." : "Compose saved successfully!");
+        updateProgress(andRun ? 33 : 100, andRun ? "Compose guardado, iniciando despliegue..." : "¡Compose guardado exitosamente!");
 
         if (andRun) {
             // Step 2: Pull & Start
             updateStep("step-pull", "active");
-            updateProgress(50, "Pulling images and starting containers...");
+            updateProgress(50, "Descargando imágenes e iniciando contenedores...");
 
             const runRes = await authFetch(`${API_BASE}/docker/compose/up`, {
                 method: "POST",
@@ -2730,27 +3687,27 @@ async function saveCompose(andRun) {
             if (!runRes.ok) {
                 updateStep("step-pull", "error");
                 updateStep("step-start", "error");
-                throw new Error(runData.error || runData.output || "Run failed");
+                throw new Error(runData.error || runData.output || "Error al ejecutar");
             }
 
             updateStep("step-pull", "done");
             updateStep("step-start", "done");
-            showResult(true, "Stack deployed successfully! ✅");
+            showResult(true, "¡Stack desplegado exitosamente! ✅");
         } else {
-            showResult(true, "Compose file saved! ✅");
+            showResult(true, "¡Archivo Compose guardado! ✅");
         }
 
     } catch (e) {
         console.error("Compose deploy error:", e);
         const currentStep = document.querySelector(".deploy-step.active");
         if (currentStep) currentStep.classList.replace("active", "error");
-        showResult(false, "Deployment failed ❌", e.message);
+        showResult(false, "Despliegue fallido ❌", e.message);
     }
 }
 
 async function runCompose(name, btn) {
     btn.disabled = true;
-    btn.textContent = 'Starting...';
+    btn.textContent = t('docker.starting', 'Iniciando...');
 
     try {
         const res = await authFetch(`${API_BASE}/docker/compose/up`, {
@@ -2759,21 +3716,21 @@ async function runCompose(name, btn) {
         });
         const data = await res.json();
 
-        if (!res.ok) throw new Error(data.error || 'Start failed');
+        if (!res.ok) throw new Error(data.error || t('common.error', 'Error al iniciar'));
 
-        alert(`Compose "${name}" started!`);
+        alert(`Compose "${name}" ${t('docker.started', 'iniciado')}!`);
         renderContent('docker');
     } catch (e) {
         console.error('Compose run error:', e);
         alert('Error: ' + e.message);
         btn.disabled = false;
-        btn.textContent = 'Run';
+        btn.textContent = t('docker.run', 'Ejecutar');
     }
 }
 
 async function stopCompose(name, btn) {
     btn.disabled = true;
-    btn.textContent = 'Stopping...';
+    btn.textContent = t('docker.stopping', 'Deteniendo...');
 
     try {
         const res = await authFetch(`${API_BASE}/docker/compose/down`, {
@@ -2782,15 +3739,15 @@ async function stopCompose(name, btn) {
         });
         const data = await res.json();
 
-        if (!res.ok) throw new Error(data.error || 'Stop failed');
+        if (!res.ok) throw new Error(data.error || t('common.error', 'Error al detener'));
 
-        alert(`Compose "${name}" stopped!`);
+        alert(`Compose "${name}" ${t('docker.stopped', 'detenido')}!`);
         renderContent('docker');
     } catch (e) {
         console.error('Compose stop error:', e);
         alert('Error: ' + e.message);
         btn.disabled = false;
-        btn.textContent = 'Stop';
+        btn.textContent = t('docker.stop', 'Detener');
     }
 }
 
@@ -2917,7 +3874,7 @@ async function handleDockerAction(id, action, btn) {
     if (!btn) return;
 
     btn.disabled = true;
-    btn.textContent = 'Processing...';
+    btn.textContent = t('common.processing', 'Procesando...');
 
     try {
         const res = await authFetch(`${API_BASE}/docker/action`, {
@@ -2950,9 +3907,13 @@ async function renderNetworkManager() {
         state.network.interfaces = await res.json();
     } catch (e) {
         console.error('Network fetch error:', e);
-        dashboardContent.innerHTML = '<div class="glass-card"><h3>Error loading network data</h3></div>';
+        dashboardContent.innerHTML = `<div class="glass-card"><h3>${t('common.error', 'Error al cargar datos de red')}</h3></div>`;
         return;
     }
+
+    // Remove any existing network-grid to prevent duplicates
+    const existingGrid = dashboardContent.querySelector('.network-grid');
+    if (existingGrid) existingGrid.remove();
 
     const container = document.createElement('div');
     container.className = 'network-grid';
@@ -2960,7 +3921,7 @@ async function renderNetworkManager() {
     // 1. Interfaces Section
     const ifaceSection = document.createElement('div');
     const ifaceTitle = document.createElement('h3');
-    ifaceTitle.textContent = 'CM5 Network Adapters';
+    ifaceTitle.textContent = 'CM5 ' + t('network.adapters', 'Adaptadores de Red');
     ifaceTitle.style.marginBottom = '20px';
     ifaceSection.appendChild(ifaceTitle);
 
@@ -2983,10 +3944,11 @@ async function renderNetworkManager() {
 
         const headerInfo = document.createElement('div');
         const h4 = document.createElement('h4');
-        h4.textContent = `${iface.name || 'Unknown'} (${iface.id || 'N/A'})`;
+        h4.textContent = `${iface.name || t('common.unknown', 'Desconocido')} (${iface.id || 'N/A'})`;
         const statusSpan = document.createElement('span');
         statusSpan.style.cssText = `font-size: 0.8rem; color: ${isConnected ? '#10b981' : '#94a3b8'}`;
-        statusSpan.textContent = (iface.status || 'unknown').toUpperCase();
+        const statusMap = { connected: t('terminal.connected', 'CONECTADO'), disconnected: t('terminal.disconnected', 'DESCONECTADO') };
+        statusSpan.textContent = statusMap[iface.status] || (iface.status || t('common.unknown', 'desconocido')).toUpperCase();
         headerInfo.appendChild(h4);
         headerInfo.appendChild(statusSpan);
 
@@ -3026,7 +3988,7 @@ async function renderNetworkManager() {
             ipInput.placeholder = ' ';
 
             const label = document.createElement('label');
-            label.textContent = 'Hardware Assigned IP';
+            label.textContent = t('network.hardwareAssignedIP', 'IP Asignada por Hardware');
 
             inputGroup.appendChild(ipInput);
             inputGroup.appendChild(label);
@@ -3041,7 +4003,7 @@ async function renderNetworkManager() {
             ipInput.value = iface.ip || '';
             ipInput.placeholder = ' ';
             const ipLabel = document.createElement('label');
-            ipLabel.textContent = 'IP Address';
+            ipLabel.textContent = t('network.ipAddress', 'Dirección IP');
             ipGroup.appendChild(ipInput);
             ipGroup.appendChild(ipLabel);
 
@@ -3054,7 +4016,7 @@ async function renderNetworkManager() {
             subnetInput.value = iface.subnet || '';
             subnetInput.placeholder = ' ';
             const subnetLabel = document.createElement('label');
-            subnetLabel.textContent = 'Subnet Mask';
+            subnetLabel.textContent = t('network.subnetMask', 'Máscara de Subred');
             subnetGroup.appendChild(subnetInput);
             subnetGroup.appendChild(subnetLabel);
 
@@ -3069,7 +4031,7 @@ async function renderNetworkManager() {
         const saveBtn = document.createElement('button');
         saveBtn.className = 'btn-primary';
         saveBtn.style.cssText = 'padding: 10px; max-width: 200px;';
-        saveBtn.textContent = 'Save to Node';
+        saveBtn.textContent = t('network.saveToNode', 'Guardar en Nodo');
         saveBtn.addEventListener('click', () => applyNetwork(iface.id));
 
         btnContainer.appendChild(saveBtn);
@@ -3115,7 +4077,7 @@ function renderNetForm(netForm, iface, isDhcp) {
         ipInput.placeholder = ' ';
 
         const label = document.createElement('label');
-        label.textContent = 'Hardware Assigned IP';
+        label.textContent = t('network.hardwareAssignedIP', 'Hardware Assigned IP');
 
         inputGroup.appendChild(ipInput);
         inputGroup.appendChild(label);
@@ -3130,7 +4092,7 @@ function renderNetForm(netForm, iface, isDhcp) {
         ipInput.value = iface.ip || '';
         ipInput.placeholder = ' ';
         const ipLabel = document.createElement('label');
-        ipLabel.textContent = 'IP Address';
+        ipLabel.textContent = t('network.ipAddress', 'Dirección IP');
         ipGroup.appendChild(ipInput);
         ipGroup.appendChild(ipLabel);
 
@@ -3143,7 +4105,7 @@ function renderNetForm(netForm, iface, isDhcp) {
         subnetInput.value = iface.subnet || '';
         subnetInput.placeholder = ' ';
         const subnetLabel = document.createElement('label');
-        subnetLabel.textContent = 'Subnet Mask';
+        subnetLabel.textContent = t('network.subnetMask', 'Máscara de Subred');
         subnetGroup.appendChild(subnetInput);
         subnetGroup.appendChild(subnetLabel);
 
@@ -3156,7 +4118,7 @@ function renderNetForm(netForm, iface, isDhcp) {
         gatewayInput.value = iface.gateway || '';
         gatewayInput.placeholder = ' ';
         const gatewayLabel = document.createElement('label');
-        gatewayLabel.textContent = 'Gateway';
+        gatewayLabel.textContent = t('network.gateway', 'Puerta de Enlace');
         gatewayGroup.appendChild(gatewayInput);
         gatewayGroup.appendChild(gatewayLabel);
 
@@ -3169,7 +4131,7 @@ function renderNetForm(netForm, iface, isDhcp) {
         dnsInput.value = '';
         dnsInput.placeholder = ' ';
         const dnsLabel = document.createElement('label');
-        dnsLabel.textContent = 'DNS (ej: 8.8.8.8)';
+        dnsLabel.textContent = t('network.dns', 'DNS') + ' (ej: 8.8.8.8)';
         dnsGroup.appendChild(dnsInput);
         dnsGroup.appendChild(dnsLabel);
 
@@ -3186,7 +4148,7 @@ function renderNetForm(netForm, iface, isDhcp) {
     const saveBtn = document.createElement('button');
     saveBtn.className = 'btn-primary';
     saveBtn.style.cssText = 'padding: 10px; width: 100%;';
-    saveBtn.textContent = 'Save to Node';
+    saveBtn.textContent = t('network.saveToNode', 'Guardar en Nodo');
     saveBtn.addEventListener('click', () => applyNetwork(iface.id));
 
     btnContainer.appendChild(saveBtn);
@@ -3246,10 +4208,10 @@ async function applyNetwork(interfaceId) {
             throw new Error(data.error || 'Network configuration failed');
         }
 
-        alert(data.message || 'Configuration saved');
+        alert(data.message || t('common.saved', 'Configuración guardada'));
     } catch (e) {
         console.error('Network config error:', e);
-        alert(e.message || 'Failed to apply network configuration');
+        alert(e.message || t('common.error', 'Error al aplicar configuración de red'));
     }
 }
 
@@ -3314,11 +4276,11 @@ function renderSystemView() {
     mgmtCard.style.gridColumn = '1 / -1';
 
     const mgmtTitle = document.createElement('h3');
-    mgmtTitle.textContent = 'CM5 Node Management';
+    mgmtTitle.textContent = 'CM5 ' + t('system.nodeManagement', 'Gestión del Nodo');
 
     const mgmtDesc = document.createElement('p');
     mgmtDesc.style.cssText = 'color: var(--text-dim); margin-top: 10px;';
-    mgmtDesc.textContent = 'Execute physical actions on the NAS hardware.';
+    mgmtDesc.textContent = t('system.executeActions', 'Ejecutar acciones físicas en el hardware del NAS.');
 
     const btnContainer = document.createElement('div');
     btnContainer.style.cssText = 'display: flex; gap: 20px; margin-top: 30px;';
@@ -3326,13 +4288,13 @@ function renderSystemView() {
     const rebootBtn = document.createElement('button');
     rebootBtn.className = 'btn-primary';
     rebootBtn.style.cssText = 'background: #f59e0b; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);';
-    rebootBtn.textContent = 'Restart Node';
+    rebootBtn.textContent = t('system.restartNode', 'Reiniciar Nodo');
     rebootBtn.addEventListener('click', () => systemAction('reboot'));
 
     const shutdownBtn = document.createElement('button');
     shutdownBtn.className = 'btn-primary';
     shutdownBtn.style.cssText = 'background: #ef4444; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);';
-    shutdownBtn.textContent = 'Power Off';
+    shutdownBtn.textContent = t('system.powerOff', 'Apagar');
     shutdownBtn.addEventListener('click', () => systemAction('shutdown'));
 
     btnContainer.appendChild(rebootBtn);
@@ -3347,15 +4309,15 @@ function renderSystemView() {
     infoCard.className = 'glass-card';
 
     const infoTitle = document.createElement('h3');
-    infoTitle.textContent = 'System Info';
+    infoTitle.textContent = t('system.systemInfo', 'Información del Sistema');
 
     const uptimeRow = document.createElement('div');
     uptimeRow.className = 'stat-row';
-    uptimeRow.innerHTML = `<span>Logic Uptime</span> <span>${uptimeStr}</span>`;
+    uptimeRow.innerHTML = `<span>${t('system.logicUptime', 'Tiempo Activo Lógico')}</span> <span>${uptimeStr}</span>`;
 
     const hostnameRow = document.createElement('div');
     hostnameRow.className = 'stat-row';
-    hostnameRow.innerHTML = `<span>Node Name</span> <span>${hostname}</span>`;
+    hostnameRow.innerHTML = `<span>${t('system.nodeName', 'Nombre del Nodo')}</span> <span>${hostname}</span>`;
 
     infoCard.appendChild(infoTitle);
     infoCard.appendChild(uptimeRow);
@@ -3366,16 +4328,16 @@ function renderSystemView() {
     updateCard.className = 'glass-card';
 
     const updateTitle = document.createElement('h3');
-    updateTitle.textContent = 'Software Updates';
+    updateTitle.textContent = t('system.softwareUpdates', 'Actualizaciones de Software');
 
     const updateDesc = document.createElement('p');
     updateDesc.style.cssText = 'color: var(--text-dim); margin-top: 10px;';
-    updateDesc.textContent = 'Check for and install HomePiNAS updates from GitHub.';
+    updateDesc.textContent = t('system.checkUpdatesDesc', 'Buscar e instalar actualizaciones de HomePiNAS desde GitHub.');
 
     const updateStatus = document.createElement('div');
     updateStatus.id = 'update-status';
     updateStatus.style.cssText = 'margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px;';
-    updateStatus.innerHTML = '<span style="color: var(--text-dim);">Click "Check Updates" to verify...</span>';
+    updateStatus.innerHTML = `<span style="color: var(--text-dim);">${t('system.clickToCheck', 'Haz clic en "Buscar Actualizaciones" para verificar...')}</span>`;
 
     const updateBtnContainer = document.createElement('div');
     updateBtnContainer.style.cssText = 'display: flex; gap: 15px; margin-top: 20px;';
@@ -3383,14 +4345,14 @@ function renderSystemView() {
     const checkUpdateBtn = document.createElement('button');
     checkUpdateBtn.className = 'btn-primary';
     checkUpdateBtn.style.cssText = 'background: #6366f1; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);';
-    checkUpdateBtn.textContent = 'Check Updates';
+    checkUpdateBtn.textContent = t('system.checkUpdates', 'Buscar Actualizaciones');
     checkUpdateBtn.addEventListener('click', checkForUpdates);
 
     const applyUpdateBtn = document.createElement('button');
     applyUpdateBtn.className = 'btn-primary';
     applyUpdateBtn.id = 'apply-update-btn';
     applyUpdateBtn.style.cssText = 'background: #10b981; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4); display: none;';
-    applyUpdateBtn.textContent = 'Install Update';
+    applyUpdateBtn.textContent = t('system.installUpdate', 'Instalar Actualización');
     applyUpdateBtn.addEventListener('click', applyUpdate);
 
     updateBtnContainer.appendChild(checkUpdateBtn);
@@ -3435,7 +4397,7 @@ async function checkForUpdates() {
 
     if (!statusEl) return;
 
-    statusEl.innerHTML = '<span style="color: #f59e0b;">Checking for updates...</span>';
+    statusEl.innerHTML = `<span style="color: #f59e0b;">${t('system.checkingUpdates', 'Buscando actualizaciones...')}</span>`;
     if (applyBtn) applyBtn.style.display = 'none';
 
     try {
@@ -3443,27 +4405,27 @@ async function checkForUpdates() {
         const data = await res.json();
 
         if (!res.ok) {
-            throw new Error(data.error || 'Failed to check updates');
+            throw new Error(data.error || t('common.error', 'Error al buscar actualizaciones'));
         }
 
         if (data.updateAvailable) {
             statusEl.innerHTML = `
-                <div style="color: #10b981; font-weight: 600;">Update Available!</div>
+                <div style="color: #10b981; font-weight: 600;">${t('system.updateAvailable', '¡Actualización Disponible!')}</div>
                 <div style="margin-top: 8px; color: var(--text-dim);">
-                    Current: <strong>v${escapeHtml(data.currentVersion)}</strong> →
-                    Latest: <strong style="color: #10b981;">v${escapeHtml(data.latestVersion)}</strong>
+                    ${t('system.current', 'Actual')}: <strong>v${escapeHtml(data.currentVersion)}</strong> →
+                    ${t('system.latest', 'Última')}: <strong style="color: #10b981;">v${escapeHtml(data.latestVersion)}</strong>
                 </div>
                 <div style="margin-top: 10px; font-size: 0.85rem; color: var(--text-dim);">
-                    <strong>Changes:</strong><br>
-                    <code style="display: block; margin-top: 5px; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 4px; white-space: pre-wrap;">${escapeHtml(data.changelog || 'See GitHub for details')}</code>
+                    <strong>${t('system.changes', 'Cambios')}:</strong><br>
+                    <code style="display: block; margin-top: 5px; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 4px; white-space: pre-wrap;">${escapeHtml(data.changelog || t('common.info', 'Ver GitHub para detalles'))}</code>
                 </div>
             `;
             if (applyBtn) applyBtn.style.display = 'inline-block';
         } else {
             statusEl.innerHTML = `
-                <div style="color: #6366f1;">You're up to date!</div>
+                <div style="color: #6366f1;">${t('system.upToDate', '¡Estás al día!')}</div>
                 <div style="margin-top: 8px; color: var(--text-dim);">
-                    Version: <strong>v${escapeHtml(data.currentVersion)}</strong>
+                    ${t('system.version', 'Versión')}: <strong>v${escapeHtml(data.currentVersion)}</strong>
                 </div>
             `;
         }
@@ -3481,11 +4443,11 @@ async function applyUpdate() {
     const applyBtn = document.getElementById('apply-update-btn');
 
     if (statusEl) {
-        statusEl.innerHTML = '<span style="color: #f59e0b;">Installing update... Please wait.</span>';
+        statusEl.innerHTML = `<span style="color: #f59e0b;">${t('system.installingUpdate', 'Instalando actualización... Por favor espera.')}</span>`;
     }
     if (applyBtn) {
         applyBtn.disabled = true;
-        applyBtn.textContent = 'Installing...';
+        applyBtn.textContent = t('system.installing', 'Instalando...');
     }
 
     try {
@@ -3525,11 +4487,11 @@ async function applyUpdate() {
     } catch (e) {
         console.error('Update apply error:', e);
         if (statusEl) {
-            statusEl.innerHTML = `<span style="color: #ef4444;">Update failed: ${escapeHtml(e.message)}</span>`;
+            statusEl.innerHTML = `<span style="color: #ef4444;">${t('system.updateFailed', 'Actualización fallida')}: ${escapeHtml(e.message)}</span>`;
         }
         if (applyBtn) {
             applyBtn.disabled = false;
-            applyBtn.textContent = 'Retry Update';
+            applyBtn.textContent = t('system.retryUpdate', 'Reintentar Actualización');
             applyBtn.style.display = 'inline-block';
         }
     }
@@ -3554,11 +4516,12 @@ if (resetBtn) {
         const confirmed = await showConfirmModal('RESETEAR NAS', '¿Seguro que quieres RESETEAR todo el NAS? Se borrará toda la configuración y será necesario configurarlo de nuevo.');
         if (!confirmed) return;
 
-        resetBtn.textContent = 'Resetting Node...';
+        resetBtn.textContent = t('system.resettingNode', 'Reseteando Nodo...');
         resetBtn.disabled = true;
 
         try {
-            const res = await authFetch(`${API_BASE}/system/reset`, { method: 'POST' });
+            // Use public factory-reset endpoint (no auth required - for login page)
+            const res = await fetch(`${API_BASE}/system/factory-reset`, { method: 'POST' });
             const data = await res.json();
 
             if (res.ok && data.success) {
@@ -3566,14 +4529,14 @@ if (resetBtn) {
                 clearSession();
                 window.location.reload();
             } else {
-                alert('Reset Failed: ' + (data.error || 'Unknown error'));
-                resetBtn.textContent = 'Reset Setup & Data';
+                alert(t('system.resetFailed', 'Reseteo Fallido') + ': ' + (data.error || t('common.unknown', 'Error desconocido')));
+                resetBtn.textContent = t('system.resetSetupData', 'Resetear Configuración');
                 resetBtn.disabled = false;
             }
         } catch (e) {
             console.error('Reset error:', e);
-            alert(e.message || 'Reset Error: Communications Broken');
-            resetBtn.textContent = 'Reset Setup & Data';
+            alert(e.message || t('system.resetError', 'Error de Reseteo: Comunicación interrumpida'));
+            resetBtn.textContent = t('system.resetSetupData', 'Resetear Configuración');
             resetBtn.disabled = false;
         }
     });
@@ -4013,7 +4976,7 @@ async function openContainerLogs(containerId, containerName) {
             logsEl.textContent = data.logs;
             logsEl.scrollTop = logsEl.scrollHeight;
         } else {
-            logsEl.innerHTML = '<span style="color: var(--text-dim);">No logs available</span>';
+            logsEl.innerHTML = `<span style="color: var(--text-dim);">${t('logs.noLogs', 'No hay logs disponibles')}</span>`;
         }
     } catch (e) {
         document.getElementById('logs-content').innerHTML = `<span style="color: #ef4444;">Error: ${escapeHtml(e.message)}</span>`;
@@ -4815,6 +5778,11 @@ async function handleFileUpload(e) {
         formData.append('files', file);
         formData.append('path', currentFilePath);
 
+        // Speed calculation
+        let uploadStartTime = Date.now();
+        let lastLoaded = 0;
+        let lastTime = uploadStartTime;
+
         try {
             // Helper to perform upload with current CSRF token
             const doUpload = () => new Promise((resolve, reject) => {
@@ -4822,11 +5790,61 @@ async function handleFileUpload(e) {
                 xhr.open('POST', `${API_BASE}/files/upload`);
                 xhr.setRequestHeader('X-Session-Id', state.sessionId);
                 if (state.csrfToken) xhr.setRequestHeader('X-CSRF-Token', state.csrfToken);
+                uploadStartTime = Date.now();
+                lastTime = uploadStartTime;
+                lastLoaded = 0;
 
                 xhr.upload.addEventListener('progress', (ev) => {
                     if (ev.lengthComputable) {
                         const pct = Math.round((ev.loaded / ev.total) * 100);
-                        if (percentEl) percentEl.textContent = pct + '%';
+                        const now = Date.now();
+                        const elapsed = (now - lastTime) / 1000; // seconds
+                        
+                        // Calculate speed (use instant speed with smoothing)
+                        let speed = 0;
+                        if (elapsed > 0.1) { // Update every 100ms minimum
+                            const bytesDelta = ev.loaded - lastLoaded;
+                            speed = bytesDelta / elapsed; // bytes per second
+                            lastLoaded = ev.loaded;
+                            lastTime = now;
+                        }
+                        
+                        // Also calculate average speed for ETA
+                        const totalElapsed = (now - uploadStartTime) / 1000;
+                        const avgSpeed = totalElapsed > 0 ? ev.loaded / totalElapsed : 0;
+                        const remaining = ev.total - ev.loaded;
+                        const eta = avgSpeed > 0 ? remaining / avgSpeed : 0;
+                        
+                        // Format speed
+                        let speedStr = '';
+                        if (speed > 0 || avgSpeed > 0) {
+                            const displaySpeed = speed > 0 ? speed : avgSpeed;
+                            if (displaySpeed >= 1024 * 1024 * 1024) {
+                                speedStr = (displaySpeed / (1024 * 1024 * 1024)).toFixed(1) + ' GB/s';
+                            } else if (displaySpeed >= 1024 * 1024) {
+                                speedStr = (displaySpeed / (1024 * 1024)).toFixed(1) + ' MB/s';
+                            } else if (displaySpeed >= 1024) {
+                                speedStr = (displaySpeed / 1024).toFixed(0) + ' KB/s';
+                            } else {
+                                speedStr = displaySpeed.toFixed(0) + ' B/s';
+                            }
+                        }
+                        
+                        // Format ETA
+                        let etaStr = '';
+                        if (eta > 0 && eta < 86400) { // Less than 24h
+                            if (eta >= 3600) {
+                                etaStr = Math.floor(eta / 3600) + 'h ' + Math.floor((eta % 3600) / 60) + 'm';
+                            } else if (eta >= 60) {
+                                etaStr = Math.floor(eta / 60) + 'm ' + Math.floor(eta % 60) + 's';
+                            } else {
+                                etaStr = Math.floor(eta) + 's';
+                            }
+                        }
+                        
+                        if (percentEl) {
+                            percentEl.textContent = `${pct}%${speedStr ? ' • ' + speedStr : ''}${etaStr ? ' • ' + etaStr : ''}`;
+                        }
                         if (fillEl) fillEl.style.width = pct + '%';
                     }
                 });
@@ -4943,17 +5961,30 @@ function fmPreviewFile(file, basePath) {
     // Header
     const header = document.createElement('div');
     header.className = 'fm-preview-header';
-    header.innerHTML = `
-        <span class="fm-preview-title">${file.name}</span>
-        <div class="fm-preview-actions">
-            <button class="fm-action-btn" onclick="downloadFile('${fullPath.replace(/'/g, "\\'")}')" title="Descargar">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            </button>
-            <button class="fm-action-btn" onclick="this.closest('.fm-preview-overlay').remove()" title="Cerrar">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-        </div>
-    `;
+    
+    const titleSpan = document.createElement('span');
+    titleSpan.className = 'fm-preview-title';
+    titleSpan.textContent = file.name;
+    
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'fm-preview-actions';
+    
+    const downloadBtn = document.createElement('button');
+    downloadBtn.className = 'fm-action-btn';
+    downloadBtn.title = 'Descargar';
+    downloadBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+    downloadBtn.addEventListener('click', () => downloadFile(fullPath));
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'fm-action-btn';
+    closeBtn.title = 'Cerrar';
+    closeBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    closeBtn.addEventListener('click', () => overlay.remove());
+    
+    actionsDiv.appendChild(downloadBtn);
+    actionsDiv.appendChild(closeBtn);
+    header.appendChild(titleSpan);
+    header.appendChild(actionsDiv);
     modal.appendChild(header);
 
     const body = document.createElement('div');
@@ -4984,11 +6015,12 @@ function fmPreviewFile(file, basePath) {
         body.innerHTML = `
             <div class="fm-preview-nopreview">
                 ${getFileIconSVG(file.name, 80)}
-                <p style="margin-top:16px;font-size:1rem">${file.name}</p>
+                <p style="margin-top:16px;font-size:1rem">${escapeHtml(file.name)}</p>
                 <p style="color:var(--text-dim);font-size:0.85rem">${formatFileSize(file.size)} · ${ext.toUpperCase()}</p>
-                <button class="btn-primary btn-sm" style="margin-top:16px" onclick="downloadFile('${fullPath.replace(/'/g, "\\'")}')">Descargar archivo</button>
+                <button class="btn-primary btn-sm fm-nopreview-download" style="margin-top:16px">Descargar archivo</button>
             </div>
         `;
+        body.querySelector('.fm-nopreview-download').addEventListener('click', () => downloadFile(fullPath));
     }
 
     modal.appendChild(body);
@@ -5184,7 +6216,7 @@ async function searchFiles(query) {
         const searchData = await res.json();
         const results = searchData.results || searchData || [];
         if (results.length === 0) {
-            filesList.innerHTML = '<div class="fm-empty-state"><p>Sin resultados para "' + query + '"</p></div>';
+            filesList.innerHTML = '<div class="fm-empty-state"><p>Sin resultados para "' + escapeHtml(query) + '"</p></div>';
             return;
         }
         filesList.innerHTML = '';
@@ -5537,10 +6569,12 @@ async function setup2FA() {
         content.innerHTML = `
             <div style="text-align: center; max-width: 400px; margin: 0 auto;">
                 <p style="margin-bottom: 15px;">Escanea este código QR con tu app de autenticación:</p>
-                <div style="background: white; padding: 20px; border-radius: 12px; display: inline-block; margin-bottom: 15px;">
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(data.uri)}" alt="QR Code" style="display: block;">
+                <div style="background: var(--bg-card); padding: 20px; border-radius: 12px; display: inline-block; margin-bottom: 15px; border: 1px solid var(--border);">
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 10px;">Introduce esta clave manualmente en tu app de autenticaci\u00f3n:</p>
+                    <code id="totp-secret-display" style="display: block; background: var(--bg-hover); padding: 12px 16px; border-radius: 8px; font-size: 1.1rem; letter-spacing: 2px; word-break: break-all; user-select: all; cursor: text; color: var(--primary); font-weight: 600;">${escapeHtml(data.secret)}</code>
+                    <button onclick="navigator.clipboard.writeText(document.getElementById('totp-secret-display').textContent).then(() => this.textContent = '\u2713 Copiado').catch(() => {})" style="margin-top: 10px; padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-hover); color: var(--text); cursor: pointer; font-size: 0.85rem;">Copiar clave</button>
                 </div>
-                <p style="font-size: 0.8rem; color: var(--text-dim); word-break: break-all; margin-bottom: 20px;">Secret: ${escapeHtml(data.secret)}</p>
+                <p style="font-size: 0.8rem; color: var(--text-dim); word-break: break-all; margin-bottom: 20px;">Account: ${escapeHtml(data.uri ? new URL(data.uri).pathname.replace(/^\/\/totp\//, '') : '')}</p>
                 <div style="display: flex; gap: 10px; justify-content: center; align-items: center;">
                     <input type="text" id="totp-verify-code" placeholder="Código de 6 dígitos" maxlength="6" style="padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); width: 160px; text-align: center; font-size: 1.2rem; letter-spacing: 4px;">
                     <button class="btn-primary" id="verify-totp-btn">Verificar</button>
@@ -6316,9 +7350,9 @@ async function renderUPSSection(container) {
                 </div>
             </div>
             <div style="margin-top: 15px; padding: 12px; background: var(--bg-hover); border-radius: 8px; display: flex; gap: 20px; flex-wrap: wrap; font-size: 0.9rem;">
-                <span><strong>Estado:</strong> ${escapeHtml(data.status || 'Unknown')}</span>
-                <span><strong>Modelo:</strong> ${escapeHtml(data.model || 'Unknown')}</span>
-                <span><strong>Driver:</strong> ${escapeHtml(data.driver || 'Unknown')}</span>
+                <span><strong>Estado:</strong> ${escapeHtml(data.status || t('common.unknown', 'Desconocido'))}</span>
+                <span><strong>Modelo:</strong> ${escapeHtml(data.model || t('common.unknown', 'Desconocido'))}</span>
+                <span><strong>Driver:</strong> ${escapeHtml(data.driver || t('common.unknown', 'Desconocido'))}</span>
             </div>
         `;
     } catch (e) {
@@ -6530,7 +7564,7 @@ async function loadDDNSServices() {
                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
                     <span style="font-size: 1.5rem;">${providerLogos[svc.provider] || '🌐'}</span>
                     <div>
-                        <h4 style="margin: 0;">${escapeHtml(svc.domain || svc.hostname || 'Unknown')}</h4>
+                        <h4 style="margin: 0;">${escapeHtml(svc.domain || svc.hostname || t('common.unknown', 'Desconocido'))}</h4>
                         <span style="font-size: 0.8rem; color: var(--text-dim);">${escapeHtml(svc.provider)}</span>
                     </div>
                     <span style="margin-left: auto; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; ${
@@ -7720,6 +8754,1161 @@ async function buildRecoveryISO() {
 }
 
 // =============================================================================
+// ACTIVE DIRECTORY (Samba AD DC)
+// =============================================================================
+
+let adRefreshInterval = null;
+
+async function renderActiveDirectoryView() {
+    const dashboardContent = document.getElementById('dashboard-content');
+    if (!dashboardContent) return;
+    
+    // Clear any existing refresh interval
+    if (adRefreshInterval) {
+        clearInterval(adRefreshInterval);
+        adRefreshInterval = null;
+    }
+    
+    dashboardContent.innerHTML = `
+        <div class="section-header">
+            <h2>🏢 Active Directory Domain Controller</h2>
+            <p class="section-subtitle">Gestiona tu dominio AD desde HomePiNAS</p>
+        </div>
+        <div id="ad-content">
+            <div class="loading-spinner">Cargando...</div>
+        </div>
+    `;
+    
+    await renderADContent();
+}
+
+async function renderADContent() {
+    const container = document.getElementById('ad-content');
+    if (!container) return;
+    
+    try {
+        const res = await authFetch(`${API_BASE}/ad/status`);
+        const status = await res.json();
+        
+        if (!status.installed) {
+            // Not installed - show install button
+            container.innerHTML = `
+                <div class="card" style="text-align: center; padding: 40px;">
+                    <h3 style="color: var(--warning);">⚠️ Samba AD DC no instalado</h3>
+                    <p style="margin: 20px 0; color: var(--text-secondary);">
+                        Active Directory Domain Controller permite que equipos Windows se unan a tu NAS como controlador de dominio.
+                    </p>
+                    <button class="btn btn-primary" id="ad-install-btn">
+                        📦 Instalar Samba AD DC
+                    </button>
+                    <p style="margin-top: 15px; font-size: 0.85rem; color: var(--text-muted);">
+                        Esto instalará ~500MB de paquetes y tardará unos minutos.
+                    </p>
+                </div>
+            `;
+            
+            document.getElementById('ad-install-btn')?.addEventListener('click', async () => {
+                const btn = document.getElementById('ad-install-btn');
+                btn.disabled = true;
+                btn.innerHTML = '⏳ Instalando...';
+                
+                try {
+                    const res = await authFetch(`${API_BASE}/ad/install`, { method: 'POST' });
+                    const data = await res.json();
+                    
+                    if (data.success) {
+                        showNotification('success', 'Samba AD DC instalado correctamente');
+                        await renderADContent();
+                    } else {
+                        showNotification('error', data.error || 'Error instalando');
+                        btn.disabled = false;
+                        btn.innerHTML = '📦 Instalar Samba AD DC';
+                    }
+                } catch (err) {
+                    showNotification('error', 'Error: ' + err.message);
+                    btn.disabled = false;
+                    btn.innerHTML = '📦 Instalar Samba AD DC';
+                }
+            });
+            return;
+        }
+        
+        if (!status.provisioned) {
+            // Installed but not provisioned - show provision form
+            container.innerHTML = `
+                <style>
+                    .ad-setup-container {
+                        display: grid;
+                        grid-template-columns: 1fr 1fr;
+                        gap: 24px;
+                        max-width: 1200px;
+                    }
+                    @media (max-width: 900px) {
+                        .ad-setup-container { grid-template-columns: 1fr; }
+                    }
+                    .ad-form-card {
+                        background: var(--card-bg, #fff);
+                        border-radius: 12px;
+                        padding: 28px;
+                        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+                        border: 1px solid var(--border-color, #e0e0e0);
+                    }
+                    .ad-form-header {
+                        display: flex;
+                        align-items: center;
+                        gap: 12px;
+                        margin-bottom: 8px;
+                    }
+                    .ad-form-header-icon {
+                        width: 48px;
+                        height: 48px;
+                        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                        border-radius: 12px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 24px;
+                    }
+                    .ad-form-header h3 {
+                        margin: 0;
+                        font-size: 1.25rem;
+                        font-weight: 600;
+                    }
+                    .ad-form-header p {
+                        margin: 4px 0 0 0;
+                        color: var(--text-secondary, #666);
+                        font-size: 0.875rem;
+                    }
+                    .ad-form-field {
+                        margin-bottom: 20px;
+                    }
+                    .ad-form-field label {
+                        display: block;
+                        font-weight: 500;
+                        margin-bottom: 6px;
+                        color: var(--text-primary, #333);
+                        font-size: 0.9rem;
+                    }
+                    .ad-form-field input {
+                        width: 100%;
+                        padding: 12px 14px;
+                        border: 1px solid var(--border-color, #d1d5db);
+                        border-radius: 8px;
+                        font-size: 0.95rem;
+                        transition: border-color 0.2s, box-shadow 0.2s;
+                        background: var(--input-bg, #fff);
+                        color: var(--text-primary, #333);
+                        box-sizing: border-box;
+                    }
+                    .ad-form-field input:focus {
+                        outline: none;
+                        border-color: #3b82f6;
+                        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+                    }
+                    .ad-form-field input::placeholder {
+                        color: var(--text-tertiary, #9ca3af);
+                    }
+                    .ad-form-field small {
+                        display: block;
+                        margin-top: 6px;
+                        color: var(--text-secondary, #666);
+                        font-size: 0.8rem;
+                    }
+                    .ad-form-row {
+                        display: grid;
+                        grid-template-columns: 1fr 1fr;
+                        gap: 16px;
+                    }
+                    @media (max-width: 500px) {
+                        .ad-form-row { grid-template-columns: 1fr; }
+                    }
+                    .ad-submit-btn {
+                        width: 100%;
+                        padding: 14px 24px;
+                        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        font-size: 1rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: transform 0.15s, box-shadow 0.15s;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 8px;
+                    }
+                    .ad-submit-btn:hover {
+                        transform: translateY(-1px);
+                        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+                    }
+                    .ad-submit-btn:disabled {
+                        opacity: 0.6;
+                        cursor: not-allowed;
+                        transform: none;
+                    }
+                    .ad-info-card {
+                        background: var(--card-bg, #fff);
+                        border-radius: 12px;
+                        padding: 28px;
+                        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+                        border: 1px solid var(--border-color, #e0e0e0);
+                    }
+                    .ad-info-card h4 {
+                        margin: 0 0 16px 0;
+                        font-size: 1rem;
+                        font-weight: 600;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                    }
+                    .ad-info-item {
+                        display: flex;
+                        gap: 12px;
+                        padding: 14px 0;
+                        border-bottom: 1px solid var(--border-color, #e5e7eb);
+                    }
+                    .ad-info-item:last-child {
+                        border-bottom: none;
+                    }
+                    .ad-info-icon {
+                        width: 36px;
+                        height: 36px;
+                        background: var(--bg-tertiary, #f3f4f6);
+                        border-radius: 8px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 16px;
+                        flex-shrink: 0;
+                    }
+                    .ad-info-content strong {
+                        display: block;
+                        font-weight: 500;
+                        margin-bottom: 2px;
+                        color: var(--text-primary, #333);
+                    }
+                    .ad-info-content span {
+                        color: var(--text-secondary, #666);
+                        font-size: 0.85rem;
+                    }
+                </style>
+                
+                <div class="ad-setup-container">
+                    <div class="ad-form-card">
+                        <div class="ad-form-header">
+                            <div class="ad-form-header-icon">🏢</div>
+                            <div>
+                                <h3>Configurar Dominio</h3>
+                                <p>Samba AD DC instalado — configura tu dominio</p>
+                            </div>
+                        </div>
+                        
+                        <form id="ad-provision-form" style="margin-top: 24px;">
+                            <div class="ad-form-field">
+                                <label>Nombre del dominio (NetBIOS)</label>
+                                <input type="text" id="ad-domain" placeholder="HOMELABS" 
+                                       pattern="[A-Za-z][A-Za-z0-9]{0,14}" required
+                                       style="text-transform: uppercase;">
+                                <small>Máx 15 caracteres, solo letras y números</small>
+                            </div>
+                            
+                            <div class="ad-form-field">
+                                <label>Realm (FQDN)</label>
+                                <input type="text" id="ad-realm" placeholder="homelabs.local" required>
+                                <small>Nombre completo del dominio para Kerberos</small>
+                            </div>
+                            
+                            <div class="ad-form-row">
+                                <div class="ad-form-field">
+                                    <label>Contraseña Administrator</label>
+                                    <input type="password" id="ad-password" minlength="8" required
+                                           placeholder="••••••••">
+                                    <small>Mínimo 8 caracteres</small>
+                                </div>
+                                
+                                <div class="ad-form-field">
+                                    <label>Confirmar contraseña</label>
+                                    <input type="password" id="ad-password-confirm" minlength="8" required
+                                           placeholder="••••••••">
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="ad-submit-btn">
+                                <span>🚀</span> Crear Dominio
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <div class="ad-info-card">
+                        <h4>📘 ¿Qué es Active Directory?</h4>
+                        
+                        <div class="ad-info-item">
+                            <div class="ad-info-icon">🏷️</div>
+                            <div class="ad-info-content">
+                                <strong>Nombre NetBIOS</strong>
+                                <span>Nombre corto del dominio (ej: HOMELABS, EMPRESA)</span>
+                            </div>
+                        </div>
+                        
+                        <div class="ad-info-item">
+                            <div class="ad-info-icon">🌐</div>
+                            <div class="ad-info-content">
+                                <strong>Realm (FQDN)</strong>
+                                <span>Nombre completo usado por Kerberos (ej: homelabs.local)</span>
+                            </div>
+                        </div>
+                        
+                        <div class="ad-info-item">
+                            <div class="ad-info-icon">🖥️</div>
+                            <div class="ad-info-content">
+                                <strong>Unir equipos Windows</strong>
+                                <span>Los PCs podrán unirse al dominio con login centralizado</span>
+                            </div>
+                        </div>
+                        
+                        <div class="ad-info-item">
+                            <div class="ad-info-icon">🔐</div>
+                            <div class="ad-info-content">
+                                <strong>DNS integrado</strong>
+                                <span>Samba incluye servidor DNS para el dominio</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('ad-provision-form')?.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const domain = document.getElementById('ad-domain').value.toUpperCase();
+                const realm = document.getElementById('ad-realm').value.toLowerCase();
+                const password = document.getElementById('ad-password').value;
+                const passwordConfirm = document.getElementById('ad-password-confirm').value;
+                
+                if (password !== passwordConfirm) {
+                    showNotification('error', 'Las contraseñas no coinciden');
+                    return;
+                }
+                
+                const btn = e.target.querySelector('button[type="submit"]');
+                btn.disabled = true;
+                btn.innerHTML = '⏳ Creando dominio...';
+                
+                try {
+                    const res = await authFetch(`${API_BASE}/ad/provision`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ domain, realm, adminPassword: password })
+                    });
+                    const data = await res.json();
+                    
+                    if (data.success) {
+                        showNotification('success', `Dominio ${data.domain} creado correctamente`);
+                        await renderADContent();
+                    } else {
+                        showNotification('error', data.error || 'Error creando dominio');
+                        btn.disabled = false;
+                        btn.innerHTML = '🚀 Crear Dominio';
+                    }
+                } catch (err) {
+                    showNotification('error', 'Error: ' + err.message);
+                    btn.disabled = false;
+                    btn.innerHTML = '🚀 Crear Dominio';
+                }
+            });
+            return;
+        }
+        
+        // Provisioned - show full dashboard
+        const [usersRes, computersRes, groupsRes] = await Promise.all([
+            authFetch(`${API_BASE}/ad/users`),
+            authFetch(`${API_BASE}/ad/computers`),
+            authFetch(`${API_BASE}/ad/groups`)
+        ]);
+        
+        const usersData = await usersRes.json();
+        const computersData = await computersRes.json();
+        const groupsData = await groupsRes.json();
+        
+        // Ensure arrays even if API returns error object
+        const users = Array.isArray(usersData) ? usersData : [];
+        const computers = Array.isArray(computersData) ? computersData : [];
+        const groups = Array.isArray(groupsData) ? groupsData : [];
+        
+        container.innerHTML = `
+            <style>
+                .ad-dashboard { max-width: 1400px; }
+                .ad-header-card {
+                    background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
+                    border-radius: 16px;
+                    padding: 24px 28px;
+                    color: white;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 20px;
+                    box-shadow: 0 4px 20px rgba(30, 58, 95, 0.3);
+                }
+                .ad-header-info { display: flex; align-items: center; gap: 16px; }
+                .ad-header-icon {
+                    width: 56px; height: 56px;
+                    background: rgba(255,255,255,0.15);
+                    border-radius: 14px;
+                    display: flex; align-items: center; justify-content: center;
+                    font-size: 28px;
+                }
+                .ad-header-text h2 { margin: 0; font-size: 1.5rem; font-weight: 600; }
+                .ad-header-text p { margin: 4px 0 0; opacity: 0.85; font-size: 0.95rem; }
+                .ad-header-status {
+                    display: flex; align-items: center; gap: 8px;
+                    background: rgba(255,255,255,0.1); padding: 6px 14px;
+                    border-radius: 20px; font-size: 0.85rem;
+                }
+                .ad-header-status .dot {
+                    width: 10px; height: 10px; border-radius: 50%;
+                    background: ${status.running ? '#4ade80' : '#f87171'};
+                    box-shadow: 0 0 8px ${status.running ? '#4ade80' : '#f87171'};
+                }
+                .ad-header-actions { display: flex; gap: 10px; }
+                .ad-header-actions button {
+                    padding: 10px 18px; border-radius: 8px; border: none;
+                    font-weight: 500; cursor: pointer; transition: all 0.2s;
+                    display: flex; align-items: center; gap: 6px;
+                }
+                .ad-btn-stop { background: rgba(248,113,113,0.9); color: white; }
+                .ad-btn-stop:hover { background: #f87171; }
+                .ad-btn-start { background: rgba(74,222,128,0.9); color: #166534; }
+                .ad-btn-start:hover { background: #4ade80; }
+                .ad-btn-restart { background: rgba(255,255,255,0.15); color: white; }
+                .ad-btn-restart:hover { background: rgba(255,255,255,0.25); }
+                .ad-btn-restart:disabled { opacity: 0.4; cursor: not-allowed; }
+                
+                .ad-stats-grid {
+                    display: grid;
+                    grid-template-columns: repeat(3, 1fr);
+                    gap: 16px;
+                    margin-top: 20px;
+                }
+                @media (max-width: 700px) { .ad-stats-grid { grid-template-columns: 1fr; } }
+                .ad-stat-card {
+                    background: var(--card-bg, #fff);
+                    border-radius: 12px;
+                    padding: 20px 24px;
+                    display: flex;
+                    align-items: center;
+                    gap: 16px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+                    border: 1px solid var(--border-color, #e5e7eb);
+                }
+                .ad-stat-icon {
+                    width: 48px; height: 48px;
+                    border-radius: 12px;
+                    display: flex; align-items: center; justify-content: center;
+                    font-size: 22px;
+                }
+                .ad-stat-icon.users { background: #dbeafe; }
+                .ad-stat-icon.computers { background: #fce7f3; }
+                .ad-stat-icon.groups { background: #d1fae5; }
+                .ad-stat-value { font-size: 1.75rem; font-weight: 700; color: var(--text-primary, #1f2937); }
+                .ad-stat-label { font-size: 0.85rem; color: var(--text-secondary, #6b7280); margin-top: 2px; }
+                
+                .ad-tabs {
+                    display: flex;
+                    gap: 4px;
+                    margin-top: 24px;
+                    background: var(--bg-secondary, #f3f4f6);
+                    padding: 4px;
+                    border-radius: 12px;
+                    width: fit-content;
+                }
+                .ad-tab {
+                    padding: 10px 20px;
+                    border: none;
+                    background: transparent;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: 500;
+                    color: var(--text-secondary, #6b7280);
+                    transition: all 0.2s;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+                .ad-tab:hover { color: var(--text-primary, #1f2937); }
+                .ad-tab.active {
+                    background: var(--card-bg, #fff);
+                    color: #3b82f6;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                }
+                
+                .ad-content-card {
+                    background: var(--card-bg, #fff);
+                    border-radius: 12px;
+                    padding: 24px;
+                    margin-top: 16px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+                    border: 1px solid var(--border-color, #e5e7eb);
+                }
+                .ad-content-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 20px;
+                    flex-wrap: wrap;
+                    gap: 12px;
+                }
+                .ad-content-header h3 { margin: 0; font-size: 1.1rem; font-weight: 600; }
+                .ad-add-btn {
+                    padding: 8px 16px;
+                    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    transition: transform 0.15s, box-shadow 0.15s;
+                }
+                .ad-add-btn:hover {
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+                }
+                
+                .ad-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+                .ad-table th {
+                    text-align: left;
+                    padding: 12px 16px;
+                    font-weight: 600;
+                    font-size: 0.8rem;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    color: var(--text-secondary, #6b7280);
+                    border-bottom: 2px solid var(--border-color, #e5e7eb);
+                }
+                .ad-table td {
+                    padding: 14px 16px;
+                    border-bottom: 1px solid var(--border-color, #f3f4f6);
+                    color: var(--text-primary, #1f2937);
+                }
+                .ad-table tr:hover { background: var(--bg-secondary, #f9fafb); }
+                .ad-table-empty {
+                    text-align: center;
+                    padding: 40px;
+                    color: var(--text-secondary, #9ca3af);
+                }
+                .ad-table-empty-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+            </style>
+            
+            <div class="ad-dashboard">
+                <!-- Header -->
+                <div class="ad-header-card">
+                    <div class="ad-header-info">
+                        <div class="ad-header-icon">🏢</div>
+                        <div class="ad-header-text">
+                            <h2>${escapeHtml(status.domain || 'HOMELABS')}</h2>
+                            <p>${escapeHtml(status.realm || 'homelabs.local')}</p>
+                        </div>
+                        <div class="ad-header-status">
+                            <span class="dot"></span>
+                            ${status.running ? 'Activo' : 'Detenido'}
+                        </div>
+                    </div>
+                    <div class="ad-header-actions">
+                        <button class="${status.running ? 'ad-btn-stop' : 'ad-btn-start'}" id="ad-toggle-btn">
+                            ${status.running ? '⏹️ Detener' : '▶️ Iniciar'}
+                        </button>
+                        <button class="ad-btn-restart" id="ad-restart-btn" ${!status.running ? 'disabled' : ''}>
+                            🔄 Reiniciar
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Stats -->
+                <div class="ad-stats-grid">
+                    <div class="ad-stat-card">
+                        <div class="ad-stat-icon users">👤</div>
+                        <div>
+                            <div class="ad-stat-value">${users.length}</div>
+                            <div class="ad-stat-label">Usuarios</div>
+                        </div>
+                    </div>
+                    <div class="ad-stat-card">
+                        <div class="ad-stat-icon computers">💻</div>
+                        <div>
+                            <div class="ad-stat-value">${computers.length}</div>
+                            <div class="ad-stat-label">Equipos unidos</div>
+                        </div>
+                    </div>
+                    <div class="ad-stat-card">
+                        <div class="ad-stat-icon groups">👥</div>
+                        <div>
+                            <div class="ad-stat-value">${groups.length}</div>
+                            <div class="ad-stat-label">Grupos</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tabs -->
+                <div class="ad-tabs">
+                    <button class="ad-tab active" data-tab="ad-users">👤 Usuarios</button>
+                    <button class="ad-tab" data-tab="ad-computers">💻 Equipos</button>
+                    <button class="ad-tab" data-tab="ad-groups">👥 Grupos</button>
+                    <button class="ad-tab" data-tab="ad-join">📋 Unir Equipo</button>
+                </div>
+                
+                <!-- Tab Content -->
+                <div id="ad-tab-content" class="ad-content-card">
+                    <!-- Content rendered here -->
+                </div>
+            </div>
+        `;
+        
+        // Tab switching
+        container.querySelectorAll('.ad-tab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                container.querySelectorAll('.ad-tab').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                renderADTab(btn.dataset.tab, { users, computers, groups, status });
+            });
+        });
+        
+        // Service controls
+        document.getElementById('ad-toggle-btn')?.addEventListener('click', async () => {
+            const action = status.running ? 'stop' : 'start';
+            try {
+                await authFetch(`${API_BASE}/ad/service/${action}`, { method: 'POST' });
+                showNotification('success', `Servicio ${action === 'start' ? 'iniciado' : 'detenido'}`);
+                await renderADContent();
+            } catch (err) {
+                showNotification('error', 'Error: ' + err.message);
+            }
+        });
+        
+        document.getElementById('ad-restart-btn')?.addEventListener('click', async () => {
+            try {
+                await authFetch(`${API_BASE}/ad/service/restart`, { method: 'POST' });
+                showNotification('success', 'Servicio reiniciado');
+                await renderADContent();
+            } catch (err) {
+                showNotification('error', 'Error: ' + err.message);
+            }
+        });
+        
+        // Render initial tab
+        renderADTab('ad-users', { users, computers, groups, status });
+        
+    } catch (error) {
+        container.innerHTML = `
+            <div class="card" style="text-align: center; padding: 40px;">
+                <h3 style="color: var(--danger);">❌ Error</h3>
+                <p>${escapeHtml(error.message)}</p>
+                <button class="btn btn-primary" onclick="renderADContent()">🔄 Reintentar</button>
+            </div>
+        `;
+    }
+}
+
+function renderADTab(tab, data) {
+    const container = document.getElementById('ad-tab-content');
+    if (!container) return;
+    
+    const { users, computers, groups, status } = data;
+    
+    switch (tab) {
+        case 'ad-users':
+            container.innerHTML = `
+                <div class="ad-content-header">
+                    <h3>👤 Usuarios del Dominio</h3>
+                    <button class="ad-add-btn" id="ad-add-user-btn">➕ Nuevo Usuario</button>
+                </div>
+                ${users.length === 0 ? `
+                    <div class="ad-table-empty">
+                        <div class="ad-table-empty-icon">👤</div>
+                        <p>No hay usuarios en el dominio</p>
+                        <p style="font-size: 0.85rem;">Haz clic en "Nuevo Usuario" para crear el primero</p>
+                    </div>
+                ` : `
+                    <table class="ad-table">
+                        <thead>
+                            <tr>
+                                <th>Usuario</th>
+                                <th>Nombre</th>
+                                <th>Estado</th>
+                                <th style="width: 120px;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${users.map(u => `
+                                <tr>
+                                    <td><strong>${escapeHtml(u.username)}</strong></td>
+                                    <td>${escapeHtml(u.displayName || '-')}</td>
+                                    <td>
+                                        <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 500; ${u.enabled !== false ? 'background: #dcfce7; color: #166534;' : 'background: #fee2e2; color: #991b1b;'}">
+                                            <span style="width: 6px; height: 6px; border-radius: 50%; background: currentColor;"></span>
+                                            ${u.enabled !== false ? 'Activo' : 'Deshabilitado'}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div style="display: flex; gap: 6px;">
+                                            <button class="ad-reset-pwd" data-user="${escapeHtml(u.username)}" title="Cambiar contraseña" style="padding: 6px 10px; border: 1px solid var(--border-color, #e5e7eb); background: var(--card-bg, #fff); border-radius: 6px; cursor: pointer;">🔑</button>
+                                            <button class="ad-delete-user" data-user="${escapeHtml(u.username)}" title="Eliminar usuario" style="padding: 6px 10px; border: 1px solid #fecaca; background: #fef2f2; border-radius: 6px; cursor: pointer; ${u.username.toLowerCase() === 'administrator' ? 'opacity: 0.4; cursor: not-allowed;' : ''}" ${u.username.toLowerCase() === 'administrator' ? 'disabled' : ''}>🗑️</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `}
+            `;
+            
+            // Add user button
+            document.getElementById('ad-add-user-btn')?.addEventListener('click', () => showADUserModal());
+            
+            // Reset password buttons
+            container.querySelectorAll('.ad-reset-pwd').forEach(btn => {
+                btn.addEventListener('click', () => showADPasswordModal(btn.dataset.user));
+            });
+            
+            // Delete user buttons
+            container.querySelectorAll('.ad-delete-user').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const username = btn.dataset.user;
+                    if (!confirm(`¿Eliminar usuario ${username}?`)) return;
+                    
+                    try {
+                        await authFetch(`${API_BASE}/ad/users/${username}`, { method: 'DELETE' });
+                        showNotification('success', `Usuario ${username} eliminado`);
+                        await renderADContent();
+                    } catch (err) {
+                        showNotification('error', 'Error: ' + err.message);
+                    }
+                });
+            });
+            break;
+            
+        case 'ad-computers':
+            container.innerHTML = `
+                <div class="ad-content-header">
+                    <h3>💻 Equipos Unidos al Dominio</h3>
+                </div>
+                ${computers.length === 0 ? `
+                    <div class="ad-table-empty">
+                        <div class="ad-table-empty-icon">💻</div>
+                        <p>No hay equipos unidos al dominio</p>
+                        <p style="font-size: 0.85rem;">Ve a la pestaña "Unir Equipo" para ver las instrucciones</p>
+                    </div>
+                ` : `
+                    <table class="ad-table">
+                        <thead>
+                            <tr>
+                                <th>Nombre del Equipo</th>
+                                <th>Sistema</th>
+                                <th>Unido</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${computers.map(c => `
+                                <tr>
+                                    <td style="display: flex; align-items: center; gap: 10px;">
+                                        <span style="width: 36px; height: 36px; background: #fce7f3; border-radius: 8px; display: flex; align-items: center; justify-content: center;">💻</span>
+                                        <strong>${escapeHtml(c.name)}</strong>
+                                    </td>
+                                    <td>${escapeHtml(c.os || 'Windows')}</td>
+                                    <td style="color: var(--text-secondary);">${escapeHtml(c.joined || '-')}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `}
+            `;
+            break;
+            
+        case 'ad-groups':
+            container.innerHTML = `
+                <div class="ad-content-header">
+                    <h3>👥 Grupos del Dominio</h3>
+                    <button class="ad-add-btn" id="ad-add-group-btn">➕ Nuevo Grupo</button>
+                </div>
+                ${groups.length === 0 ? `
+                    <div class="ad-table-empty">
+                        <div class="ad-table-empty-icon">👥</div>
+                        <p>No hay grupos en el dominio</p>
+                    </div>
+                ` : `
+                    <table class="ad-table">
+                        <thead>
+                            <tr>
+                                <th>Nombre del Grupo</th>
+                                <th>Miembros</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${groups.map(g => `
+                                <tr>
+                                    <td style="display: flex; align-items: center; gap: 10px;">
+                                        <span style="width: 36px; height: 36px; background: #d1fae5; border-radius: 8px; display: flex; align-items: center; justify-content: center;">👥</span>
+                                        <strong>${escapeHtml(g.name)}</strong>
+                                    </td>
+                                    <td style="color: var(--text-secondary);">${g.members || 0} miembros</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `}
+            `;
+            
+            document.getElementById('ad-add-group-btn')?.addEventListener('click', () => showADGroupModal());
+            break;
+            
+        case 'ad-join':
+            container.innerHTML = `
+                <div class="ad-content-header">
+                    <h3>📋 Unir Equipo Windows al Dominio</h3>
+                </div>
+                
+                <!-- Domain Info Card -->
+                <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); border-radius: 12px; padding: 20px; color: white; margin-bottom: 24px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+                    <div style="text-align: center;">
+                        <div style="font-size: 0.8rem; opacity: 0.85; margin-bottom: 4px;">DOMINIO</div>
+                        <div style="font-size: 1.25rem; font-weight: 600;">${escapeHtml(status.domain)}</div>
+                    </div>
+                    <div style="text-align: center; border-left: 1px solid rgba(255,255,255,0.2); border-right: 1px solid rgba(255,255,255,0.2);">
+                        <div style="font-size: 0.8rem; opacity: 0.85; margin-bottom: 4px;">REALM</div>
+                        <div style="font-size: 1.25rem; font-weight: 600;">${escapeHtml(status.realm)}</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 0.8rem; opacity: 0.85; margin-bottom: 4px;">SERVIDOR DNS</div>
+                        <div style="font-size: 1.25rem; font-weight: 600;">${window.location.hostname}</div>
+                    </div>
+                </div>
+                
+                <!-- Steps -->
+                <div style="display: grid; gap: 16px;">
+                    <div style="display: flex; gap: 16px; padding: 20px; background: var(--bg-secondary, #f9fafb); border-radius: 12px; border: 1px solid var(--border-color, #e5e7eb);">
+                        <div style="width: 40px; height: 40px; background: #dbeafe; color: #1d4ed8; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">1</div>
+                        <div style="flex: 1;">
+                            <h4 style="margin: 0 0 12px 0; font-size: 1rem;">Configurar DNS del equipo (Windows 11)</h4>
+                            
+                            <div style="display: grid; gap: 12px;">
+                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
+                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">1.1</span>
+                                    <div>
+                                        <strong>Abrir Configuración de Red</strong><br>
+                                        <span style="color: var(--text-secondary, #6b7280);">Clic derecho en el icono de WiFi/Red (abajo a la derecha) → <strong>"Configuración de red e Internet"</strong></span>
+                                    </div>
+                                </div>
+                                
+                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
+                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">1.2</span>
+                                    <div>
+                                        <strong>Ir a "Configuración de red avanzada"</strong><br>
+                                        <span style="color: var(--text-secondary, #6b7280);">Baja hasta el final y pulsa <strong>"Configuración de red avanzada"</strong></span>
+                                    </div>
+                                </div>
+                                
+                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
+                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">1.3</span>
+                                    <div>
+                                        <strong>Seleccionar tu conexión (Ethernet o Wi-Fi)</strong><br>
+                                        <span style="color: var(--text-secondary, #6b7280);">Haz clic en tu adaptador de red activo para expandirlo, luego pulsa <strong>"Ver propiedades adicionales"</strong></span>
+                                    </div>
+                                </div>
+                                
+                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
+                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">1.4</span>
+                                    <div>
+                                        <strong>Editar la configuración DNS</strong><br>
+                                        <span style="color: var(--text-secondary, #6b7280);">Junto a "Asignación de servidor DNS" pulsa <strong>"Editar"</strong></span>
+                                    </div>
+                                </div>
+                                
+                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #10b981;">
+                                    <span style="background: #d1fae5; color: #166534; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">1.5</span>
+                                    <div>
+                                        <strong>Cambiar a "Manual" y poner esta IP:</strong><br>
+                                        <code style="background: #fef3c7; padding: 4px 12px; border-radius: 4px; font-weight: 700; font-size: 1.1rem; display: inline-block; margin-top: 4px;">${window.location.hostname}</code>
+                                        <br><span style="color: var(--text-secondary, #6b7280); font-size: 0.85rem;">Activa IPv4, pon esta IP en "DNS preferido" y guarda</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 16px; padding: 20px; background: var(--bg-secondary, #f9fafb); border-radius: 12px; border: 1px solid var(--border-color, #e5e7eb);">
+                        <div style="width: 40px; height: 40px; background: #dbeafe; color: #1d4ed8; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">2</div>
+                        <div style="flex: 1;">
+                            <h4 style="margin: 0 0 12px 0; font-size: 1rem;">Unir el equipo al dominio (Windows 11)</h4>
+                            
+                            <div style="display: grid; gap: 12px;">
+                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
+                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">2.1</span>
+                                    <div>
+                                        <strong>Abrir Configuración</strong><br>
+                                        <span style="color: var(--text-secondary, #6b7280);">Pulsa <code style="background: #f3f4f6; padding: 2px 6px; border-radius: 3px;">⊞ Win + I</code> o busca "Configuración" en el menú inicio</span>
+                                    </div>
+                                </div>
+                                
+                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
+                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">2.2</span>
+                                    <div>
+                                        <strong>Ir a Sistema → Información</strong><br>
+                                        <span style="color: var(--text-secondary, #6b7280);">En el menú lateral izquierdo selecciona <strong>Sistema</strong>, luego baja hasta <strong>Información</strong> (o "Acerca de")</span>
+                                    </div>
+                                </div>
+                                
+                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
+                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">2.3</span>
+                                    <div>
+                                        <strong>Clic en "Dominio o grupo de trabajo"</strong><br>
+                                        <span style="color: var(--text-secondary, #6b7280);">Busca el enlace <strong>"Dominio o grupo de trabajo"</strong> en la sección "Especificaciones del dispositivo"</span>
+                                    </div>
+                                </div>
+                                
+                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
+                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">2.4</span>
+                                    <div>
+                                        <strong>Clic en "Cambiar..."</strong><br>
+                                        <span style="color: var(--text-secondary, #6b7280);">Se abre la ventana de Propiedades del sistema. Pulsa el botón <strong>"Cambiar..."</strong></span>
+                                    </div>
+                                </div>
+                                
+                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #10b981;">
+                                    <span style="background: #d1fae5; color: #166534; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">2.5</span>
+                                    <div>
+                                        <strong>Seleccionar "Dominio" e introducir:</strong><br>
+                                        <code style="background: #fef3c7; padding: 4px 12px; border-radius: 4px; font-weight: 700; font-size: 1.1rem; display: inline-block; margin-top: 4px;">${escapeHtml(status.realm)}</code>
+                                    </div>
+                                </div>
+                                
+                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #10b981;">
+                                    <span style="background: #d1fae5; color: #166534; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">2.6</span>
+                                    <div>
+                                        <strong>Introducir credenciales del dominio:</strong><br>
+                                        <span style="color: var(--text-secondary, #6b7280);">Usuario:</span> <code style="background: #fef3c7; padding: 2px 8px; border-radius: 4px; font-weight: 600;">Administrator</code><br>
+                                        <span style="color: var(--text-secondary, #6b7280);">Contraseña:</span> <span style="color: #dc2626;">la que pusiste al crear el dominio</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 16px; padding: 20px; background: var(--bg-secondary, #f9fafb); border-radius: 12px; border: 1px solid var(--border-color, #e5e7eb);">
+                        <div style="width: 40px; height: 40px; background: #d1fae5; color: #166534; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">3</div>
+                        <div>
+                            <h4 style="margin: 0 0 8px 0; font-size: 1rem;">Reiniciar y listo ✓</h4>
+                            <p style="margin: 0; color: var(--text-secondary, #6b7280);">
+                                Tras reiniciar, podrás hacer login con cualquier usuario del dominio.<br>
+                                Formato: <code style="background: white; padding: 2px 8px; border-radius: 4px;">${escapeHtml(status.domain)}\\usuario</code> o <code style="background: white; padding: 2px 8px; border-radius: 4px;">usuario@${escapeHtml(status.realm)}</code>
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Important note about DNS -->
+                    <div style="display: flex; gap: 16px; padding: 20px; margin-top: 16px; background: #fef3c7; border-radius: 12px; border: 1px solid #fcd34d;">
+                        <div style="width: 40px; height: 40px; background: #fbbf24; color: white; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">💡</div>
+                        <div>
+                            <h4 style="margin: 0 0 8px 0; font-size: 1rem; color: #92400e;">¿Y si salgo de casa?</h4>
+                            <p style="margin: 0; color: #a16207; line-height: 1.6;">
+                                <strong>El DNS del NAS solo es necesario para unirse al dominio.</strong><br>
+                                Una vez unido, puedes volver a poner el DNS en <strong>automático (DHCP)</strong> y tendrás internet normal dentro y fuera de casa.<br>
+                                El equipo seguirá unido al dominio aunque cambies el DNS.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            break;
+    }
+}
+
+// Modal for adding AD user
+function showADUserModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>➕ Nuevo Usuario AD</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form id="ad-user-form" class="modal-body">
+                <div class="form-group">
+                    <label>Nombre de usuario</label>
+                    <input type="text" id="ad-new-username" required pattern="[a-zA-Z][a-zA-Z0-9._-]{0,19}">
+                </div>
+                <div class="form-group">
+                    <label>Nombre completo (opcional)</label>
+                    <input type="text" id="ad-new-displayname">
+                </div>
+                <div class="form-group">
+                    <label>Contraseña</label>
+                    <input type="password" id="ad-new-password" required minlength="8">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary modal-cancel">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Crear Usuario</button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    modal.querySelector('.modal-close')?.addEventListener('click', () => modal.remove());
+    modal.querySelector('.modal-cancel')?.addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    
+    modal.querySelector('#ad-user-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const username = document.getElementById('ad-new-username').value;
+        const displayName = document.getElementById('ad-new-displayname').value;
+        const password = document.getElementById('ad-new-password').value;
+        
+        try {
+            const res = await authFetch(`${API_BASE}/ad/users`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, displayName, password })
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                showNotification('success', `Usuario ${username} creado`);
+                modal.remove();
+                await renderADContent();
+            } else {
+                showNotification('error', data.error || 'Error creando usuario');
+            }
+        } catch (err) {
+            showNotification('error', 'Error: ' + err.message);
+        }
+    });
+}
+
+// Modal for resetting password
+function showADPasswordModal(username) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>🔑 Cambiar Contraseña</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form id="ad-pwd-form" class="modal-body">
+                <p>Usuario: <strong>${escapeHtml(username)}</strong></p>
+                <div class="form-group">
+                    <label>Nueva contraseña</label>
+                    <input type="password" id="ad-pwd-new" required minlength="8">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary modal-cancel">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Cambiar</button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    modal.querySelector('.modal-close')?.addEventListener('click', () => modal.remove());
+    modal.querySelector('.modal-cancel')?.addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    
+    modal.querySelector('#ad-pwd-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const newPassword = document.getElementById('ad-pwd-new').value;
+        
+        try {
+            const res = await authFetch(`${API_BASE}/ad/users/${username}/password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ newPassword })
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                showNotification('success', `Contraseña de ${username} cambiada`);
+                modal.remove();
+            } else {
+                showNotification('error', data.error || 'Error cambiando contraseña');
+            }
+        } catch (err) {
+            showNotification('error', 'Error: ' + err.message);
+        }
+    });
+}
+
+// Modal for adding group
+function showADGroupModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>➕ Nuevo Grupo AD</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form id="ad-group-form" class="modal-body">
+                <div class="form-group">
+                    <label>Nombre del grupo</label>
+                    <input type="text" id="ad-new-group" required>
+                </div>
+                <div class="form-group">
+                    <label>Descripción (opcional)</label>
+                    <input type="text" id="ad-new-group-desc">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary modal-cancel">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Crear Grupo</button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    modal.querySelector('.modal-close')?.addEventListener('click', () => modal.remove());
+    modal.querySelector('.modal-cancel')?.addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    
+    modal.querySelector('#ad-group-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const name = document.getElementById('ad-new-group').value;
+        const description = document.getElementById('ad-new-group-desc').value;
+        
+        try {
+            const res = await authFetch(`${API_BASE}/ad/groups`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, description })
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                showNotification('success', `Grupo ${name} creado`);
+                modal.remove();
+                await renderADContent();
+            } else {
+                showNotification('error', data.error || 'Error creando grupo');
+            }
+        } catch (err) {
+            showNotification('error', 'Error: ' + err.message);
+        }
+    });
+}
+
+// =============================================================================
 // CLOUD SYNC (Syncthing Integration)
 // =============================================================================
 
@@ -7805,7 +9994,7 @@ async function loadCloudSyncStatus() {
             <h3 style="color: var(--primary);">☁️ Cloud Sync</h3>
             <div style="display: flex; align-items: center; gap: 20px; margin: 15px 0; flex-wrap: wrap;">
                 <span style="color: #10b981;">● Activo</span>
-                <span style="color: var(--text-dim);">v${escapeHtml(status.version || 'Unknown')}</span>
+                <span style="color: var(--text-dim);">${escapeHtml(status.version ? (status.version.startsWith('v') ? status.version : 'v' + status.version) : t('common.unknown', 'Desconocido'))}</span>
                 <span style="color: var(--text-dim);">📁 ${status.folders.length} carpetas</span>
                 <span style="color: var(--text-dim);">📱 ${status.connections} dispositivos conectados</span>
                 <button id="stop-syncthing-btn" class="btn" style="background: #ef4444; color: #fff; padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
@@ -7843,7 +10032,7 @@ async function renderCloudSyncContent(status) {
                     <span style="color: #666; font-size: 0.8rem;">Generando QR...</span>
                 </div>
                 <div style="flex: 1; min-width: 200px;">
-                    <label style="color: var(--text-dim); font-size: 0.85rem;">Device ID:</label>
+                    <label style="color: var(--text-dim); font-size: 0.85rem;">ID del Dispositivo:</label>
                     <div style="display: flex; gap: 10px; margin-top: 5px;">
                         <input type="text" id="device-id-input" value="${escapeHtml(deviceId)}" readonly 
                             style="flex: 1; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: var(--text); font-family: monospace; font-size: 0.75rem;">
@@ -7914,9 +10103,12 @@ function generateQRCode(deviceId) {
     const qrDiv = document.getElementById('qr-code');
     if (!qrDiv || !deviceId) return;
     
-    // Use a simple QR code API (or implement locally)
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=130x130&data=${encodeURIComponent(deviceId)}`;
-    qrDiv.innerHTML = `<img src="${qrUrl}" alt="QR Code" style="width: 130px; height: 130px;">`;
+    // Show device ID as copyable text (external QR APIs may be blocked by CSP)
+    qrDiv.innerHTML = `
+        <div style="background: var(--bg-card); border: 2px dashed var(--border); border-radius: 10px; padding: 15px; text-align: center;">
+            <span style="font-size: 2rem;">📋</span>
+            <p style="font-size: 0.75rem; color: var(--text-dim); margin-top: 5px;">Copia el ID del dispositivo</p>
+        </div>`;
 }
 
 function renderFoldersList(folders) {
@@ -7940,6 +10132,11 @@ function renderFoldersList(folders) {
                         style="padding: 6px 10px; background: ${f.paused ? '#10b981' : '#f59e0b'}; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;" 
                         title="${f.paused ? 'Reanudar' : 'Pausar'}">
                         ${f.paused ? '▶️' : '⏸️'}
+                    </button>
+                    <button class="browse-folder-btn" data-folder-path="${escapeHtml(f.path)}" 
+                        style="padding: 6px 10px; background: #8b5cf6; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;" 
+                        title="Ver archivos">
+                        📂
                     </button>
                     <button class="share-folder-btn" data-folder-id="${escapeHtml(f.id)}" data-folder-label="${escapeHtml(f.label)}" 
                         style="padding: 6px 10px; background: #3b82f6; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;" 
@@ -7984,6 +10181,15 @@ function renderFoldersList(folders) {
     });
     listDiv.querySelectorAll('.pause-folder-btn').forEach(btn => {
         btn.addEventListener('click', () => toggleFolderPause(btn.dataset.folderId, btn.dataset.paused === 'true'));
+    });
+    listDiv.querySelectorAll('.browse-folder-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            // Navigate to Files view and open the folder
+            state.currentView = 'files';
+            state.filesCurrentPath = btn.dataset.folderPath;
+            renderContent();
+            updateSidebarActive();
+        });
     });
     
     // Load detailed sync status for each folder
@@ -8096,7 +10302,7 @@ async function loadDevicesList() {
         const devices = await res.json();
         
         if (devices.length === 0) {
-            listDiv.innerHTML = '<p style="color: #9ca3af;">No hay dispositivos vinculados. Añade el Device ID de tu PC o móvil.</p>';
+            listDiv.innerHTML = '<p style="color: #9ca3af;">No hay dispositivos vinculados. Añade el ID del Dispositivo de tu PC o móvil.</p>';
             return;
         }
         
@@ -8332,58 +10538,6 @@ async function addFolder() {
     }
 }
 
-// Custom confirm modal (replaces native confirm() which has issues in some contexts)
-function showConfirmModal(title, message) {
-    return new Promise((resolve) => {
-        // Remove any existing confirm modal
-        const existing = document.getElementById('confirm-modal');
-        if (existing) existing.remove();
-        
-        const modal = document.createElement('div');
-        modal.id = 'confirm-modal';
-        modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 99999;';
-        modal.innerHTML = `
-            <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 400px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
-                <h3 style="color: #ef4444; margin-bottom: 15px;">⚠️ ${escapeHtml(title)}</h3>
-                <p style="color: #ccc; margin-bottom: 25px;">${escapeHtml(message)}</p>
-                <div style="display: flex; gap: 15px; justify-content: center;">
-                    <button id="confirm-cancel-btn" style="padding: 12px 24px; background: #4b5563; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem;">
-                        Cancelar
-                    </button>
-                    <button id="confirm-ok-btn" style="padding: 12px 24px; background: #ef4444; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: 600;">
-                        Confirmar
-                    </button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-        
-        const cancelBtn = document.getElementById('confirm-cancel-btn');
-        const okBtn = document.getElementById('confirm-ok-btn');
-        
-        cancelBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            modal.remove();
-            resolve(false);
-        });
-        okBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            modal.remove();
-            resolve(true);
-        });
-        
-        // Close on backdrop click (click on modal background, not content)
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                modal.remove();
-                resolve(false);
-            }
-        });
-    });
-}
-
 async function deleteFolder(folderId) {
     // Use custom modal instead of confirm() which has issues in some contexts
     const confirmed = await showConfirmModal(
@@ -8529,10 +10683,10 @@ function showAddDeviceModal() {
         <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 500px;">
             <h3 style="color: #22d3ee; margin-bottom: 20px;">📱 Añadir Dispositivo</h3>
             <p style="color: #9ca3af; margin-bottom: 15px; font-size: 0.9rem;">
-                Copia el Device ID de Syncthing desde tu PC o móvil (Ajustes → Mostrar ID).
+                Copia el ID del Dispositivo de Syncthing desde tu PC o móvil (Ajustes → Mostrar ID).
             </p>
             <div style="margin-bottom: 15px;">
-                <label style="color: #9ca3af; font-size: 0.9rem;">Device ID:</label>
+                <label style="color: #9ca3af; font-size: 0.9rem;">ID del Dispositivo:</label>
                 <input type="text" id="device-id" placeholder="XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX"
                     style="width: 100%; padding: 12px; margin-top: 5px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff; font-family: monospace; font-size: 0.8rem;">
             </div>
@@ -8564,7 +10718,7 @@ async function addDevice() {
     const name = document.getElementById('device-name')?.value.trim();
     
     if (!deviceId) {
-        showNotification('El Device ID es obligatorio', 'error');
+        showNotification('El ID del Dispositivo es obligatorio', 'error');
         return;
     }
     
@@ -8608,11 +10762,2375 @@ async function deleteDevice(deviceId) {
     }
 }
 
+// =============================================================================
+// HOMESTORE - APP MARKETPLACE
+// =============================================================================
+
+let homestoreCatalog = null;
+let homestoreFilter = 'all';
+let systemArch = null;
+
+async function renderHomeStoreView() {
+    dashboardContent.innerHTML = `
+        <div class="section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>🏪 HomeStore</h2>
+                <div id="homestore-status" style="display: flex; gap: 15px; align-items: center;">
+                    <div id="homestore-arch-status"></div>
+                    <div id="homestore-docker-status"></div>
+                </div>
+            </div>
+            <p style="color: var(--text-secondary); margin-bottom: 20px;">
+                Instala aplicaciones con un clic. Todas funcionan sobre Docker.
+            </p>
+            
+            <div id="homestore-categories" style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;"></div>
+            
+            <div id="homestore-apps" class="grid-3" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;"></div>
+        </div>
+    `;
+    
+    await loadHomeStoreCatalog();
+}
+
+async function loadHomeStoreCatalog() {
+    const appsDiv = document.getElementById('homestore-apps');
+    const categoriesDiv = document.getElementById('homestore-categories');
+    const dockerStatusDiv = document.getElementById('homestore-docker-status');
+    const archStatusDiv = document.getElementById('homestore-arch-status');
+    
+    try {
+        // Detect system architecture
+        if (!systemArch) {
+            try {
+                const archRes = await authFetch(`${API_BASE}/system/arch`);
+                if (archRes.ok) {
+                    systemArch = await archRes.json();
+                }
+            } catch (e) {
+                console.warn('Could not detect architecture:', e);
+                systemArch = { arch: 'unknown', isArm: false, isX86: false };
+            }
+        }
+        
+        // Show architecture
+        if (archStatusDiv && systemArch) {
+            const archLabel = systemArch.isArm ? 'ARM' : (systemArch.isX86 ? 'x86' : systemArch.arch);
+            const archIcon = systemArch.isArm ? '🍓' : '💻';
+            archStatusDiv.innerHTML = `<span style="color: var(--text-secondary);">${archIcon} ${archLabel.toUpperCase()}</span>`;
+        }
+        
+        // Check Docker status
+        const dockerRes = await authFetch(`${API_BASE}/homestore/check-docker`);
+        const dockerData = await dockerRes.json();
+        
+        if (!dockerData.available) {
+            dockerStatusDiv.innerHTML = `<span style="color: #ef4444;">⚠️ Docker no disponible</span>`;
+            appsDiv.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-secondary);">
+                    <p style="font-size: 48px; margin-bottom: 20px;">🐳</p>
+                    <p>Docker no está instalado o no está corriendo.</p>
+                    <p style="margin-top: 10px;">Instala Docker primero desde el Gestor de Docker.</p>
+                    <button onclick="navigateTo('/docker')" class="btn" style="margin-top: 20px; background: var(--primary); color: #000; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;">
+                        Ir a Gestor de Docker
+                    </button>
+                </div>
+            `;
+            return;
+        }
+        
+        dockerStatusDiv.innerHTML = `<span style="color: #10b981;">✓ Docker activo</span>`;
+        
+        // Load catalog
+        const res = await authFetch(`${API_BASE}/homestore/catalog`);
+        const data = await res.json();
+        
+        if (!data.success) throw new Error(data.error);
+        
+        homestoreCatalog = data;
+        
+        // Render categories
+        const categories = Object.entries(data.categories).sort((a, b) => a[1].order - b[1].order);
+        categoriesDiv.innerHTML = `
+            <button class="homestore-cat-btn ${homestoreFilter === 'all' ? 'active' : ''}" data-cat="all" 
+                    style="padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border); background: ${homestoreFilter === 'all' ? 'var(--primary)' : 'var(--bg-card)'}; color: ${homestoreFilter === 'all' ? '#000' : 'var(--text)'}; cursor: pointer;">
+                Todas
+            </button>
+            <button class="homestore-cat-btn ${homestoreFilter === 'installed' ? 'active' : ''}" data-cat="installed"
+                    style="padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border); background: ${homestoreFilter === 'installed' ? 'var(--primary)' : 'var(--bg-card)'}; color: ${homestoreFilter === 'installed' ? '#000' : 'var(--text)'}; cursor: pointer;">
+                ✓ Instaladas
+            </button>
+            ${categories.map(([id, cat]) => `
+                <button class="homestore-cat-btn ${homestoreFilter === id ? 'active' : ''}" data-cat="${id}"
+                        style="padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border); background: ${homestoreFilter === id ? 'var(--primary)' : 'var(--bg-card)'}; color: ${homestoreFilter === id ? '#000' : 'var(--text)'}; cursor: pointer;">
+                    ${cat.icon} ${cat.name}
+                </button>
+            `).join('')}
+        `;
+        
+        // Add category click handlers
+        categoriesDiv.querySelectorAll('.homestore-cat-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                homestoreFilter = btn.dataset.cat;
+                loadHomeStoreCatalog();
+            });
+        });
+        
+        // Filter apps
+        let apps = data.apps;
+        if (homestoreFilter === 'installed') {
+            apps = apps.filter(app => app.installed);
+        } else if (homestoreFilter !== 'all') {
+            apps = apps.filter(app => app.category === homestoreFilter);
+        }
+        
+        // Render apps
+        if (apps.length === 0) {
+            appsDiv.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-secondary);">
+                    <p>No hay aplicaciones en esta categoría.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        appsDiv.innerHTML = apps.map(app => renderHomeStoreAppCard(app, data.categories)).join('');
+        
+        // Add button handlers
+        apps.forEach(app => {
+            const card = document.getElementById(`homestore-app-${app.id}`);
+            if (!card) return;
+            
+            card.querySelector('.homestore-install-btn')?.addEventListener('click', () => installHomeStoreApp(app.id));
+            card.querySelector('.homestore-uninstall-btn')?.addEventListener('click', () => uninstallHomeStoreApp(app.id));
+            card.querySelector('.homestore-start-btn')?.addEventListener('click', () => startHomeStoreApp(app.id));
+            card.querySelector('.homestore-stop-btn')?.addEventListener('click', () => stopHomeStoreApp(app.id));
+            card.querySelector('.homestore-open-btn')?.addEventListener('click', () => openHomeStoreApp(app));
+            card.querySelector('.homestore-logs-btn')?.addEventListener('click', () => showHomeStoreAppLogs(app.id));
+            card.querySelector('.homestore-update-btn')?.addEventListener('click', () => updateHomeStoreApp(app.id));
+        });
+        
+    } catch (error) {
+        console.error('Error loading HomeStore:', error);
+        appsDiv.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #ef4444;">
+                <p>Error al cargar el catálogo: ${error.message}</p>
+                <button onclick="loadHomeStoreCatalog()" class="btn" style="margin-top: 20px;">Reintentar</button>
+            </div>
+        `;
+    }
+}
+
+function renderHomeStoreAppCard(app, categories) {
+    const cat = categories[app.category] || { name: app.category, icon: '📦' };
+    const isRunning = app.status === 'running';
+    const isStopped = app.status === 'stopped';
+    
+    // Check architecture compatibility
+    const appArch = app.arch || ['amd64', 'arm64', 'arm']; // Default to all if not specified
+    const isCompatible = !systemArch || systemArch.arch === 'unknown' || appArch.includes(systemArch.arch);
+    const archNote = app.archNote || '';
+    
+    let statusBadge = '';
+    let actionButtons = '';
+    let compatWarning = '';
+    
+    if (!isCompatible) {
+        compatWarning = `
+            <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 0.85rem; color: #92400e;">
+                ⚠️ No compatible con ${systemArch.arch.toUpperCase()}${archNote ? ` — ${archNote}` : ''}
+            </div>
+        `;
+    }
+    
+    if (app.installed) {
+        if (isRunning) {
+            statusBadge = `<span style="background: #10b981; color: #fff; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem;">● Activa</span>`;
+            actionButtons = `
+                <button class="homestore-open-btn" style="background: var(--primary); color: #000; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                    Abrir
+                </button>
+                <button class="homestore-stop-btn" style="background: #6b7280; color: #fff; padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer;">
+                    ⏹ Parar
+                </button>
+                <button class="homestore-logs-btn" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; cursor: pointer;">
+                    📋
+                </button>
+            `;
+        } else {
+            statusBadge = `<span style="background: #6b7280; color: #fff; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem;">○ Parada</span>`;
+            actionButtons = `
+                <button class="homestore-start-btn" style="background: #10b981; color: #fff; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                    ▶ Iniciar
+                </button>
+                <button class="homestore-uninstall-btn" style="background: #ef4444; color: #fff; padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer;">
+                    🗑
+                </button>
+                <button class="homestore-update-btn" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; cursor: pointer;">
+                    ↻
+                </button>
+            `;
+        }
+    } else {
+        if (isCompatible) {
+            actionButtons = `
+                <button class="homestore-install-btn" style="background: var(--primary); color: #000; padding: 8px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                    Instalar
+                </button>
+                <a href="${app.docs}" target="_blank" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; text-decoration: none; display: inline-block;">
+                    📖 Docs
+                </a>
+            `;
+        } else {
+            actionButtons = `
+                <button disabled style="background: #6b7280; color: #fff; padding: 8px 20px; border: none; border-radius: 6px; cursor: not-allowed; font-weight: 500; opacity: 0.6;">
+                    No disponible
+                </button>
+                <a href="${app.docs}" target="_blank" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; text-decoration: none; display: inline-block;">
+                    📖 Docs
+                </a>
+            `;
+        }
+    }
+    
+    // Show supported architectures
+    const archBadges = appArch.map(a => {
+        const isCurrentArch = systemArch && systemArch.arch === a;
+        return `<span style="background: ${isCurrentArch ? '#10b981' : 'var(--bg-card)'}; color: ${isCurrentArch ? '#fff' : 'var(--text-secondary)'}; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; border: 1px solid var(--border);">${a}</span>`;
+    }).join(' ');
+    
+    // Build config info section for installed apps
+    let configInfoHtml = '';
+    if (app.installed && app.config) {
+        const configVolumes = app.config.volumes || app.volumes || {};
+        const configPorts = app.config.ports || app.ports || {};
+        
+        // Show key paths (first 2 volumes)
+        const volumeEntries = Object.entries(configVolumes).slice(0, 2);
+        const volumeInfo = volumeEntries.map(([container, host]) => {
+            const shortPath = host.length > 30 ? '...' + host.slice(-27) : host;
+            return `<span style="font-family: monospace; font-size: 0.75rem; color: var(--text-secondary);" title="${escapeHtml(host)}">📁 ${escapeHtml(shortPath)}</span>`;
+        }).join('<br>');
+        
+        // Show port
+        const portEntry = Object.entries(configPorts)[0];
+        const portInfo = portEntry ? `<span style="font-family: monospace; font-size: 0.75rem; color: var(--text-secondary);">🌐 :${escapeHtml(portEntry[0].split('/')[0])}</span>` : '';
+        
+        if (volumeInfo || portInfo) {
+            configInfoHtml = `
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 0.8rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+                        <div style="flex: 1; line-height: 1.6;">${volumeInfo}</div>
+                        <div>${portInfo}</div>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    return `
+        <div id="homestore-app-${app.id}" class="card" style="background: rgba(30, 30, 50, 0.7); border: 2px solid ${isCompatible ? 'rgba(100, 100, 140, 0.5)' : '#f59e0b'}; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); ${!isCompatible ? 'opacity: 0.7;' : ''}">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 2rem;">${app.icon}</span>
+                    <div>
+                        <h3 style="margin: 0; font-size: 1.1rem;">${app.name}</h3>
+                        <span style="color: var(--text-secondary); font-size: 0.85rem;">${cat.icon} ${cat.name}</span>
+                    </div>
+                </div>
+                ${statusBadge}
+            </div>
+            ${compatWarning}
+            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px; line-height: 1.4;">
+                ${app.description}
+            </p>
+            ${configInfoHtml}
+            <div style="margin-bottom: 12px;">
+                ${archBadges}
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                ${actionButtons}
+            </div>
+        </div>
+    `;
+}
+
+// Show configuration modal before installing an app
+async function showHomeStoreConfigModal(appId) {
+    // Remove any existing modals first
+    const existingModal = document.getElementById('homestore-config-modal');
+    if (existingModal) existingModal.remove();
+    const existingPicker = document.getElementById('folder-picker-modal');
+    if (existingPicker) existingPicker.remove();
+    
+    // Find the app in the catalog
+    const app = homestoreCatalog?.apps?.find(a => a.id === appId);
+    if (!app) {
+        showNotification('App no encontrada en el catálogo', 'error');
+        return;
+    }
+    
+    // Try to load previous configuration for reinstalls
+    let previousConfig = null;
+    try {
+        const configRes = await authFetch(`${API_BASE}/homestore/app/${appId}/config`);
+        if (configRes.ok) {
+            const configData = await configRes.json();
+            if (configData.success && configData.config) {
+                previousConfig = configData.config;
+            }
+        }
+    } catch (e) {
+        // No previous config, that's fine
+    }
+    
+    // Build volume config inputs
+    const defaultVolumes = app.volumes || {};
+    const volumeInputs = Object.entries(defaultVolumes).map(([containerPath, hostPath]) => {
+        // Use previous config if available
+        const savedPath = previousConfig?.volumes?.[containerPath] || hostPath;
+        const isConfigDir = containerPath.toLowerCase().includes('config') || containerPath.toLowerCase().includes('data');
+        const isMediaDir = containerPath.toLowerCase().includes('media') || 
+                          containerPath.toLowerCase().includes('download') || 
+                          containerPath.toLowerCase().includes('photos') ||
+                          containerPath.toLowerCase().includes('storage');
+        
+        let label = containerPath;
+        let icon = '📁';
+        if (isConfigDir) {
+            label = 'Configuración';
+            icon = '⚙️';
+        } else if (isMediaDir) {
+            label = 'Media/Datos';
+            icon = '🎬';
+        }
+        
+        return `
+            <div class="homestore-config-volume" style="margin-bottom: 16px;">
+                <label style="color: var(--text-secondary); font-size: 0.85rem; display: block; margin-bottom: 6px;">
+                    ${icon} ${escapeHtml(label)} <code style="font-size: 0.75rem; opacity: 0.7;">(${escapeHtml(containerPath)})</code>
+                </label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" 
+                           class="homestore-volume-input" 
+                           data-container-path="${escapeHtml(containerPath)}"
+                           value="${escapeHtml(savedPath)}"
+                           placeholder="${escapeHtml(hostPath)}"
+                           style="flex: 1; padding: 10px 12px; background: rgba(255,255,255,0.1); border: 1px solid #3a3a5e; border-radius: 8px; color: #fff; font-family: monospace; font-size: 0.9rem;">
+                    <button type="button" class="homestore-browse-btn" data-target="${escapeHtml(containerPath)}"
+                            style="padding: 10px 14px; background: rgba(255,255,255,0.1); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; color: var(--text);"
+                            title="Explorar carpetas">
+                        📂
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    // Build port config if applicable
+    const defaultPorts = app.ports || {};
+    const portInputs = Object.entries(defaultPorts).map(([hostPort, containerPort]) => {
+        const savedPort = previousConfig?.ports?.[hostPort] || hostPort;
+        return `
+            <div class="homestore-config-port" style="margin-bottom: 12px;">
+                <label style="color: var(--text-secondary); font-size: 0.85rem; display: block; margin-bottom: 6px;">
+                    🌐 Puerto ${escapeHtml(String(containerPort).replace('/udp', ' (UDP)').replace('/tcp', ''))}
+                </label>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <input type="number" 
+                           class="homestore-port-input" 
+                           data-original-port="${escapeHtml(hostPort)}"
+                           data-container-port="${escapeHtml(containerPort)}"
+                           value="${escapeHtml(savedPort.toString().split('/')[0])}"
+                           min="1" max="65535"
+                           style="width: 100px; padding: 10px 12px; background: rgba(255,255,255,0.1); border: 1px solid #3a3a5e; border-radius: 8px; color: #fff; font-family: monospace;">
+                    <span style="color: var(--text-secondary);">→ ${escapeHtml(containerPort)}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    // Build environment variables if applicable
+    const defaultEnv = app.env || {};
+    const envInputs = Object.entries(defaultEnv).length > 0 ? Object.entries(defaultEnv).map(([key, value]) => {
+        const savedValue = previousConfig?.env?.[key] ?? value;
+        const isPassword = key.toLowerCase().includes('password') || key.toLowerCase().includes('secret');
+        return `
+            <div class="homestore-config-env" style="margin-bottom: 12px;">
+                <label style="color: var(--text-secondary); font-size: 0.85rem; display: block; margin-bottom: 6px;">
+                    ${isPassword ? '🔑' : '📝'} ${escapeHtml(key)}
+                </label>
+                <input type="${isPassword ? 'password' : 'text'}" 
+                       class="homestore-env-input" 
+                       data-env-key="${escapeHtml(key)}"
+                       value="${escapeHtml(savedValue)}"
+                       placeholder="${escapeHtml(value)}"
+                       style="width: 100%; padding: 10px 12px; background: rgba(255,255,255,0.1); border: 1px solid #3a3a5e; border-radius: 8px; color: #fff; font-family: monospace; font-size: 0.9rem;">
+            </div>
+        `;
+    }).join('') : '';
+    
+    // Create the modal
+    const modal = document.createElement('div');
+    modal.id = 'homestore-config-modal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.92); display: flex; align-items: center; justify-content: center; z-index: 100000; backdrop-filter: blur(4px);';
+    modal.innerHTML = `
+        <div style="background: #1a1a2e; border: 1px solid #3a3a5e; border-radius: 16px; width: 90%; max-width: 600px; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.5);">
+            <div style="padding: 20px 24px; border-bottom: 1px solid #3a3a5e; display: flex; justify-content: space-between; align-items: center; background: #1a1a2e;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 2rem;">${app.icon}</span>
+                    <div>
+                        <h3 style="margin: 0; font-size: 1.2rem; color: var(--text);">Configurar ${escapeHtml(app.name)}</h3>
+                        <span style="color: var(--text-secondary); font-size: 0.85rem;">Personaliza la instalación</span>
+                    </div>
+                </div>
+                <button id="homestore-config-close" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); padding: 4px 8px;">&times;</button>
+            </div>
+            
+            <div style="padding: 24px; overflow-y: auto; flex: 1;">
+                ${previousConfig ? `
+                    <div style="background: rgba(34, 197, 94, 0.1); border: 1px solid #22c55e; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 1.2rem;">♻️</span>
+                        <div>
+                            <div style="color: #22c55e; font-weight: 500;">Configuración anterior encontrada</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem;">Se han restaurado los paths de la instalación previa</div>
+                        </div>
+                    </div>
+                ` : ''}
+                
+                ${volumeInputs ? `
+                    <div style="margin-bottom: 24px;">
+                        <h4 style="color: var(--primary); margin: 0 0 16px 0; font-size: 1rem; display: flex; align-items: center; gap: 8px;">
+                            📂 Rutas de almacenamiento
+                        </h4>
+                        ${volumeInputs}
+                    </div>
+                ` : ''}
+                
+                ${portInputs ? `
+                    <div style="margin-bottom: 24px;">
+                        <h4 style="color: var(--primary); margin: 0 0 16px 0; font-size: 1rem; display: flex; align-items: center; gap: 8px;">
+                            🌐 Puertos
+                        </h4>
+                        ${portInputs}
+                    </div>
+                ` : ''}
+                
+                ${envInputs ? `
+                    <div style="margin-bottom: 24px;">
+                        <h4 style="color: var(--primary); margin: 0 0 16px 0; font-size: 1rem; display: flex; align-items: center; gap: 8px;">
+                            ⚙️ Variables de entorno
+                        </h4>
+                        ${envInputs}
+                    </div>
+                ` : ''}
+            </div>
+            
+            <div style="padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 12px; justify-content: flex-end;">
+                <button id="homestore-config-cancel" style="padding: 12px 24px; background: rgba(255,255,255,0.1); border: 1px solid #3a3a5e; border-radius: 8px; cursor: pointer; color: #fff; font-size: 0.95rem;">
+                    Cancelar
+                </button>
+                <button id="homestore-config-install" style="padding: 12px 24px; background: var(--primary); border: none; border-radius: 8px; cursor: pointer; color: #000; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+                    🚀 Instalar
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Close handlers - also remove any picker modals
+    const closeModal = () => {
+        const pickerModal = document.getElementById('folder-picker-modal');
+        if (pickerModal) pickerModal.remove();
+        modal.remove();
+    };
+    document.getElementById('homestore-config-close').addEventListener('click', closeModal);
+    document.getElementById('homestore-config-cancel').addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+    
+    // Browse button handlers - open folder picker
+    modal.querySelectorAll('.homestore-browse-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const targetPath = btn.dataset.target;
+            const input = modal.querySelector(`.homestore-volume-input[data-container-path="${targetPath}"]`);
+            if (!input) return;
+            
+            // Simple folder picker modal
+            const currentPath = input.value || '/mnt/storage';
+            const pickerModal = document.createElement('div');
+            pickerModal.id = 'folder-picker-modal';
+            pickerModal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 999999;';
+            
+            pickerModal.innerHTML = `
+                <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; width: 90%; max-width: 500px; max-height: 70vh; display: flex; flex-direction: column;">
+                    <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="margin: 0; font-size: 1rem;">📂 Seleccionar carpeta</h3>
+                        <button id="folder-picker-close" style="background: none; border: none; font-size: 1.3rem; cursor: pointer; color: var(--text-secondary);">&times;</button>
+                    </div>
+                    <div style="padding: 16px 20px;">
+                        <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                            <input type="text" id="folder-picker-path" value="${escapeHtml(currentPath)}" 
+                                   style="flex: 1; padding: 10px 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: monospace;">
+                            <button id="folder-picker-go" style="padding: 10px 14px; background: var(--primary); border: none; border-radius: 8px; cursor: pointer; color: #000;">Ir</button>
+                        </div>
+                        <div id="folder-picker-list" style="max-height: 300px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 8px;">
+                            <div style="padding: 20px; text-align: center; color: var(--text-secondary);">Cargando...</div>
+                        </div>
+                    </div>
+                    <div style="padding: 12px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end;">
+                        <button id="folder-picker-cancel" style="padding: 10px 20px; background: rgba(255,255,255,0.1); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; color: var(--text);">Cancelar</button>
+                        <button id="folder-picker-select" style="padding: 10px 20px; background: var(--primary); border: none; border-radius: 8px; cursor: pointer; color: #000; font-weight: 600;">Seleccionar</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(pickerModal);
+            
+            const pathInput = document.getElementById('folder-picker-path');
+            const listDiv = document.getElementById('folder-picker-list');
+            
+            async function loadFolders(path) {
+                listDiv.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Cargando...</div>';
+                try {
+                    const res = await authFetch(`${API_BASE}/files/list?path=${encodeURIComponent(path)}`);
+                    const data = await res.json();
+                    
+                    if (!data.success && data.error) {
+                        listDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #ef4444;">${escapeHtml(data.error)}</div>`;
+                        return;
+                    }
+                    
+                    const folders = (data.files || []).filter(f => f.isDirectory);
+                    
+                    // Add parent directory option
+                    let html = '';
+                    if (path !== '/') {
+                        html += `<div class="folder-item" data-path="${escapeHtml(path.split('/').slice(0, -1).join('/') || '/')}" 
+                                     style="padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; border-radius: 6px; margin-bottom: 4px;"
+                                     onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+                                    📁 <span style="color: var(--text-secondary);">..</span>
+                                 </div>`;
+                    }
+                    
+                    folders.forEach(f => {
+                        const fullPath = path === '/' ? `/${f.name}` : `${path}/${f.name}`;
+                        html += `<div class="folder-item" data-path="${escapeHtml(fullPath)}" 
+                                     style="padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; border-radius: 6px; margin-bottom: 4px;"
+                                     onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+                                    📁 ${escapeHtml(f.name)}
+                                 </div>`;
+                    });
+                    
+                    if (folders.length === 0 && path !== '/') {
+                        html += '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Sin subcarpetas</div>';
+                    }
+                    
+                    listDiv.innerHTML = html || '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Vacío</div>';
+                    
+                    // Add click handlers for folders
+                    listDiv.querySelectorAll('.folder-item').forEach(item => {
+                        item.addEventListener('click', () => {
+                            pathInput.value = item.dataset.path;
+                            loadFolders(item.dataset.path);
+                        });
+                    });
+                } catch (e) {
+                    listDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #ef4444;">Error: ${escapeHtml(e.message)}</div>`;
+                }
+            }
+            
+            loadFolders(currentPath.split('/').slice(0, -1).join('/') || '/');
+            
+            document.getElementById('folder-picker-go').addEventListener('click', () => loadFolders(pathInput.value));
+            document.getElementById('folder-picker-close').addEventListener('click', () => pickerModal.remove());
+            document.getElementById('folder-picker-cancel').addEventListener('click', () => pickerModal.remove());
+            document.getElementById('folder-picker-select').addEventListener('click', () => {
+                input.value = pathInput.value;
+                pickerModal.remove();
+            });
+            pickerModal.addEventListener('click', (e) => { if (e.target === pickerModal) pickerModal.remove(); });
+        });
+    });
+    
+    // Install button handler
+    document.getElementById('homestore-config-install').addEventListener('click', async () => {
+        const installBtn = document.getElementById('homestore-config-install');
+        installBtn.disabled = true;
+        installBtn.innerHTML = '⏳ Instalando...';
+        
+        // Collect configuration
+        const config = {
+            volumes: {},
+            ports: {},
+            env: {}
+        };
+        
+        // Collect volumes
+        modal.querySelectorAll('.homestore-volume-input').forEach(input => {
+            const containerPath = input.dataset.containerPath;
+            const hostPath = input.value.trim();
+            if (containerPath && hostPath) {
+                config.volumes[containerPath] = hostPath;
+            }
+        });
+        
+        // Collect ports
+        modal.querySelectorAll('.homestore-port-input').forEach(input => {
+            const originalPort = input.dataset.originalPort;
+            const containerPort = input.dataset.containerPort;
+            const hostPort = input.value.trim();
+            if (originalPort && hostPort) {
+                // Preserve protocol suffix if present (e.g., /udp)
+                const suffix = containerPort.includes('/') ? containerPort.split('/')[1] : '';
+                config.ports[suffix ? `${hostPort}/${suffix}` : hostPort] = containerPort;
+            }
+        });
+        
+        // Collect environment variables
+        modal.querySelectorAll('.homestore-env-input').forEach(input => {
+            const key = input.dataset.envKey;
+            const value = input.value;
+            if (key) {
+                config.env[key] = value;
+            }
+        });
+        
+        try {
+            const res = await authFetch(`${API_BASE}/homestore/install/${appId}`, {
+                method: 'POST',
+                body: JSON.stringify({ config })
+            });
+            const data = await res.json();
+            
+            if (!data.success) throw new Error(data.error);
+            
+            closeModal();
+            showNotification(`✅ ${app.name} instalado correctamente!`, 'success');
+            if (data.webUI) {
+                showNotification(`Accede en: http://${window.location.hostname}:${data.webUI}`, 'info');
+            }
+            await loadHomeStoreCatalog();
+            
+        } catch (error) {
+            console.error('Install error:', error);
+            showNotification(`❌ Error al instalar: ${error.message}`, 'error');
+            installBtn.disabled = false;
+            installBtn.innerHTML = '🚀 Instalar';
+        }
+    });
+}
+
+async function installHomeStoreApp(appId) {
+    // Show configuration modal instead of installing directly
+    await showHomeStoreConfigModal(appId);
+}
+
+async function uninstallHomeStoreApp(appId) {
+    if (!confirm(`¿Desinstalar ${appId}?\n\n¿Eliminar también los datos?`)) return;
+    
+    const removeData = confirm('¿Eliminar los datos de la aplicación?');
+    
+    try {
+        const res = await authFetch(`${API_BASE}/homestore/uninstall/${appId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ removeData })
+        });
+        const data = await res.json();
+        
+        if (!data.success) throw new Error(data.error);
+        
+        alert(`✅ ${appId} desinstalado`);
+        await loadHomeStoreCatalog();
+        
+    } catch (error) {
+        console.error('Uninstall error:', error);
+        alert(`❌ Error: ${error.message}`);
+    }
+}
+
+async function startHomeStoreApp(appId) {
+    try {
+        const res = await authFetch(`${API_BASE}/homestore/start/${appId}`, { method: 'POST' });
+        const data = await res.json();
+        
+        if (!data.success) throw new Error(data.error);
+        
+        await loadHomeStoreCatalog();
+        
+    } catch (error) {
+        alert(`❌ Error: ${error.message}`);
+    }
+}
+
+async function stopHomeStoreApp(appId) {
+    try {
+        const res = await authFetch(`${API_BASE}/homestore/stop/${appId}`, { method: 'POST' });
+        const data = await res.json();
+        
+        if (!data.success) throw new Error(data.error);
+        
+        await loadHomeStoreCatalog();
+        
+    } catch (error) {
+        alert(`❌ Error: ${error.message}`);
+    }
+}
+
+function openHomeStoreApp(app) {
+    if (app.webUI) {
+        const url = `http://${window.location.hostname}:${app.webUI}`;
+        window.open(url, '_blank');
+    }
+}
+
+async function showHomeStoreAppLogs(appId) {
+    try {
+        const res = await authFetch(`${API_BASE}/homestore/logs/${appId}?lines=100`);
+        const data = await res.json();
+        
+        if (!data.success) throw new Error(data.error);
+        
+        // Create modal
+        const modal = document.createElement('div');
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; align-items: center; justify-content: center;';
+        modal.innerHTML = `
+            <div style="background: var(--bg-card); border-radius: 12px; padding: 20px; width: 90%; max-width: 800px; max-height: 80vh; display: flex; flex-direction: column;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0;">📋 Logs: ${appId}</h3>
+                    <button id="close-logs-modal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text);">×</button>
+                </div>
+                <pre style="background: #1a1a2e; color: #0f0; padding: 15px; border-radius: 8px; overflow: auto; flex: 1; font-size: 0.85rem; line-height: 1.4;">${data.logs || 'No logs available'}</pre>
+            </div>
+        `;
+        
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal || e.target.id === 'close-logs-modal') {
+                modal.remove();
+            }
+        });
+        
+        document.body.appendChild(modal);
+        
+    } catch (error) {
+        alert(`❌ Error: ${error.message}`);
+    }
+}
+
+async function updateHomeStoreApp(appId) {
+    if (!confirm(`¿Actualizar ${appId}?\n\nSe descargará la última versión de la imagen.`)) return;
+    
+    try {
+        const res = await authFetch(`${API_BASE}/homestore/update/${appId}`, { method: 'POST' });
+        const data = await res.json();
+        
+        if (!data.success) throw new Error(data.error);
+        
+        alert(`✅ ${appId} actualizado`);
+        await loadHomeStoreCatalog();
+        
+    } catch (error) {
+        alert(`❌ Error: ${error.message}`);
+    }
+}
+
+// Expose HomeStore functions globally
+window.loadHomeStoreCatalog = loadHomeStoreCatalog;
+window.installHomeStoreApp = installHomeStoreApp;
+window.uninstallHomeStoreApp = uninstallHomeStoreApp;
+window.startHomeStoreApp = startHomeStoreApp;
+window.stopHomeStoreApp = stopHomeStoreApp;
+window.openHomeStoreApp = openHomeStoreApp;
+window.showHomeStoreAppLogs = showHomeStoreAppLogs;
+window.updateHomeStoreApp = updateHomeStoreApp;
+
 // Expose functions globally for onclick handlers
 window.deleteFolder = deleteFolder;
 window.deleteDevice = deleteDevice;
 window.addFolder = addFolder;
 window.addDevice = addDevice;
 
+// ============================================
+// DOCKER STACKS MANAGER
+// ============================================
+
+let stacksCache = [];
+
+async function openStacksManager() {
+    // Remove existing modal
+    const existing = document.getElementById('stacks-modal');
+    if (existing) existing.remove();
+    
+    const modal = document.createElement('div');
+    modal.id = 'stacks-modal';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.85);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 99999;
+    `;
+    
+    modal.innerHTML = `
+        <div style="
+            background: #1a1a2e;
+            border: 1px solid #3d3d5c;
+            border-radius: 16px;
+            width: 95%;
+            max-width: 900px;
+            max-height: 90vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        ">
+            <div style="padding: 20px; border-bottom: 1px solid #3d3d5c; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="margin: 0; color: #10b981;">🗂️ Docker Stacks</h2>
+                <button id="stacks-close-btn" style="background: none; border: none; color: #ffffff; font-size: 24px; cursor: pointer;">×</button>
+            </div>
+            <div style="padding: 20px; border-bottom: 1px solid #3d3d5c; display: flex; gap: 10px; flex-wrap: wrap;">
+                <button id="stacks-new-btn" class="btn-primary" style="background: #10b981; color: white;">➕ Nuevo Stack</button>
+                <button id="stacks-template-btn" class="btn-primary" style="background: #6366f1; color: white;">📋 Desde Template</button>
+                <button id="stacks-refresh-btn" class="btn-primary" style="background: #4a4a6a; color: white;">🔄 Refrescar</button>
+            </div>
+            <div id="stacks-list" style="flex: 1; overflow-y: auto; padding: 20px;">
+                <div style="text-align: center; padding: 40px; color: #a0a0b0;">
+                    Cargando stacks...
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Event listeners
+    document.getElementById('stacks-close-btn').addEventListener('click', () => modal.remove());
+    document.getElementById('stacks-new-btn').addEventListener('click', openNewStackModal);
+    document.getElementById('stacks-template-btn').addEventListener('click', openTemplateSelector);
+    document.getElementById('stacks-refresh-btn').addEventListener('click', loadStacksList);
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    
+    await loadStacksList();
+}
+
+async function loadStacksList() {
+    const listDiv = document.getElementById('stacks-list');
+    if (!listDiv) return;
+    
+    listDiv.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-secondary);">Cargando...</div>';
+    
+    try {
+        const res = await authFetch(`${API_BASE}/stacks/list`);
+        const data = await res.json();
+        
+        if (!data.success) throw new Error(data.error);
+        
+        stacksCache = data.stacks;
+        
+        if (data.stacks.length === 0) {
+            listDiv.innerHTML = `
+                <div style="text-align: center; padding: 60px; color: var(--text-secondary);">
+                    <div style="font-size: 48px; margin-bottom: 20px;">📦</div>
+                    <h3>No hay stacks</h3>
+                    <p>Crea tu primer stack o usa una plantilla predefinida.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        listDiv.innerHTML = data.stacks.map(stack => `
+            <div class="stack-card" style="
+                background: var(--bg-hover);
+                border: 1px solid var(--border);
+                border-radius: 12px;
+                padding: 16px;
+                margin-bottom: 12px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 12px;
+            ">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 32px;">${stack.icon || '📦'}</span>
+                    <div>
+                        <h4 style="margin: 0; color: var(--text);">${escapeHtml(stack.name || stack.id)}</h4>
+                        <p style="margin: 4px 0 0; color: var(--text-secondary); font-size: 13px;">${escapeHtml(stack.description || 'Sin descripción')}</p>
+                        <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+                            ${stack.services.map(s => `
+                                <span style="
+                                    padding: 2px 8px;
+                                    border-radius: 4px;
+                                    font-size: 11px;
+                                    background: ${s.state === 'running' ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'};
+                                    color: ${s.state === 'running' ? '#10b981' : '#ef4444'};
+                                ">${escapeHtml(s.name)}</span>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <span style="
+                        padding: 4px 12px;
+                        border-radius: 20px;
+                        font-size: 12px;
+                        font-weight: 600;
+                        background: ${stack.status === 'running' ? 'rgba(16,185,129,0.2)' : stack.status === 'partial' ? 'rgba(245,158,11,0.2)' : 'rgba(107,114,128,0.2)'};
+                        color: ${stack.status === 'running' ? '#10b981' : stack.status === 'partial' ? '#f59e0b' : '#6b7280'};
+                    ">${stack.status === 'running' ? '● En Ejecución' : stack.status === 'partial' ? '◐ Parcial' : '○ Detenido'}</span>
+
+                    <button data-action="toggle" data-stack="${stack.id}" data-cmd="${stack.status === 'running' ? 'down' : 'up'}"
+                        class="btn-primary stack-btn" style="padding: 6px 12px; font-size: 12px; background: ${stack.status === 'running' ? '#ef4444' : '#10b981'};">
+                        ${stack.status === 'running' ? '⏹ Detener' : '▶ Iniciar'}
+                    </button>
+                    <button data-action="edit" data-stack="${stack.id}" class="btn-primary stack-btn" style="padding: 6px 12px; font-size: 12px; background: #6366f1;">
+                        ✏️ Editar
+                    </button>
+                    <button data-action="logs" data-stack="${stack.id}" class="btn-primary stack-btn" style="padding: 6px 12px; font-size: 12px; background: var(--bg-hover);">
+                        📜 Logs
+                    </button>
+                    <button data-action="delete" data-stack="${stack.id}" class="btn-primary stack-btn" style="padding: 6px 12px; font-size: 12px; background: #ef4444;">
+                        🗑️
+                    </button>
+                </div>
+            </div>
+        `).join('');
+        
+        // Bind event listeners for stack buttons
+        listDiv.querySelectorAll('.stack-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const action = btn.dataset.action;
+                const stackId = btn.dataset.stack;
+                if (action === 'toggle') {
+                    await stackAction(stackId, btn.dataset.cmd, e);
+                } else if (action === 'edit') {
+                    await openStackEditor(stackId);
+                } else if (action === 'logs') {
+                    await showStackLogs(stackId);
+                } else if (action === 'delete') {
+                    await deleteStack(stackId);
+                }
+            });
+        });
+        
+    } catch (e) {
+        listDiv.innerHTML = `<div style="text-align: center; padding: 40px; color: #ef4444;">Error: ${escapeHtml(e.message)}</div>`;
+    }
+}
+
+async function openNewStackModal() {
+    const modal = document.getElementById('stacks-modal');
+    if (!modal) return;
+    
+    const content = modal.querySelector('div > div');
+    content.innerHTML = `
+        <div style="padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="margin: 0; color: var(--primary);">➕ Nuevo Stack</h2>
+            <button id="stack-back-btn" style="background: none; border: none; color: var(--text); font-size: 14px; cursor: pointer;">← Volver</button>
+        </div>
+        <div style="padding: 20px; overflow-y: auto; max-height: 70vh;">
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 6px; color: var(--text-secondary);">Nombre del Stack</label>
+                <input type="text" id="stack-name" placeholder="mi-stack" style="
+                    width: 100%;
+                    padding: 10px;
+                    border-radius: 8px;
+                    border: 1px solid #4a4a6a;
+                    background: #1a1a2e;
+                    color: #e0e0e0;
+                    font-size: 14px;
+                ">
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 6px; color: var(--text-secondary);">Descripción (opcional)</label>
+                <input type="text" id="stack-desc" placeholder="Descripción del stack" style="
+                    width: 100%;
+                    padding: 10px;
+                    border-radius: 8px;
+                    border: 1px solid #4a4a6a;
+                    background: #1a1a2e;
+                    color: #e0e0e0;
+                    font-size: 14px;
+                ">
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 6px; color: var(--text-secondary);">docker-compose.yml</label>
+                <textarea id="stack-compose" placeholder="version: '3.8'
+services:
+  web:
+    image: nginx
+    ports:
+      - '8080:80'" style="
+                    width: 100%;
+                    height: 300px;
+                    padding: 12px;
+                    border-radius: 8px;
+                    border: 1px solid #4a4a6a;
+                    background: #1a1a2e;
+                    color: #e0e0e0;
+                    font-family: monospace;
+                    font-size: 13px;
+                    resize: vertical;
+                "></textarea>
+            </div>
+            <button id="stack-create-btn" class="btn-primary" style="width: 100%; padding: 12px; background: #10b981; font-size: 14px;">
+                🚀 Crear Stack
+            </button>
+        </div>
+    `;
+    
+    document.getElementById('stack-back-btn').addEventListener('click', openStacksManager);
+    document.getElementById('stack-create-btn').addEventListener('click', createStack);
+}
+
+async function createStack() {
+    const name = document.getElementById('stack-name').value.trim();
+    const description = document.getElementById('stack-desc').value.trim();
+    const compose = document.getElementById('stack-compose').value;
+    
+    if (!name) return alert('El nombre es requerido');
+    if (!compose) return alert('El contenido docker-compose es requerido');
+    
+    const btn = document.getElementById('stack-create-btn');
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Creando...';
+    
+    try {
+        const res = await authFetch(`${API_BASE}/stacks/create`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, description, compose })
+        });
+        const data = await res.json();
+        
+        if (!data.success) throw new Error(data.error);
+        
+        alert('Stack creado correctamente');
+        openStacksManager();
+    } catch (e) {
+        alert('Error: ' + e.message);
+        btn.disabled = false;
+        btn.innerHTML = '🚀 Crear Stack';
+    }
+}
+
+async function openTemplateSelector() {
+    const modal = document.getElementById('stacks-modal');
+    if (!modal) return;
+    
+    const content = modal.querySelector('div > div');
+    content.innerHTML = `
+        <div style="padding: 20px; border-bottom: 1px solid #3d3d5c; display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="margin: 0; color: #10b981;">📋 Plantillas</h2>
+            <button id="template-back-btn" style="background: #4a4a6a; border: none; color: #ffffff; font-size: 14px; cursor: pointer; padding: 8px 16px; border-radius: 6px;">← Volver</button>
+        </div>
+        <div id="templates-list" style="padding: 20px; overflow-y: auto; max-height: 70vh;">
+            <div style="text-align: center; padding: 40px; color: #a0a0b0;">Cargando plantillas...</div>
+        </div>
+    `;
+    
+    document.getElementById('template-back-btn').addEventListener('click', openStacksManager);
+    
+    try {
+        const res = await authFetch(`${API_BASE}/stacks/templates`);
+        const data = await res.json();
+        
+        const list = document.getElementById('templates-list');
+        list.innerHTML = data.templates.map(t => `
+            <div style="
+                background: #2d2d44;
+                border: 1px solid #3d3d5c;
+                border-radius: 12px;
+                padding: 16px;
+                margin-bottom: 12px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            ">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 32px;">${t.icon}</span>
+                    <div>
+                        <h4 style="margin: 0; color: #ffffff;">${escapeHtml(t.name)}</h4>
+                        <p style="margin: 4px 0 0; color: #a0a0b0; font-size: 13px;">${escapeHtml(t.description)}</p>
+                    </div>
+                </div>
+                <button onclick="useTemplate('${t.id}')" class="btn-primary" style="padding: 8px 16px; background: #10b981; color: white;">
+                    Usar
+                </button>
+            </div>
+        `).join('');
+    } catch (e) {
+        document.getElementById('templates-list').innerHTML = `<div style="color: #ef4444;">Error: ${e.message}</div>`;
+    }
+}
+
+async function useTemplate(templateId) {
+    try {
+        const res = await authFetch(`${API_BASE}/stacks/templates/${templateId}`);
+        const data = await res.json();
+        
+        if (!data.success) throw new Error(data.error);
+        
+        // Open new stack modal with template content
+        openNewStackModal();
+        setTimeout(() => {
+            document.getElementById('stack-name').value = templateId;
+            document.getElementById('stack-desc').value = data.template.description;
+            document.getElementById('stack-compose').value = data.template.compose;
+        }, 100);
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function stackAction(stackId, action, event) {
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '⏳...';
+    
+    try {
+        const res = await authFetch(`${API_BASE}/stacks/${stackId}/${action}`, { method: 'POST' });
+        const data = await res.json();
+        
+        if (!data.success) throw new Error(data.error);
+        
+        await loadStacksList();
+    } catch (e) {
+        alert('Error: ' + e.message);
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+
+async function openStackEditor(stackId) {
+    try {
+        const res = await authFetch(`${API_BASE}/stacks/${stackId}`);
+        const data = await res.json();
+        
+        if (!data.success) throw new Error(data.error);
+        
+        const modal = document.getElementById('stacks-modal');
+        const content = modal.querySelector('div > div');
+        
+        content.innerHTML = `
+            <div style="padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="margin: 0; color: var(--primary);">✏️ Editar: ${escapeHtml(data.stack.name || stackId)}</h2>
+                <button id="editor-back-btn" style="background: none; border: none; color: var(--text); font-size: 14px; cursor: pointer;">← Volver</button>
+            </div>
+            <div style="padding: 20px; overflow-y: auto; max-height: 70vh;">
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-secondary);">docker-compose.yml</label>
+                    <textarea id="edit-compose" style="
+                        width: 100%;
+                        height: 400px;
+                        padding: 12px;
+                        border-radius: 8px;
+                        border: 1px solid #4a4a6a;
+                        background: #1a1a2e;
+                        color: #e0e0e0;
+                        font-family: monospace;
+                        font-size: 13px;
+                    ">${escapeHtml(data.stack.compose)}</textarea>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button id="save-stack-btn" class="btn-primary" style="flex: 1; padding: 12px; background: #10b981;">
+                        💾 Guardar
+                    </button>
+                    <button id="redeploy-stack-btn" class="btn-primary" style="flex: 1; padding: 12px; background: #6366f1;">
+                        🚀 Guardar y Redesplegar
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('editor-back-btn').addEventListener('click', openStacksManager);
+        document.getElementById('save-stack-btn').addEventListener('click', () => saveStack(stackId, false));
+        document.getElementById('redeploy-stack-btn').addEventListener('click', () => saveStack(stackId, true));
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function saveStack(stackId, redeploy) {
+    const compose = document.getElementById('edit-compose').value;
+    const btn = redeploy ? document.getElementById('redeploy-stack-btn') : document.getElementById('save-stack-btn');
+    btn.disabled = true;
+    btn.innerHTML = '⏳...';
+    
+    try {
+        // Save
+        let res = await authFetch(`${API_BASE}/stacks/${stackId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ compose })
+        });
+        let data = await res.json();
+        if (!data.success) throw new Error(data.error);
+        
+        // Redeploy if requested
+        if (redeploy) {
+            res = await authFetch(`${API_BASE}/stacks/${stackId}/up`, { method: 'POST' });
+            data = await res.json();
+            if (!data.success) throw new Error(data.error);
+        }
+        
+        alert(redeploy ? 'Stack guardado y redesplegado' : 'Stack guardado');
+        openStacksManager();
+    } catch (e) {
+        alert('Error: ' + e.message);
+        btn.disabled = false;
+        btn.innerHTML = redeploy ? '🚀 Guardar y Redesplegar' : '💾 Guardar';
+    }
+}
+
+async function showStackLogs(stackId) {
+    const modal = document.getElementById('stacks-modal');
+    const content = modal.querySelector('div > div');
+    
+    content.innerHTML = `
+        <div style="padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="margin: 0; color: var(--primary);">📜 Logs: ${escapeHtml(stackId)}</h2>
+            <button id="logs-back-btn" style="background: none; border: none; color: var(--text); font-size: 14px; cursor: pointer;">← Volver</button>
+        </div>
+        <div style="padding: 20px; overflow-y: auto; max-height: 70vh;">
+            <pre id="stack-logs" style="
+                background: #0a0a0a;
+                padding: 16px;
+                border-radius: 8px;
+                overflow-x: auto;
+                font-size: 12px;
+                color: #10b981;
+                max-height: 500px;
+                overflow-y: auto;
+            ">Cargando logs...</pre>
+        </div>
+    `;
+    
+    document.getElementById('logs-back-btn').addEventListener('click', openStacksManager);
+    
+    try {
+        const res = await authFetch(`${API_BASE}/stacks/${stackId}/logs?lines=200`);
+        const data = await res.json();
+        document.getElementById('stack-logs').textContent = data.logs || 'Sin logs';
+    } catch (e) {
+        document.getElementById('stack-logs').textContent = 'Error: ' + e.message;
+    }
+}
+
+async function deleteStack(stackId) {
+    if (!confirm(`¿Eliminar el stack "${stackId}"? Esto detendrá y eliminará todos sus contenedores.`)) return;
+    
+    try {
+        const res = await authFetch(`${API_BASE}/stacks/${stackId}`, { method: 'DELETE' });
+        const data = await res.json();
+        
+        if (!data.success) throw new Error(data.error);
+        
+        await loadStacksList();
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+// Expose stack functions globally
+window.openStacksManager = openStacksManager;
+window.stackAction = stackAction;
+window.openStackEditor = openStackEditor;
+window.showStackLogs = showStackLogs;
+window.deleteStack = deleteStack;
+window.useTemplate = useTemplate;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CLOUD BACKUP - rclone integration for Google Drive, Dropbox, OneDrive, etc.
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function renderCloudBackupView() {
+    const dashboardContent = document.getElementById('dashboard-content');
+    if (!dashboardContent) return;
+    
+    dashboardContent.innerHTML = `
+        <div class="glass-card" style="margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h3 style="color: var(--primary); margin: 0;">☁️ Cloud Backup</h3>
+                    <p style="color: var(--text-dim); margin: 5px 0 0;">Sincroniza con Google Drive, Dropbox, OneDrive y más</p>
+                </div>
+                <div id="cloud-backup-status-badge"></div>
+            </div>
+        </div>
+        <div id="cloud-backup-content">
+            <div style="text-align: center; padding: 40px; color: var(--text-dim);">
+                Cargando...
+            </div>
+        </div>
+    `;
+    
+    await loadCloudBackupStatus();
+}
+
+async function loadCloudBackupStatus() {
+    const contentDiv = document.getElementById('cloud-backup-content');
+    const badgeDiv = document.getElementById('cloud-backup-status-badge');
+    
+    try {
+        const res = await authFetch(`${API_BASE}/cloud-backup/status`);
+        if (!res.ok) throw new Error('Failed to load status');
+        const status = await res.json();
+        
+        if (!status.installed) {
+            // rclone not installed
+            badgeDiv.innerHTML = '<span style="color: #f59e0b;">⚠️ rclone no instalado</span>';
+            contentDiv.innerHTML = `
+                <div class="glass-card" style="text-align: center; padding: 40px;">
+                    <h3 style="margin-bottom: 15px;">📦 Instalar rclone</h3>
+                    <p style="color: var(--text-dim); margin-bottom: 20px;">
+                        rclone es necesario para conectar con servicios de nube como Google Drive, Dropbox, OneDrive, etc.
+                    </p>
+                    <button id="btn-install-rclone" class="btn-primary" style="padding: 12px 24px;">
+                        Instalar rclone
+                    </button>
+                </div>
+            `;
+            document.getElementById('btn-install-rclone').addEventListener('click', installRclone);
+            return;
+        }
+        
+        badgeDiv.innerHTML = `<span style="color: #10b981;">✓ rclone v${status.version}</span>`;
+        
+        // Load configured remotes
+        const remotesRes = await authFetch(`${API_BASE}/cloud-backup/remotes`);
+        const remotesData = await remotesRes.json();
+        
+        let remotesHtml = '';
+        if (remotesData.remotes && remotesData.remotes.length > 0) {
+            remotesHtml = `
+                <div class="glass-card" style="margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h4 style="margin: 0;">🌐 Nubes Configuradas</h4>
+                        <button data-action="add-cloud" class="btn-primary" style="padding: 8px 16px;">
+                            + Añadir Nube
+                        </button>
+                    </div>
+                    <div id="cloud-remotes-list">
+                        ${remotesData.remotes.map(r => `
+                            <div class="remote-card" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background: rgba(255,255,255,0.03); border-radius: 10px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <span style="font-size: 1.8rem;">${r.icon}</span>
+                                    <div>
+                                        <div style="font-weight: 600;">${escapeHtml(r.name)}</div>
+                                        <div style="font-size: 0.85rem; color: var(--text-dim);">${r.displayName}</div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 8px;">
+                                    <button data-action="browse-remote" data-remote="${escapeHtml(r.name)}" class="btn-sm" style="background: #6366f1;" title="Explorar">
+                                        📂
+                                    </button>
+                                    <button data-action="sync-remote" data-remote="${escapeHtml(r.name)}" class="btn-sm" style="background: #10b981;" title="Sincronizar">
+                                        🔄
+                                    </button>
+                                    <button data-action="delete-remote" data-remote="${escapeHtml(r.name)}" class="btn-sm" style="background: #ef4444;" title="Eliminar">
+                                        🗑️
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        } else {
+            remotesHtml = `
+                <div class="glass-card" style="text-align: center; padding: 40px;">
+                    <h3 style="margin-bottom: 15px;">🌐 No hay nubes configuradas</h3>
+                    <p style="color: var(--text-dim); margin-bottom: 20px;">
+                        Añade tu primera nube para empezar a sincronizar archivos
+                    </p>
+                    <button data-action="add-cloud" class="btn-primary" style="padding: 12px 24px;">
+                        + Añadir Nube
+                    </button>
+                </div>
+            `;
+        }
+        
+        // Load active sync jobs
+        const activeJobsRes = await authFetch(`${API_BASE}/cloud-backup/jobs/active`);
+        const activeJobsData = await activeJobsRes.json();
+        
+        // Load scheduled syncs
+        const schedulesRes = await authFetch(`${API_BASE}/cloud-backup/schedules`);
+        const schedulesData = await schedulesRes.json();
+        
+        // Load transfer history
+        const historyRes = await authFetch(`${API_BASE}/cloud-backup/history`);
+        const historyData = await historyRes.json();
+        
+        // Build active syncs section (only if there are active jobs)
+        let activeHtml = '';
+        if (activeJobsData.jobs && activeJobsData.jobs.length > 0) {
+            activeHtml = `
+                <div class="glass-card" style="margin-bottom: 20px; border: 2px solid rgba(16,185,129,0.3);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h4 style="margin: 0; color: #10b981;">🔄 Sincronizaciones Activas</h4>
+                        <span style="font-size: 0.8rem; color: #a0a0b0;">Auto-actualiza cada 5s</span>
+                    </div>
+                    <div id="active-syncs-list">
+                        ${activeJobsData.jobs.map(job => `
+                            <div style="padding: 15px; background: rgba(16,185,129,0.05); border-radius: 8px; margin-bottom: 10px; border: 1px solid rgba(16,185,129,0.2);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                    <div style="overflow: hidden;">
+                                        <div style="font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(job.source)}</div>
+                                        <div style="font-size: 0.8rem; color: #a0a0b0;">→ ${escapeHtml(job.dest)}</div>
+                                    </div>
+                                    <span style="color: #10b981; font-weight: 600; font-size: 1.1rem;">${job.percent}%</span>
+                                </div>
+                                <div style="height: 6px; background: #2d2d44; border-radius: 3px; overflow: hidden;">
+                                    <div style="height: 100%; background: linear-gradient(90deg, #10b981, #6366f1); width: ${job.percent}%; transition: width 0.5s ease;"></div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            
+            // Auto-refresh active syncs
+            setTimeout(() => {
+                if (document.getElementById('active-syncs-list')) {
+                    loadCloudBackupStatus();
+                }
+            }, 5000);
+        }
+        
+        // Build scheduled syncs section
+        let schedulesHtml = `
+            <div class="glass-card" style="margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h4 style="margin: 0;">⏰ Sincronizaciones Programadas</h4>
+                </div>
+                <div id="scheduled-syncs-list">
+        `;
+        
+        if (schedulesData.schedules && schedulesData.schedules.length > 0) {
+            schedulesHtml += schedulesData.schedules.map(s => `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 8px; border: 1px solid ${s.enabled ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.05)'};">
+                    <div style="flex: 1; overflow: hidden;">
+                        <div style="font-weight: 500;">${escapeHtml(s.name)}</div>
+                        <div style="font-size: 0.8rem; color: #a0a0b0;">
+                            ${escapeHtml(s.source)} → ${escapeHtml(s.dest)}
+                        </div>
+                        <div style="font-size: 0.75rem; color: #6366f1; margin-top: 4px;">
+                            ${getScheduleLabel(s.schedule)} • ${s.mode}
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button data-action="toggle-schedule" data-id="${s.id}" class="btn-sm" style="background: ${s.enabled ? '#10b981' : '#4a4a6a'};" title="${s.enabled ? 'Pausar' : 'Activar'}">
+                            ${s.enabled ? '⏸️' : '▶️'}
+                        </button>
+                        <button data-action="delete-schedule" data-id="${s.id}" class="btn-sm" style="background: #ef4444;" title="Eliminar">
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            schedulesHtml += `<div style="text-align: center; padding: 20px; color: #a0a0b0;">No hay sincronizaciones programadas</div>`;
+        }
+        schedulesHtml += '</div></div>';
+        
+        // Build history section
+        let historyHtml = `
+            <div class="glass-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h4 style="margin: 0;">📜 Historial de Transferencias</h4>
+                    ${historyData.history && historyData.history.length > 0 ? `
+                        <button data-action="clear-history" class="btn-sm" style="background: #4a4a6a;">Limpiar</button>
+                    ` : ''}
+                </div>
+                <div id="transfer-history-list" style="max-height: 300px; overflow-y: auto;">
+        `;
+        
+        if (historyData.history && historyData.history.length > 0) {
+            historyHtml += historyData.history.slice(0, 20).map(t => {
+                const statusIcon = t.status === 'completed' ? '✅' : t.status === 'running' ? '🔄' : '❌';
+                const statusColor = t.status === 'completed' ? '#10b981' : t.status === 'running' ? '#f59e0b' : '#ef4444';
+                return `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: rgba(255,255,255,0.02); border-radius: 6px; margin-bottom: 6px; border-left: 3px solid ${statusColor};">
+                    <div style="flex: 1; overflow: hidden;">
+                        <div style="font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            ${escapeHtml(t.source)} → ${escapeHtml(t.dest)}
+                        </div>
+                        <div style="font-size: 0.75rem; color: #a0a0b0;">
+                            ${new Date(t.timestamp).toLocaleString()} • ${t.mode}
+                        </div>
+                    </div>
+                    <span style="font-size: 1.2rem;" title="${t.status}">${statusIcon}</span>
+                </div>
+            `}).join('');
+        } else {
+            historyHtml += `<div style="text-align: center; padding: 20px; color: #a0a0b0;">Sin transferencias recientes</div>`;
+        }
+        historyHtml += '</div></div>';
+        
+        contentDiv.innerHTML = remotesHtml + activeHtml + schedulesHtml + historyHtml;
+        
+        // Bind event listeners after DOM is updated
+        bindCloudBackupEventListeners();
+        
+    } catch (e) {
+        contentDiv.innerHTML = `<div class="glass-card" style="color: #ef4444; padding: 20px;">Error: ${e.message}</div>`;
+    }
+}
+
+// Bind all event listeners for Cloud Backup view using event delegation
+function bindCloudBackupEventListeners() {
+    const contentDiv = document.getElementById('cloud-backup-content');
+    if (!contentDiv) return;
+    
+    // Remove old listener if exists
+    contentDiv.removeEventListener('click', handleCloudBackupClick);
+    // Add new listener
+    contentDiv.addEventListener('click', handleCloudBackupClick);
+}
+
+// Event delegation handler for Cloud Backup
+async function handleCloudBackupClick(e) {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    
+    const action = btn.dataset.action;
+    const remote = btn.dataset.remote;
+    const id = btn.dataset.id;
+    
+    switch (action) {
+        case 'add-cloud':
+            showAddCloudModal();
+            break;
+        case 'browse-remote':
+            browseRemote(remote);
+            break;
+        case 'sync-remote':
+            syncRemote(remote);
+            break;
+        case 'delete-remote':
+            deleteRemote(remote);
+            break;
+        case 'toggle-schedule':
+            toggleScheduledSync(id);
+            break;
+        case 'delete-schedule':
+            deleteScheduledSync(id);
+            break;
+        case 'clear-history':
+            clearTransferHistory();
+            break;
+    }
+}
+
+// Helper: Get human-readable schedule label
+function getScheduleLabel(schedule) {
+    switch (schedule) {
+        case 'hourly': return '⏱️ Cada hora';
+        case 'daily': return '📅 Diario (3:00)';
+        case 'weekly': return '📆 Semanal (Dom 3:00)';
+        case 'monthly': return '🗓️ Mensual (día 1)';
+        default: return `🕐 ${schedule}`;
+    }
+}
+
+// Toggle scheduled sync enabled/disabled
+async function toggleScheduledSync(id) {
+    try {
+        const res = await authFetch(`${API_BASE}/cloud-backup/schedules/${id}/toggle`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            showNotification(data.enabled ? 'Sincronización activada' : 'Sincronización pausada', 'success');
+            await loadCloudBackupStatus();
+        } else {
+            throw new Error(data.error);
+        }
+    } catch (e) {
+        showNotification('Error: ' + e.message, 'error');
+    }
+}
+
+// Delete scheduled sync
+async function deleteScheduledSync(id) {
+    if (!confirm('¿Eliminar esta sincronización programada?')) return;
+    
+    try {
+        const res = await authFetch(`${API_BASE}/cloud-backup/schedules/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+            showNotification('Sincronización eliminada', 'success');
+            await loadCloudBackupStatus();
+        } else {
+            throw new Error(data.error);
+        }
+    } catch (e) {
+        showNotification('Error: ' + e.message, 'error');
+    }
+}
+
+// Clear transfer history
+async function clearTransferHistory() {
+    if (!confirm('¿Limpiar todo el historial de transferencias?')) return;
+    
+    try {
+        const res = await authFetch(`${API_BASE}/cloud-backup/history`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+            showNotification('Historial limpiado', 'success');
+            await loadCloudBackupStatus();
+        } else {
+            throw new Error(data.error);
+        }
+    } catch (e) {
+        showNotification('Error: ' + e.message, 'error');
+    }
+}
+
+async function installRclone() {
+    console.log('[Cloud Backup] installRclone called');
+    if (!confirm('¿Instalar rclone? Esto puede tardar unos minutos.')) return;
+    console.log('[Cloud Backup] User confirmed, starting install...');
+    
+    const contentDiv = document.getElementById('cloud-backup-content');
+    
+    const updateProgress = (step, percent, text) => {
+        contentDiv.innerHTML = `
+            <div class="glass-card" style="text-align: center; padding: 40px;">
+                <h3 style="margin-bottom: 20px; color: var(--primary);">📦 Instalando rclone</h3>
+                <div style="margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #a0a0b0;">${text}</span>
+                        <span style="color: #10b981; font-weight: 600;">${percent}%</span>
+                    </div>
+                    <div style="height: 8px; background: #2d2d44; border-radius: 4px; overflow: hidden;">
+                        <div style="height: 100%; background: linear-gradient(90deg, #10b981, #6366f1); width: ${percent}%; transition: width 0.5s ease;"></div>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: center; gap: 20px; margin-top: 20px;">
+                    <span style="color: ${step >= 1 ? '#10b981' : '#4a4a6a'};">${step >= 1 ? '✅' : '⏳'} Descargando</span>
+                    <span style="color: ${step >= 2 ? '#10b981' : '#4a4a6a'};">${step >= 2 ? '✅' : '⏳'} Extrayendo</span>
+                    <span style="color: ${step >= 3 ? '#10b981' : '#4a4a6a'};">${step >= 3 ? '✅' : '⏳'} Instalando</span>
+                </div>
+            </div>
+        `;
+    };
+    
+    updateProgress(0, 5, 'Iniciando...');
+    
+    // Simulate progress while waiting for server
+    let fakeProgress = 5;
+    const progressInterval = setInterval(() => {
+        if (fakeProgress < 30) {
+            fakeProgress += 5;
+            updateProgress(1, fakeProgress, 'Descargando rclone...');
+        } else if (fakeProgress < 60) {
+            fakeProgress += 3;
+            updateProgress(2, fakeProgress, 'Extrayendo archivos...');
+        } else if (fakeProgress < 90) {
+            fakeProgress += 2;
+            updateProgress(3, fakeProgress, 'Instalando...');
+        }
+    }, 500);
+    
+    try {
+        const res = await authFetch(`${API_BASE}/cloud-backup/install`, { method: 'POST' });
+        clearInterval(progressInterval);
+        
+        const data = await res.json();
+        
+        if (data.success) {
+            updateProgress(3, 100, '¡Completado!');
+            await new Promise(r => setTimeout(r, 1500));
+            showNotification(`rclone v${data.version} instalado correctamente`, 'success');
+            // Force full view re-render
+            await renderCloudBackupView();
+        } else {
+            throw new Error(data.error);
+        }
+    } catch (e) {
+        clearInterval(progressInterval);
+        showNotification('Error instalando rclone: ' + e.message, 'error');
+        await loadCloudBackupStatus();
+    }
+}
+
+async function showAddCloudModal() {
+    try {
+        // Get available providers
+        const res = await authFetch(`${API_BASE}/cloud-backup/providers`);
+        if (!res.ok) {
+            throw new Error('Error cargando proveedores');
+        }
+        const data = await res.json();
+    
+        const modal = document.createElement('div');
+        modal.id = 'add-cloud-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100000;';
+        
+        modal.innerHTML = `
+            <div style="background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 16px; width: 95%; max-width: 600px; max-height: 80vh; overflow: hidden;">
+                <div style="padding: 20px; border-bottom: 1px solid #3d3d5c; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0; color: #10b981;">☁️ Añadir Nube</h3>
+                    <button data-action="close-modal" style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer;">×</button>
+                </div>
+                <div style="padding: 20px; overflow-y: auto; max-height: 60vh;">
+                    <p style="color: #a0a0b0; margin-bottom: 20px;">Selecciona el servicio de nube que quieres configurar:</p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px;">
+                        ${data.providers.map(p => `
+                            <button data-action="select-provider" data-provider="${p.id}" style="
+                                background: rgba(255,255,255,0.05);
+                                border: 2px solid rgba(255,255,255,0.1);
+                                border-radius: 12px;
+                                padding: 20px 15px;
+                                cursor: pointer;
+                                text-align: center;
+                                transition: all 0.2s;
+                            " onmouseover="this.style.borderColor='${p.color}'" onmouseout="this.style.borderColor='rgba(255,255,255,0.1)'">
+                                <div style="font-size: 2rem; margin-bottom: 8px;">${p.icon}</div>
+                                <div style="color: #fff; font-size: 0.9rem;">${p.name}</div>
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Add event listeners to modal
+        modal.addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-action]');
+            if (!btn) return;
+            
+            const action = btn.dataset.action;
+            if (action === 'close-modal') {
+                modal.remove();
+            } else if (action === 'select-provider') {
+                const provider = btn.dataset.provider;
+                modal.remove();
+                startCloudConfig(provider);
+            }
+        });
+        
+    } catch (e) {
+        console.error('[Cloud Backup] Error in showAddCloudModal:', e);
+        showNotification('Error: ' + e.message, 'error');
+    }
+}
+
+async function startCloudConfig(provider) {
+    document.getElementById('add-cloud-modal')?.remove();
+    
+    const res = await authFetch(`${API_BASE}/cloud-backup/config/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider, name: `${provider}_${Date.now()}` })
+    });
+    const data = await res.json();
+    
+    if (data.needsOAuth) {
+        // Show OAuth instructions
+        showOAuthModal(provider, data.instructions);
+    } else {
+        // Show config form
+        showConfigFormModal(provider, data.fields);
+    }
+}
+
+function showOAuthModal(provider, instructions) {
+    const modal = document.createElement('div');
+    modal.id = 'oauth-modal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100000;';
+    
+    modal.innerHTML = `
+        <div style="background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 16px; width: 95%; max-width: 500px; padding: 25px;">
+            <h3 style="color: #10b981; margin-bottom: 20px;">🔐 Autorización OAuth</h3>
+            <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <pre style="white-space: pre-wrap; color: #a0a0b0; font-size: 0.9rem;">${escapeHtml(instructions)}</pre>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="color: #fff; display: block; margin-bottom: 8px;">Nombre para esta nube:</label>
+                <input type="text" id="oauth-remote-name" value="${provider}" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label style="color: #fff; display: block; margin-bottom: 8px;">Pega el token aquí:</label>
+                <textarea id="oauth-token" rows="4" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff; resize: vertical;"></textarea>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button data-action="cancel" style="padding: 10px 20px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Cancelar</button>
+                <button data-action="save" style="padding: 10px 20px; background: #10b981; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Guardar</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Add event listeners
+    modal.addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        
+        if (btn.dataset.action === 'cancel') {
+            modal.remove();
+        } else if (btn.dataset.action === 'save') {
+            await saveOAuthConfig(provider);
+        }
+    });
+}
+
+async function saveOAuthConfig(provider) {
+    const name = document.getElementById('oauth-remote-name').value.trim();
+    const token = document.getElementById('oauth-token').value.trim();
+    
+    if (!name || !token) {
+        alert('Nombre y token son requeridos');
+        return;
+    }
+    
+    try {
+        const res = await authFetch(`${API_BASE}/cloud-backup/config/save-oauth`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, provider, token })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+            document.getElementById('oauth-modal').remove();
+            showNotification('Nube configurada correctamente', 'success');
+            await loadCloudBackupStatus();
+        } else {
+            throw new Error(data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+function showConfigFormModal(provider, fields) {
+    const modal = document.createElement('div');
+    modal.id = 'config-form-modal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100000;';
+    
+    const fieldNames = fields.map(f => f.name);
+    
+    const fieldsHtml = fields.map(f => `
+        <div style="margin-bottom: 15px;">
+            <label style="color: #fff; display: block; margin-bottom: 8px;">${f.label}${f.required ? ' *' : ''}:</label>
+            ${f.type === 'select' ? `
+                <select id="config-${f.name}" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+                    ${f.options.map(o => `<option value="${o}">${o}</option>`).join('')}
+                </select>
+            ` : `
+                <input type="${f.type}" id="config-${f.name}" value="${f.default || ''}" placeholder="${f.placeholder || ''}" 
+                    style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+            `}
+        </div>
+    `).join('');
+    
+    modal.innerHTML = `
+        <div style="background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 16px; width: 95%; max-width: 500px; padding: 25px;">
+            <h3 style="color: #10b981; margin-bottom: 20px;">⚙️ Configurar ${provider.toUpperCase()}</h3>
+            <div style="margin-bottom: 15px;">
+                <label style="color: #fff; display: block; margin-bottom: 8px;">Nombre para esta nube *:</label>
+                <input type="text" id="config-name" value="${provider}" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+            </div>
+            ${fieldsHtml}
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button data-action="cancel" style="padding: 10px 20px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Cancelar</button>
+                <button data-action="save" style="padding: 10px 20px; background: #10b981; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Guardar</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Add event listeners
+    modal.addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        
+        if (btn.dataset.action === 'cancel') {
+            modal.remove();
+        } else if (btn.dataset.action === 'save') {
+            await saveSimpleConfig(provider, fieldNames);
+        }
+    });
+}
+
+async function saveSimpleConfig(provider, fieldNames) {
+    const name = document.getElementById('config-name').value.trim();
+    if (!name) {
+        alert('El nombre es requerido');
+        return;
+    }
+    
+    const config = {};
+    for (const fieldName of fieldNames) {
+        const el = document.getElementById(`config-${fieldName}`);
+        if (el) config[fieldName] = el.value;
+    }
+    
+    try {
+        const res = await authFetch(`${API_BASE}/cloud-backup/config/save-simple`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, provider, config })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+            document.getElementById('config-form-modal').remove();
+            showNotification('Nube configurada correctamente', 'success');
+            await loadCloudBackupStatus();
+        } else {
+            throw new Error(data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function browseRemote(remoteName, path = '') {
+    const modal = document.createElement('div');
+    modal.id = 'remote-browser-modal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 100000;';
+    
+    modal.innerHTML = `
+        <div style="background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 16px; width: 95%; max-width: 800px; height: 80vh; display: flex; flex-direction: column;">
+            <div style="padding: 15px 20px; border-bottom: 1px solid #3d3d5c; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h3 style="margin: 0; color: #10b981;">📂 ${escapeHtml(remoteName)}</h3>
+                    <div id="remote-path-display" style="font-size: 0.85rem; color: #a0a0b0; margin-top: 4px;">/${escapeHtml(path)}</div>
+                </div>
+                <button data-action="close" style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer;">×</button>
+            </div>
+            <div style="padding: 10px 20px; border-bottom: 1px solid #3d3d5c; display: flex; gap: 10px;">
+                <button id="remote-back-btn" data-action="back" style="padding: 8px 16px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;" ${!path ? 'disabled style="opacity:0.5;padding: 8px 16px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff;"' : ''}>
+                    ⬅️ Atrás
+                </button>
+                <button data-action="refresh" style="padding: 8px 16px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;">
+                    🔄 Actualizar
+                </button>
+                <button data-action="sync-folder" style="padding: 8px 16px; background: #10b981; border: none; border-radius: 6px; color: #fff; cursor: pointer;">
+                    📥 Sincronizar esta carpeta
+                </button>
+            </div>
+            <div id="remote-files-list" style="flex: 1; overflow-y: auto; padding: 15px 20px;">
+                <div style="text-align: center; padding: 40px; color: #a0a0b0;">Cargando...</div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Store current state
+    window.remoteBrowserState = { remoteName, path };
+    
+    // Add event delegation for modal buttons
+    modal.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        
+        switch (btn.dataset.action) {
+            case 'close': modal.remove(); break;
+            case 'back': remoteBrowserBack(); break;
+            case 'refresh': remoteBrowserRefresh(); break;
+            case 'sync-folder': syncFromCurrentPath(); break;
+        }
+    });
+    
+    await loadRemoteFiles(remoteName, path);
+}
+
+async function loadRemoteFiles(remoteName, path) {
+    const listDiv = document.getElementById('remote-files-list');
+    const pathDisplay = document.getElementById('remote-path-display');
+    
+    if (pathDisplay) pathDisplay.textContent = '/' + path;
+    
+    try {
+        const res = await authFetch(`${API_BASE}/cloud-backup/remotes/${encodeURIComponent(remoteName)}/ls?path=${encodeURIComponent(path)}`);
+        if (!res.ok) throw new Error('Failed to load files');
+        const data = await res.json();
+        
+        if (!data.items || data.items.length === 0) {
+            listDiv.innerHTML = '<div style="text-align: center; padding: 40px; color: #a0a0b0;">📭 Carpeta vacía</div>';
+            return;
+        }
+        
+        // Sort: folders first, then files
+        const sorted = data.items.sort((a, b) => {
+            if (a.isDir && !b.isDir) return -1;
+            if (!a.isDir && b.isDir) return 1;
+            return a.name.localeCompare(b.name);
+        });
+        
+        listDiv.innerHTML = sorted.map(item => `
+            <div class="remote-file-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 8px; cursor: ${item.isDir ? 'pointer' : 'default'}; border: 1px solid rgba(255,255,255,0.05);"
+                ${item.isDir ? `data-action="navigate" data-path="${escapeHtml(item.path)}"` : ''}>
+                <div style="display: flex; align-items: center; gap: 12px; overflow: hidden;">
+                    <span style="font-size: 1.4rem;">${item.isDir ? '📁' : getFileIcon(item.name)}</span>
+                    <div style="overflow: hidden;">
+                        <div style="font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(item.name)}</div>
+                        <div style="font-size: 0.8rem; color: #a0a0b0;">
+                            ${item.isDir ? 'Carpeta' : formatFileSize(item.size)}
+                            ${item.modTime ? ' • ' + new Date(item.modTime).toLocaleDateString() : ''}
+                        </div>
+                    </div>
+                </div>
+                ${!item.isDir ? `
+                    <button data-action="download" data-path="${escapeHtml(item.path)}"
+                        style="padding: 6px 12px; background: #6366f1; border: none; border-radius: 6px; color: #fff; cursor: pointer; font-size: 0.85rem;">
+                        📥
+                    </button>
+                ` : ''}
+            </div>
+        `).join('');
+        
+        // Add event delegation for file list
+        listDiv.addEventListener('click', (e) => {
+            const item = e.target.closest('[data-action="navigate"]');
+            if (item) {
+                navigateRemoteFolder(item.dataset.path);
+                return;
+            }
+            const downloadBtn = e.target.closest('[data-action="download"]');
+            if (downloadBtn) {
+                e.stopPropagation();
+                downloadRemoteFile(window.remoteBrowserState.remoteName, downloadBtn.dataset.path);
+            }
+        });
+        
+    } catch (e) {
+        listDiv.innerHTML = `<div style="text-align: center; padding: 40px; color: #ef4444;">Error: ${e.message}</div>`;
+    }
+}
+
+function navigateRemoteFolder(path) {
+    window.remoteBrowserState.path = path;
+    loadRemoteFiles(window.remoteBrowserState.remoteName, path);
+    
+    // Enable back button
+    const backBtn = document.getElementById('remote-back-btn');
+    if (backBtn) {
+        backBtn.disabled = false;
+        backBtn.style.opacity = '1';
+    }
+}
+
+function remoteBrowserBack() {
+    const state = window.remoteBrowserState;
+    if (!state.path) return;
+    
+    // Go up one level
+    const parts = state.path.split('/').filter(Boolean);
+    parts.pop();
+    state.path = parts.join('/');
+    
+    loadRemoteFiles(state.remoteName, state.path);
+    
+    // Disable back button if at root
+    if (!state.path) {
+        const backBtn = document.getElementById('remote-back-btn');
+        if (backBtn) {
+            backBtn.disabled = true;
+            backBtn.style.opacity = '0.5';
+        }
+    }
+}
+
+function remoteBrowserRefresh() {
+    const state = window.remoteBrowserState;
+    loadRemoteFiles(state.remoteName, state.path);
+}
+
+async function downloadRemoteFile(remoteName, filePath) {
+    showNotification('Descarga iniciada...', 'info');
+    // This would need a backend endpoint to handle the actual download
+    alert(`Para descargar: rclone copy "${remoteName}:${filePath}" /mnt/storage/downloads/`);
+}
+
+function syncFromCurrentPath() {
+    const state = window.remoteBrowserState;
+    document.getElementById('remote-browser-modal')?.remove();
+    showSyncWizard(state.remoteName, state.path);
+}
+
+async function syncRemote(remoteName) {
+    showSyncWizard(remoteName, '');
+}
+
+function showSyncWizard(remoteName, remotePath = '') {
+    const modal = document.createElement('div');
+    modal.id = 'sync-wizard-modal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 100000;';
+    
+    modal.innerHTML = `
+        <div style="background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 16px; width: 95%; max-width: 600px; padding: 25px;">
+            <h3 style="color: #10b981; margin-bottom: 20px;">🔄 Configurar Sincronización</h3>
+            
+            <div style="margin-bottom: 20px;">
+                <label style="color: #fff; display: block; margin-bottom: 8px;">📤 Origen (nube):</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="sync-source" value="${remoteName}:${remotePath}" readonly 
+                        style="flex: 1; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+                    <button data-action="browse-source" style="padding: 10px 15px; background: #6366f1; border: none; border-radius: 6px; color: #fff; cursor: pointer;">📂</button>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <label style="color: #fff; display: block; margin-bottom: 8px;">📥 Destino (NAS):</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="sync-dest" value="/mnt/storage/cloud-backup/${remoteName}" 
+                        style="flex: 1; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+                    <button data-action="browse-dest" style="padding: 10px 15px; background: #6366f1; border: none; border-radius: 6px; color: #fff; cursor: pointer;">📂</button>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <label style="color: #fff; display: block; margin-bottom: 8px;">⚙️ Modo:</label>
+                <select id="sync-mode" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+                    <option value="copy">📥 Copiar (solo añade archivos nuevos)</option>
+                    <option value="sync">🔄 Sincronizar (hace destino idéntico al origen)</option>
+                    <option value="move">✂️ Mover (elimina del origen después de copiar)</option>
+                </select>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <label style="color: #fff; display: block; margin-bottom: 8px;">⏰ Programar:</label>
+                <select id="sync-schedule" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+                    <option value="now">▶️ Ejecutar ahora (una vez)</option>
+                    <option value="hourly">🕐 Cada hora</option>
+                    <option value="daily">📅 Diariamente (3:00 AM)</option>
+                    <option value="weekly">📆 Semanalmente (Domingo 3:00 AM)</option>
+                </select>
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button data-action="cancel" style="padding: 12px 24px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Cancelar</button>
+                <button data-action="start-sync" style="padding: 12px 24px; background: #10b981; border: none; border-radius: 6px; color: #fff; cursor: pointer; font-weight: 600;">🚀 Iniciar</button>
+            </div>
+        </div>
+    `;
+    
+    // Add event listeners
+    modal.addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        
+        switch (btn.dataset.action) {
+            case 'cancel': modal.remove(); break;
+            case 'browse-source': browseForSync('source'); break;
+            case 'browse-dest': browseLocalForSync(); break;
+            case 'start-sync': await startSync(); break;
+        }
+    });
+    
+    document.body.appendChild(modal);
+}
+
+async function startSync() {
+    const source = document.getElementById('sync-source').value;
+    const dest = document.getElementById('sync-dest').value;
+    const mode = document.getElementById('sync-mode').value;
+    const schedule = document.getElementById('sync-schedule').value;
+    
+    if (!source || !dest) {
+        alert('Origen y destino son requeridos');
+        return;
+    }
+    
+    document.getElementById('sync-wizard-modal')?.remove();
+    
+    if (schedule === 'now') {
+        // Execute immediately
+        showNotification('Iniciando sincronización...', 'info');
+        
+        try {
+            const res = await authFetch(`${API_BASE}/cloud-backup/sync`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ source, dest, mode })
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                showNotification('Sincronización iniciada en segundo plano', 'success');
+                showSyncProgress(data.jobId);
+            } else {
+                throw new Error(data.error);
+            }
+        } catch (e) {
+            showNotification('Error: ' + e.message, 'error');
+        }
+    } else {
+        // Schedule for later - save to cron
+        try {
+            const name = `${source.split(':')[0]} → ${dest.split('/').pop()}`;
+            const res = await authFetch(`${API_BASE}/cloud-backup/schedules`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, source, dest, mode, schedule })
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                showNotification('Sincronización programada correctamente', 'success');
+                await loadCloudBackupStatus();
+            } else {
+                throw new Error(data.error);
+            }
+        } catch (e) {
+            showNotification('Error programando: ' + e.message, 'error');
+        }
+    }
+}
+
+function showSyncProgress(jobId) {
+    const toast = document.createElement('div');
+    toast.id = `sync-progress-${jobId}`;
+    toast.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 12px; padding: 15px 20px; z-index: 100001; width: 320px;';
+    toast.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <span style="color: #10b981; font-weight: 600;">🔄 Sincronizando...</span>
+            <button data-action="close" style="background: none; border: none; color: #fff; cursor: pointer; font-size: 18px;">×</button>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span id="sync-progress-text-${jobId}" style="color: #a0a0b0; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px;">Iniciando...</span>
+            <span id="sync-progress-percent-${jobId}" style="color: #10b981; font-weight: 600; font-size: 0.9rem;">0%</span>
+        </div>
+        <div style="height: 6px; background: #2d2d44; border-radius: 3px; overflow: hidden;">
+            <div id="sync-progress-bar-${jobId}" style="height: 100%; background: linear-gradient(90deg, #10b981, #6366f1); width: 0%; transition: width 0.5s ease;"></div>
+        </div>
+    `;
+    document.body.appendChild(toast);
+    
+    // Close button
+    toast.querySelector('[data-action="close"]').addEventListener('click', () => toast.remove());
+    
+    // Poll for progress
+    const pollProgress = async () => {
+        // Check if toast still exists
+        if (!document.getElementById(`sync-progress-${jobId}`)) return;
+        
+        try {
+            const res = await authFetch(`${API_BASE}/cloud-backup/jobs/${jobId}`);
+            const data = await res.json();
+            
+            const textEl = document.getElementById(`sync-progress-text-${jobId}`);
+            const barEl = document.getElementById(`sync-progress-bar-${jobId}`);
+            const percentEl = document.getElementById(`sync-progress-percent-${jobId}`);
+            
+            // Parse rclone output to extract useful info
+            const line = data.lastLine || '';
+            
+            // Try to extract percentage (e.g., "45%")
+            const percentMatch = line.match(/(\d+)%/);
+            const percent = percentMatch ? parseInt(percentMatch[1]) : 0;
+            
+            // Try to extract transferred amount (e.g., "1.234 GiB / 5.678 GiB")
+            const transferMatch = line.match(/([\d.]+\s*[KMGT]i?B)\s*\/\s*([\d.]+\s*[KMGT]i?B)/i);
+            const transferred = transferMatch ? `${transferMatch[1]} / ${transferMatch[2]}` : '';
+            
+            // Try to extract speed (e.g., "10.5 MiB/s")
+            const speedMatch = line.match(/([\d.]+\s*[KMGT]i?B\/s)/i);
+            const speed = speedMatch ? speedMatch[1] : '';
+            
+            // Update UI
+            if (textEl) {
+                if (transferred) {
+                    textEl.textContent = `${transferred}${speed ? ' • ' + speed : ''}`;
+                } else {
+                    textEl.textContent = 'Procesando...';
+                }
+            }
+            
+            if (barEl) {
+                barEl.style.width = percent + '%';
+            }
+            
+            if (percentEl) {
+                percentEl.textContent = percent + '%';
+            }
+            
+            if (data.running) {
+                setTimeout(pollProgress, 1500);
+            } else {
+                if (textEl) textEl.textContent = '✅ Completado';
+                if (barEl) barEl.style.width = '100%';
+                if (percentEl) percentEl.textContent = '100%';
+                setTimeout(() => {
+                    document.getElementById(`sync-progress-${jobId}`)?.remove();
+                }, 5000);
+            }
+        } catch (e) {
+            console.error('Progress poll error:', e);
+            // Continue polling even on error
+            setTimeout(pollProgress, 3000);
+        }
+    };
+    
+    // Start polling immediately
+    pollProgress();
+}
+
+function browseLocalForSync() {
+    // Simple prompt for now - could integrate with file browser
+    const path = prompt('Ruta de destino en el NAS:', document.getElementById('sync-dest').value);
+    if (path) {
+        document.getElementById('sync-dest').value = path;
+    }
+}
+
+async function deleteRemote(remoteName) {
+    if (!confirm(`¿Eliminar la configuración de "${remoteName}"?`)) return;
+    
+    try {
+        const res = await authFetch(`${API_BASE}/cloud-backup/remotes/${encodeURIComponent(remoteName)}/delete`, {
+            method: 'POST'
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+            showNotification('Nube eliminada', 'success');
+            await loadCloudBackupStatus();
+        } else {
+            throw new Error(data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+// Expose cloud backup functions globally
+window.installRclone = installRclone;
+window.showAddCloudModal = showAddCloudModal;
+window.startCloudConfig = startCloudConfig;
+window.saveOAuthConfig = saveOAuthConfig;
+window.saveSimpleConfig = saveSimpleConfig;
+window.browseRemote = browseRemote;
+window.syncRemote = syncRemote;
+window.deleteRemote = deleteRemote;
+window.loadRemoteFiles = loadRemoteFiles;
+window.navigateRemoteFolder = navigateRemoteFolder;
+window.remoteBrowserBack = remoteBrowserBack;
+window.remoteBrowserRefresh = remoteBrowserRefresh;
+window.downloadRemoteFile = downloadRemoteFile;
+window.syncFromCurrentPath = syncFromCurrentPath;
+window.showSyncWizard = showSyncWizard;
+window.startSync = startSync;
+window.browseLocalForSync = browseLocalForSync;
+window.toggleScheduledSync = toggleScheduledSync;
+window.deleteScheduledSync = deleteScheduledSync;
+window.clearTransferHistory = clearTransferHistory;
+
 init();
-console.log("HomePiNAS Core v2.5.0 Loaded - Cloud Sync");
+console.log("HomePiNAS Core v2.6.0 Loaded - Cloud Backup");

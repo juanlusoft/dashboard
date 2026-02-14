@@ -110,11 +110,66 @@ function searchFiles(dir, query, results, maxResults) {
   }
 }
 
-// Configure multer to use temp directory first, then move to target
-// (req.body.path may not be available when multer processes the file in multipart)
+// Configure multer to use storage temp directory for large files
+// Falls back to system tmp if storage not mounted or not writable
 const os = require('os');
-const tmpUploadDir = path.join(os.tmpdir(), 'homepinas-uploads');
-if (!fs.existsSync(tmpUploadDir)) fs.mkdirSync(tmpUploadDir, { recursive: true });
+const storageTmpDir = '/mnt/storage/.uploads-tmp';
+const systemTmpDir = path.join(os.tmpdir(), 'homepinas-uploads');
+// Prefer storage temp dir (large capacity) over system tmp (limited eMMC)
+let tmpUploadDir = systemTmpDir;
+
+// Try to use storage if available and writable
+if (fs.existsSync('/mnt/storage')) {
+  try {
+    if (!fs.existsSync(storageTmpDir)) {
+      fs.mkdirSync(storageTmpDir, { recursive: true });
+    }
+    // Test if writable
+    const testFile = path.join(storageTmpDir, '.write-test');
+    fs.writeFileSync(testFile, 'test');
+    fs.unlinkSync(testFile);
+    tmpUploadDir = storageTmpDir;
+  } catch (e) {
+    console.warn('[Upload] Storage not writable, using system tmp:', e.message);
+    tmpUploadDir = systemTmpDir;
+  }
+}
+
+// Ensure tmp dir exists
+if (!fs.existsSync(tmpUploadDir)) {
+  try {
+    fs.mkdirSync(tmpUploadDir, { recursive: true });
+  } catch (e) {
+    console.error('[Upload] Cannot create temp dir:', e.message);
+  }
+}
+
+// Cleanup abandoned uploads (older than 1 hour)
+function cleanupOldUploads() {
+  try {
+    if (!fs.existsSync(tmpUploadDir)) return;
+    const files = fs.readdirSync(tmpUploadDir);
+    const now = Date.now();
+    const maxAge = 60 * 60 * 1000; // 1 hour
+    
+    for (const file of files) {
+      try {
+        const filePath = path.join(tmpUploadDir, file);
+        const stat = fs.statSync(filePath);
+        if (now - stat.mtimeMs > maxAge) {
+          fs.unlinkSync(filePath);
+          console.log(`[Cleanup] Removed abandoned upload: ${file}`);
+        }
+      } catch (e) {}
+    }
+  } catch (e) {
+    console.error('[Cleanup] Error:', e.message);
+  }
+}
+
+// Run cleanup on startup and every hour
+cleanupOldUploads();
+setInterval(cleanupOldUploads, 60 * 60 * 1000);
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -128,9 +183,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: {
-    fileSize: 2 * 1024 * 1024 * 1024, // 2GB per file
-  },
+  // No file size limit - NAS can handle large files
 });
 
 // All routes require authentication
@@ -156,10 +209,13 @@ router.get('/list', requirePermission('read'), (req, res) => {
       return res.status(400).json({ error: 'Path is not a directory' });
     }
 
+    const showHidden = req.query.showHidden === 'true';
     const entries = fs.readdirSync(dirPath);
     const items = [];
 
     for (const entry of entries) {
+      // Hide dotfiles/dotfolders and system folders unless explicitly requested
+      if (!showHidden && (entry.startsWith('.') || entry === 'lost+found')) continue;
       try {
         const fullPath = path.join(dirPath, entry);
         const stat = fs.statSync(fullPath);

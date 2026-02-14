@@ -98,7 +98,7 @@ HYST_TEMP=2
 };
 
 // System Hardware Telemetry
-router.get('/stats', async (req, res) => {
+router.get('/stats', requireAuth, async (req, res) => {
     try {
         const [cpu, cpuInfo, mem, temp, osInfo, graphics] = await Promise.all([
             si.currentLoad(),
@@ -251,7 +251,7 @@ router.post('/fan', requireAuth, (req, res) => {
 });
 
 // Get current fan mode
-router.get('/fan/mode', (req, res) => {
+router.get('/fan/mode', requireAuth, (req, res) => {
     try {
         let currentMode = 'balanced';
         try {
@@ -294,7 +294,7 @@ router.post('/fan/mode', requireAuth, (req, res) => {
 
     try {
         const preset = FAN_PRESETS[validatedMode];
-        const tempFile = '/tmp/homepinas-fanctl-temp.conf';
+        const tempFile = '/mnt/storage/.tmp/homepinas-fanctl-temp.conf';
         fs.writeFileSync(tempFile, preset, 'utf8');
 
         // SECURITY: Use execSync with timeout to prevent hanging
@@ -320,84 +320,100 @@ router.post('/fan/mode', requireAuth, (req, res) => {
 });
 
 // Real Disk Detection & SMART
+// Disks endpoint - public (needed by frontend for storage wizard)
 router.get('/disks', async (req, res) => {
     try {
+        // Get disk info from lsblk (no sudo needed, includes serial)
+        let lsblkData = {};
+        try {
+            const lsblkJson = execSync('lsblk -Jbo NAME,SIZE,TYPE,MODEL,SERIAL,TRAN 2>/dev/null', { encoding: 'utf8' });
+            const parsed = JSON.parse(lsblkJson);
+            for (const dev of (parsed.blockdevices || [])) {
+                lsblkData[dev.name] = {
+                    size: dev.size,
+                    type: dev.type,
+                    model: dev.model || '',
+                    serial: dev.serial || '',
+                    transport: dev.tran || ''
+                };
+            }
+        } catch (e) {
+            console.log('lsblk parse error:', e.message);
+        }
+
+        // Get temperature from /sys (no sudo needed)
+        const temps = {};
+        try {
+            const hwmonDirs = execSync('ls -d /sys/class/block/sd*/device/hwmon/hwmon*/temp*_input 2>/dev/null || true', { encoding: 'utf8' });
+            // Fallback: try reading from drivetemp if available
+            const drivetemps = execSync('cat /sys/class/hwmon/hwmon*/temp1_input 2>/dev/null || true', { encoding: 'utf8' });
+        } catch (e) {}
+
         const blockDevices = await si.blockDevices();
         const diskLayout = await si.diskLayout();
 
         const disks = blockDevices
             .filter(dev => {
                 if (dev.type !== 'disk') return false;
-                // Exclude virtual/system devices
-                if (dev.name && dev.name.startsWith('mmcblk')) return false;  // SD card
-                if (dev.name && dev.name.startsWith('zram')) return false;    // Compressed RAM swap
-                if (dev.name && dev.name.startsWith('loop')) return false;    // Loop devices
-                if (dev.name && dev.name.startsWith('ram')) return false;     // RAM disks
-                if (dev.name && dev.name.startsWith('dm-')) return false;     // Device mapper
+                if (dev.name && dev.name.startsWith('mmcblk')) return false;
+                if (dev.name && dev.name.startsWith('zram')) return false;
+                if (dev.name && dev.name.startsWith('loop')) return false;
+                if (dev.name && dev.name.startsWith('ram')) return false;
+                if (dev.name && dev.name.startsWith('dm-')) return false;
                 const sizeGB = dev.size / 1024 / 1024 / 1024;
                 if (sizeGB < 1) return false;
                 return true;
             })
             .map(dev => {
+                const lsblk = lsblkData[dev.name] || {};
                 const layoutInfo = diskLayout.find(d => d.device === dev.device) || {};
                 const sizeGBraw = dev.size / 1024 / 1024 / 1024;
                 const sizeGB = sizeGBraw.toFixed(0);
 
+                // Determine disk type
                 let diskType = 'HDD';
-                if (layoutInfo.interfaceType === 'NVMe' || dev.name.includes('nvme')) {
+                if (layoutInfo.interfaceType === 'NVMe' || dev.name.includes('nvme') || lsblk.transport === 'nvme') {
                     diskType = 'NVMe';
-                } else if ((layoutInfo.type || '').includes('SSD') || (layoutInfo.name || '').toLowerCase().includes('ssd')) {
+                } else if ((layoutInfo.type || '').includes('SSD') || 
+                           (lsblk.model || '').toLowerCase().includes('ssd') ||
+                           (layoutInfo.name || '').toLowerCase().includes('ssd')) {
                     diskType = 'SSD';
                 }
 
+                // Get serial from lsblk (most reliable, no sudo)
+                const serial = lsblk.serial || layoutInfo.serial || '';
+
+                // Get model - prefer lsblk if it has a good value
+                const lsblkModel = lsblk.model || '';
+                const layoutModel = layoutInfo.model || layoutInfo.name || '';
+                const finalModel = (lsblkModel && lsblkModel.length > 3) ? lsblkModel : 
+                                   (layoutModel || lsblkModel || 'Unknown Drive');
+
+                // Try to get temperature (read from /sys without sudo)
                 let temp = null;
-                let serial = layoutInfo.serial || null;
-                let smartModel = null;
-                let smartType = null;
-                
                 try {
-                    const smartOutput = execSync(`sudo smartctl -i -A /dev/${dev.name} 2>/dev/null`, { encoding: 'utf8', timeout: 5000 });
-
-                    // Get model from smartctl (more reliable for USB adapters)
-                    const modelMatch = smartOutput.match(/(?:Device Model|Model Number|Product):\s*(.+)/i);
-                    if (modelMatch) {
-                        smartModel = modelMatch[1].trim();
-                    }
-
-                    // Detect NVMe from smartctl output
-                    if (smartOutput.includes('NVMe') || smartOutput.match(/Model Number:/i)) {
-                        smartType = 'NVMe';
-                    } else if (smartOutput.match(/Solid State|SSD/i) || smartOutput.match(/Rotation Rate:.*Solid State/i)) {
-                        smartType = 'SSD';
-                    }
-
-                    const tempMatch = smartOutput.match(/Temperature.*?(\d+)\s*(Celsius|C)/i) ||
-                                     smartOutput.match(/194\s+Temperature.*?\s(\d+)(\s|$)/);
-                    if (tempMatch) {
-                        const tempVal = parseInt(tempMatch[1]);
-                        if (!isNaN(tempVal) && tempVal > 0 && tempVal < 100) {
-                            temp = tempVal;
-                        }
-                    }
-
-                    if (!serial || serial === 'N/A') {
-                        const serialMatch = smartOutput.match(/Serial [Nn]umber:\s*(\S+)/);
-                        if (serialMatch) {
-                            serial = serialMatch[1];
-                        }
+                    // drivetemp module exposes temps via hwmon
+                    const tempPath = `/sys/block/${dev.name}/device/hwmon/`;
+                    const hwmonDir = execSync(`ls ${tempPath} 2>/dev/null | head -1`, { encoding: 'utf8' }).trim();
+                    if (hwmonDir) {
+                        const tempVal = parseInt(execSync(`cat ${tempPath}${hwmonDir}/temp1_input 2>/dev/null`, { encoding: 'utf8' }));
+                        if (!isNaN(tempVal)) temp = Math.round(tempVal / 1000);
                     }
                 } catch (e) {}
 
-                // Use smartctl data if lsblk data looks wrong
-                const lsblkModel = layoutInfo.model || layoutInfo.name || '';
-                const finalModel = (smartModel && (lsblkModel.length < 3 || /^\d+$/.test(lsblkModel))) 
-                    ? smartModel 
-                    : (lsblkModel || smartModel || 'Unknown Drive');
-                
-                // Use smartctl type if detected
-                if (smartType) {
-                    diskType = smartType;
-                }
+                // Get disk usage from mounted partitions
+                let usage = 0;
+                try {
+                    // Find mounted partition for this disk (e.g., sda1, sdb1)
+                    // Filter to only /dev/ lines to avoid udev entries
+                    const dfOutput = execSync(`df -P /dev/${dev.name}* 2>/dev/null | grep "^/dev/${dev.name}" | head -1`, { encoding: 'utf8' }).trim();
+                    if (dfOutput) {
+                        const parts = dfOutput.split(/\s+/);
+                        if (parts.length >= 5) {
+                            usage = parseInt(parts[4]) || 0; // Use% column
+                        }
+                    }
+                } catch (e) {}
 
                 return {
                     id: dev.name,
@@ -407,7 +423,7 @@ router.get('/disks', async (req, res) => {
                     model: finalModel,
                     serial: serial || 'N/A',
                     temp: temp || (35 + Math.floor(Math.random() * 10)),
-                    usage: 0
+                    usage
                 };
             });
         res.json(disks);
@@ -418,6 +434,7 @@ router.get('/disks', async (req, res) => {
 });
 
 // System Status
+// Status endpoint - public (needed by frontend to check if user exists)
 router.get('/status', async (req, res) => {
     const data = getData();
     res.json({
@@ -426,6 +443,58 @@ router.get('/status', async (req, res) => {
         poolConfigured: data.poolConfigured || false,
         network: data.network
     });
+});
+
+// System Architecture Detection
+router.get('/arch', requireAuth, async (req, res) => {
+    try {
+        const os = require('os');
+        const arch = os.arch(); // 'arm64', 'x64', 'arm', etc.
+        const platform = os.platform(); // 'linux', 'darwin', 'win32'
+        
+        // Normalize architecture names
+        let normalizedArch;
+        switch (arch) {
+            case 'arm64':
+            case 'aarch64':
+                normalizedArch = 'arm64';
+                break;
+            case 'arm':
+            case 'armv7l':
+                normalizedArch = 'arm';
+                break;
+            case 'x64':
+            case 'amd64':
+                normalizedArch = 'amd64';
+                break;
+            case 'ia32':
+            case 'x86':
+                normalizedArch = 'i386';
+                break;
+            default:
+                normalizedArch = arch;
+        }
+        
+        // Check if running on Raspberry Pi
+        let isRaspberryPi = false;
+        try {
+            const cpuInfo = fs.readFileSync('/proc/cpuinfo', 'utf8');
+            isRaspberryPi = cpuInfo.toLowerCase().includes('raspberry') || 
+                           cpuInfo.toLowerCase().includes('bcm2');
+        } catch (e) {}
+        
+        res.json({
+            arch: normalizedArch,
+            rawArch: arch,
+            platform,
+            isRaspberryPi,
+            isArm: normalizedArch === 'arm64' || normalizedArch === 'arm',
+            isX86: normalizedArch === 'amd64' || normalizedArch === 'i386'
+        });
+    } catch (error) {
+        console.error('Architecture detection error:', error);
+        res.status(500).json({ error: 'Failed to detect architecture' });
+    }
 });
 
 module.exports = router;

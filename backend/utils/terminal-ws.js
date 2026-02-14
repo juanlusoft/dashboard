@@ -7,7 +7,8 @@
 
 const WebSocket = require('ws');
 const pty = require('node-pty');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
+const crypto = require('crypto');
 const { validateSession } = require('./session');
 const { logSecurityEvent } = require('./security');
 
@@ -31,16 +32,19 @@ const COMMAND_PACKAGES = {
     'docker': 'docker.io'
 };
 
+// SECURITY: Only allow exact command names, no arguments, no paths
 function validateCommand(cmd) {
     if (!cmd || typeof cmd !== 'string') return false;
-    const baseCmd = cmd.split(' ')[0].split('/').pop();
-    return ALLOWED_COMMANDS.includes(baseCmd);
+    // Only allow a single command name - no spaces, no paths, no arguments
+    const trimmed = cmd.trim();
+    if (trimmed.includes(' ') || trimmed.includes('/')) return false;
+    return ALLOWED_COMMANDS.includes(trimmed);
 }
 
-// Check if command exists
+// Check if command exists (safe - no shell interpolation)
 function commandExists(cmd) {
     try {
-        execSync(`which ${cmd}`, { stdio: 'ignore' });
+        execFileSync('which', [cmd], { stdio: 'ignore' });
         return true;
     } catch {
         return false;
@@ -51,18 +55,16 @@ function commandExists(cmd) {
 function tryInstallCommand(cmd) {
     const pkg = COMMAND_PACKAGES[cmd];
     if (!pkg) return false;
-    
+
     try {
         console.log(`[Terminal] Installing missing package: ${pkg}`);
-        // Update package list first
-        execSync('sudo /usr/bin/apt-get update', { 
+        execFileSync('sudo', ['/usr/bin/apt-get', 'update'], {
             stdio: 'ignore',
             timeout: 30000
         });
-        // Install the specific package (must match sudoers entry exactly)
-        execSync(`sudo /usr/bin/apt-get install -y ${pkg}`, { 
+        execFileSync('sudo', ['/usr/bin/apt-get', 'install', '-y', pkg], {
             stdio: 'ignore',
-            timeout: 60000 // 60 second timeout
+            timeout: 60000
         });
         return commandExists(cmd);
     } catch (err) {
@@ -78,10 +80,11 @@ function setupTerminalWebSocket(server) {
     });
 
     wss.on('connection', (ws, req) => {
-        // Extract session ID and command from URL
+        // Extract command and auth from URL
         const urlParts = req.url.split('?');
         const params = new URLSearchParams(urlParts[1] || '');
-        const sessionId = params.get('sessionId');
+        // SECURITY: Generate sessionId server-side, don't trust client
+        const sessionId = crypto.randomBytes(16).toString('hex');
         const command = params.get('command') || 'bash';
         const authToken = params.get('token');
 
@@ -136,14 +139,13 @@ function setupTerminalWebSocket(server) {
         // Create PTY process
         let ptyProcess;
         try {
-            const shell = command.includes(' ') ? 'bash' : command;
-            const args = command.includes(' ') ? ['-c', command] : [];
-            
-            ptyProcess = pty.spawn(shell, args, {
+            // SECURITY: Only spawn the exact validated command, no "bash -c" bypass
+            // command was already validated to be a single word in ALLOWED_COMMANDS
+            ptyProcess = pty.spawn(command, [], {
                 name: 'xterm-256color',
                 cols: 80,
                 rows: 24,
-                cwd: process.env.HOME || '/root',
+                cwd: process.env.HOME || '/home',
                 env: {
                     ...process.env,
                     TERM: 'xterm-256color',

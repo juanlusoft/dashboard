@@ -4,10 +4,43 @@
 # Universal Installer with automatic OS detection
 # Version: 2.0.0 (Homelabs.club Edition)
 
-set -e
-
 # Version - CHANGE THIS FOR EACH RELEASE
-VERSION="2.2.18"
+VERSION="2.6.0"
+
+# Parse command line arguments
+CLEAN_INSTALL=false
+for arg in "$@"; do
+    case $arg in
+        --clean)
+            CLEAN_INSTALL=true
+            echo "Clean install mode: will NOT preserve existing users/config"
+            ;;
+    esac
+done
+
+# Determine the real user early (before any operations that need it)
+REAL_USER=${SUDO_USER:-$USER}
+REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+
+# Track if repos were disabled for cleanup
+REPOS_DISABLED=false
+
+# Cleanup function for trap
+cleanup() {
+    local exit_code=$?
+    if [ "$REPOS_DISABLED" = true ]; then
+        echo -e "${YELLOW}Restoring disabled repositories...${NC}"
+        for f in /etc/apt/sources.list.d/*.disabled; do
+            [ -f "$f" ] && mv "$f" "${f%.disabled}"
+        done
+    fi
+    if [ $exit_code -ne 0 ]; then
+        echo -e "${RED}Installation failed. Check the errors above.${NC}"
+    fi
+}
+trap cleanup EXIT
+
+set -e
 
 # Colors
 RED='\033[0;31m'
@@ -126,6 +159,7 @@ for f in /etc/apt/sources.list.d/*.list; do
     if [ -f "$f" ] && [ "$f" != "/etc/apt/sources.list.d/raspi.list" ]; then
         echo -e "${YELLOW}Temporarily disabling: $f${NC}"
         mv "$f" "${f}.disabled" 2>/dev/null || true
+        REPOS_DISABLED=true
     fi
 done
 
@@ -403,8 +437,9 @@ install_mergerfs() {
 
     echo -e "${BLUE}Installing MergerFS...${NC}"
 
-    # Get latest mergerfs release
-    MERGERFS_VERSION=$(curl -s https://api.github.com/repos/trapexit/mergerfs/releases/latest | grep -oP '"tag_name": "\K[^"]+' || echo "2.40.2")
+    # Get latest mergerfs release (portable grep without -P)
+    MERGERFS_VERSION=$(curl -sS --fail https://api.github.com/repos/trapexit/mergerfs/releases/latest 2>/dev/null | sed -n 's/.*"tag_name": "\([^"]*\)".*/\1/p' | head -1)
+    [ -z "$MERGERFS_VERSION" ] && MERGERFS_VERSION="2.40.2"
 
     # Determine correct package name based on distro
     local mergerfs_distro="debian-bookworm"
@@ -458,13 +493,17 @@ install_snapraid() {
     # Build from source
     echo -e "${YELLOW}Building SnapRAID from source...${NC}"
 
-    # Get version
-    local snapraid_version=$(curl -s https://api.github.com/repos/amadvance/snapraid/releases/latest | grep -oP '"tag_name": "v\K[^"]+' || echo "12.3")
+    # Get version (portable grep without -P)
+    local snapraid_version=$(curl -sS --fail https://api.github.com/repos/amadvance/snapraid/releases/latest 2>/dev/null | sed -n 's/.*"tag_name": "v\([^"]*\)".*/\1/p' | head -1)
+    [ -z "$snapraid_version" ] && snapraid_version="12.3"
     echo -e "${BLUE}Building SnapRAID v${snapraid_version}...${NC}"
 
     cd /tmp
-    curl -L -o snapraid.tar.gz "https://github.com/amadvance/snapraid/releases/download/v${snapraid_version}/snapraid-${snapraid_version}.tar.gz"
-    tar xzf snapraid.tar.gz
+    if ! curl -fsSL -o snapraid.tar.gz "https://github.com/amadvance/snapraid/releases/download/v${snapraid_version}/snapraid-${snapraid_version}.tar.gz"; then
+        echo -e "${RED}Failed to download SnapRAID${NC}"
+        return 1
+    fi
+    tar xzf snapraid.tar.gz || { echo -e "${RED}Failed to extract SnapRAID${NC}"; return 1; }
     cd "snapraid-${snapraid_version}"
 
     # Configure and build (releases include pre-generated configure)
@@ -514,8 +553,9 @@ if command -v smbd &> /dev/null; then
    passwd program = /usr/bin/passwd %u
    passwd chat = *Enter\snew\s*\spassword:* %n\n *Retype\snew\s*\spassword:* %n\n *password\supdated\ssuccessfully* .
    pam password change = yes
-   map to guest = bad user
+   map to guest = never
    usershare allow guests = no
+   guest account = nobody
 
    # Security settings
    server min protocol = SMB2
@@ -570,40 +610,40 @@ if command -v avahi-daemon &> /dev/null; then
     # Create Avahi services directory
     mkdir -p /etc/avahi/services
     
-    # Install HomePiNAS service file
-    cat > /etc/avahi/services/homepinas.service <<'AVAHIEOF'
+    # Install HomePiNAS service file (using AVAHIEOF without quotes for variable expansion)
+    cat > /etc/avahi/services/homepinas.service <<AVAHIEOF
 <?xml version="1.0" standalone='no'?>
 <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
 <!--
   HomePiNAS mDNS/Zeroconf Service Configuration
   This file announces HomePiNAS on the local network as homepinas.local
-  Version: 2.2.0
+  Version: ${VERSION}
 -->
 <service-group>
   <name replace-wildcards="yes">HomePiNAS on %h</name>
 
-  <!-- HTTP Service (port 3000) -->
+  <!-- HTTP Service (port 80) -->
   <service>
     <type>_http._tcp</type>
-    <port>3000</port>
+    <port>80</port>
     <txt-record>path=/</txt-record>
-    <txt-record>version=2.2.0</txt-record>
+    <txt-record>version=${VERSION}</txt-record>
     <txt-record>product=HomePiNAS</txt-record>
   </service>
 
-  <!-- HTTPS Service (port 3001) -->
+  <!-- HTTPS Service (port 443) -->
   <service>
     <type>_https._tcp</type>
-    <port>3001</port>
+    <port>443</port>
     <txt-record>path=/</txt-record>
-    <txt-record>version=2.2.0</txt-record>
+    <txt-record>version=${VERSION}</txt-record>
     <txt-record>product=HomePiNAS</txt-record>
   </service>
 
   <!-- Web Admin Interface -->
   <service>
     <type>_http-alt._tcp</type>
-    <port>3001</port>
+    <port>443</port>
     <txt-record>txtvers=1</txt-record>
     <txt-record>type=NAS Dashboard</txt-record>
   </service>
@@ -642,12 +682,16 @@ AVAHIEOF
         fi
     fi
 
-    # Set hostname to homepinas if not already set
+    # Set hostname to homepinas for easy access via homepinas.local
     CURRENT_HOSTNAME=$(hostname)
-    if [ "$CURRENT_HOSTNAME" != "homepinas" ]; then
-        echo -e "${YELLOW}Note: Current hostname is '$CURRENT_HOSTNAME'${NC}"
-        echo -e "${YELLOW}To access via homepinas.local, you may want to change hostname:${NC}"
-        echo -e "  sudo hostnamectl set-hostname homepinas"
+    if [ "$CURRENT_HOSTNAME" != "homepinas" ] && [ "$CURRENT_HOSTNAME" != "PiNas" ]; then
+        echo -e "${YELLOW}Note: Keeping current hostname '$CURRENT_HOSTNAME'${NC}"
+        echo -e "${CYAN}To change it manually, run: sudo hostnamectl set-hostname homepinas${NC}"
+        # Add homepinas as an alias in /etc/hosts if not present
+        if ! grep -q "homepinas" /etc/hosts; then
+            echo "127.0.1.1       homepinas" >> /etc/hosts
+            echo -e "${GREEN}Added 'homepinas' alias to /etc/hosts${NC}"
+        fi
     fi
 
     # Enable and start Avahi
@@ -693,6 +737,28 @@ echo -e "${BLUE}[6/7] Deploying HomePiNAS application...${NC}"
 
 cd /tmp
 
+# Preserve existing config (users, sessions, settings) during reinstall
+CONFIG_BACKUP=""
+STACKS_BACKUP=""
+if [ "$CLEAN_INSTALL" = false ]; then
+    if [ -d "$TARGET_DIR/backend/config" ]; then
+        echo -e "${BLUE}Backing up existing configuration...${NC}"
+        CONFIG_BACKUP="/tmp/homepinas-config-backup-$$"
+        cp -r "$TARGET_DIR/backend/config" "$CONFIG_BACKUP"
+        echo -e "${GREEN}Config backed up to $CONFIG_BACKUP${NC}"
+    fi
+
+    # Also preserve stacks
+    if [ -d "$TARGET_DIR/stacks" ]; then
+        echo -e "${BLUE}Backing up existing stacks...${NC}"
+        STACKS_BACKUP="/tmp/homepinas-stacks-backup-$$"
+        cp -r "$TARGET_DIR/stacks" "$STACKS_BACKUP"
+        echo -e "${GREEN}Stacks backed up to $STACKS_BACKUP${NC}"
+    fi
+else
+    echo -e "${YELLOW}Clean install: skipping config/stacks backup${NC}"
+fi
+
 if [ -d "$TARGET_DIR" ]; then
     echo -e "${BLUE}Cleaning up old installation...${NC}"
     rm -rf "$TARGET_DIR"
@@ -709,6 +775,28 @@ git clone -b $BRANCH $REPO_URL $TARGET_DIR
 
 cd $TARGET_DIR
 
+# Restore backed up config if exists and has files
+if [ -n "$CONFIG_BACKUP" ] && [ -d "$CONFIG_BACKUP" ] && [ "$(ls -A "$CONFIG_BACKUP" 2>/dev/null)" ]; then
+    echo -e "${BLUE}Restoring configuration...${NC}"
+    mkdir -p "$TARGET_DIR/backend/config"
+    cp -r "$CONFIG_BACKUP"/. "$TARGET_DIR/backend/config/" 2>/dev/null || true
+    rm -rf "$CONFIG_BACKUP"
+    echo -e "${GREEN}Configuration restored!${NC}"
+elif [ -n "$CONFIG_BACKUP" ]; then
+    rm -rf "$CONFIG_BACKUP" 2>/dev/null || true
+fi
+
+# Restore backed up stacks if exists and has files
+if [ -n "$STACKS_BACKUP" ] && [ -d "$STACKS_BACKUP" ] && [ "$(ls -A "$STACKS_BACKUP" 2>/dev/null)" ]; then
+    echo -e "${BLUE}Restoring stacks...${NC}"
+    mkdir -p "$TARGET_DIR/stacks"
+    cp -r "$STACKS_BACKUP"/. "$TARGET_DIR/stacks/" 2>/dev/null || true
+    rm -rf "$STACKS_BACKUP"
+    echo -e "${GREEN}Stacks restored!${NC}"
+elif [ -n "$STACKS_BACKUP" ]; then
+    rm -rf "$STACKS_BACKUP" 2>/dev/null || true
+fi
+
 # Update package.json version to match installer
 sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"${VERSION}\"/" package.json 2>/dev/null || true
 
@@ -720,17 +808,33 @@ if [ ! -d "backend" ]; then
     exit 1
 fi
 
-# Install Node.js if needed
-if ! command -v node &> /dev/null; then
-    echo -e "${BLUE}Installing Node.js...${NC}"
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+# Install Node.js if needed (requires Node 20+ for dependencies)
+NODE_REQUIRED_MAJOR=20
+CURRENT_NODE_MAJOR=$(node -v 2>/dev/null | cut -d. -f1 | tr -d 'v' || echo "0")
+
+if ! command -v node &> /dev/null || [ "$CURRENT_NODE_MAJOR" -lt "$NODE_REQUIRED_MAJOR" ]; then
+    echo -e "${BLUE}Installing Node.js 22 LTS...${NC}"
+    if [ "$CURRENT_NODE_MAJOR" -gt 0 ] && [ "$CURRENT_NODE_MAJOR" -lt "$NODE_REQUIRED_MAJOR" ]; then
+        echo -e "${YELLOW}Upgrading from Node.js v${CURRENT_NODE_MAJOR} to v22 (required for dependencies)${NC}"
+    fi
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
     apt-get install -y $APT_OPTS nodejs
 else
-    echo -e "${GREEN}Node.js already installed${NC}"
+    echo -e "${GREEN}Node.js v${CURRENT_NODE_MAJOR} already installed${NC}"
 fi
 
 # Build application
 echo -e "${BLUE}Installing npm dependencies...${NC}"
+
+# Verify package.json exists and is valid JSON
+if [ ! -f "package.json" ]; then
+    echo -e "${RED}FATAL: package.json not found!${NC}"
+    exit 1
+fi
+if ! node -e "JSON.parse(require('fs').readFileSync('package.json'))" 2>/dev/null; then
+    echo -e "${RED}FATAL: package.json is not valid JSON!${NC}"
+    exit 1
+fi
 
 # Ensure native module compilation dependencies
 if command -v apt-get &> /dev/null; then
@@ -739,6 +843,9 @@ fi
 
 # Install with verbose logging for native modules
 npm install --no-optional 2>&1 | tee /tmp/npm-install.log
+if [ $? -ne 0 ]; then
+    echo -e "${YELLOW}Warning: npm install had errors, but continuing...${NC}"
+fi
 
 # Verify node-pty compiled successfully
 if node -e "require('node-pty')" 2>/dev/null; then
@@ -750,21 +857,53 @@ else
     npm rebuild node-pty 2>&1 || true
 fi
 
-# Generate self-signed SSL certificates for HTTPS
+# Generate self-signed SSL certificates for HTTPS with SANs
 echo -e "${BLUE}Generating SSL certificates...${NC}"
 mkdir -p $TARGET_DIR/backend/certs
 if [ ! -f "$TARGET_DIR/backend/certs/server.key" ]; then
+    # Get local IP for SAN
+    LOCAL_IP=$(hostname -I | awk '{print $1}')
+    
+    # Create openssl config with SANs
+    cat > /tmp/ssl.cnf <<SSLEOF
+[req]
+distinguished_name = req_distinguished_name
+x509_extensions = v3_req
+prompt = no
+
+[req_distinguished_name]
+C = ES
+ST = Local
+L = HomeLab
+O = HomePiNAS
+OU = NAS
+CN = $(hostname)
+
+[v3_req]
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = $(hostname)
+DNS.2 = homepinas.local
+DNS.3 = localhost
+IP.1 = ${LOCAL_IP}
+IP.2 = 127.0.0.1
+SSLEOF
+
     openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
         -keyout $TARGET_DIR/backend/certs/server.key \
         -out $TARGET_DIR/backend/certs/server.crt \
-        -subj "/C=ES/ST=Local/L=HomeLab/O=HomePiNAS/OU=NAS/CN=$(hostname)" \
+        -config /tmp/ssl.cnf \
         2>/dev/null
-    echo -e "${GREEN}SSL certificates generated (valid for 10 years)${NC}"
+    rm -f /tmp/ssl.cnf
+    echo -e "${GREEN}SSL certificates generated with SANs (valid for 10 years)${NC}"
 else
     echo -e "${GREEN}SSL certificates already exist${NC}"
 fi
 
-REAL_USER=${SUDO_USER:-$USER}
+# Set ownership (REAL_USER defined at script start)
 chown -R $REAL_USER:$REAL_USER $TARGET_DIR
 chmod -R 755 $TARGET_DIR
 chmod 600 $TARGET_DIR/backend/certs/server.key
@@ -1093,9 +1232,16 @@ $REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/apt-get install -y nano
 $REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/apt-get install -y vim
 $REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/apt-get install -y tmux
 
-# SnapRAID and MergerFS
-$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/snapraid *
-$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/mergerfs *
+# SnapRAID (restricted to safe operations with config file)
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/snapraid -c /etc/snapraid.conf status
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/snapraid -c /etc/snapraid.conf diff
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/snapraid -c /etc/snapraid.conf sync
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/snapraid -c /etc/snapraid.conf scrub
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/snapraid -c /etc/snapraid.conf fix
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/snapraid -c /etc/snapraid.conf smart
+
+# MergerFS (only mount operations)
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/mergerfs -o * /mnt/disks/* /mnt/storage
 
 # Systemctl (only specific services)
 $REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl daemon-reload
@@ -1103,9 +1249,38 @@ $REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart smbd
 $REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart nmbd
 $REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart homepinas
 
-# Disk management (restricted to /dev/sd* and /dev/nvme*)
-$REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted /dev/sd[a-z] *
-$REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted /dev/nvme[0-9]n[0-9] *
+# Disk management - allow parted, partprobe, blkid, mkdir, mount, umount for storage setup
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/parted *
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/partprobe *
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/partprobe *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/blkid *
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/blkid *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/blkid *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/mkdir *
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/mkdir *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/rmdir *
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/rmdir *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/mount *
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/mount *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/umount *
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/umount *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/mkfs.ext4 *
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/mkfs.ext4 *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/mkfs.xfs *
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/mkfs.xfs *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/sed *
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/sed *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/snapraid *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/local/bin/snapraid *
+
+# Legacy disk management (keep for backwards compatibility)
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted /dev/sd[a-z] --script mklabel gpt
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted /dev/sd[a-z] --script mkpart primary ext4 0% 100%
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted /dev/sd[a-z] --script print
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted /dev/nvme[0-9]n[0-9] --script mklabel gpt
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted /dev/nvme[0-9]n[0-9] --script mkpart primary ext4 0% 100%
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted /dev/nvme[0-9]n[0-9] --script print
 $REAL_USER ALL=(ALL) NOPASSWD: /sbin/partprobe /dev/sd[a-z]
 $REAL_USER ALL=(ALL) NOPASSWD: /sbin/partprobe /dev/nvme[0-9]n[0-9]
 
@@ -1120,11 +1295,8 @@ $REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/pdbedit -L
 $REAL_USER ALL=(ALL) NOPASSWD: /bin/chown -R *\:sambashare /mnt/storage
 $REAL_USER ALL=(ALL) NOPASSWD: /bin/chmod -R 2775 /mnt/storage
 
-# SMART monitoring
-$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/smartctl -i /dev/sd[a-z]
-$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/smartctl -i /dev/nvme[0-9]n[0-9]
-$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/smartctl -A /dev/sd[a-z]
-$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/smartctl -A /dev/nvme[0-9]n[0-9]
+# SMART monitoring (allow all smartctl operations)
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/smartctl *
 
 # Samba config management
 $REAL_USER ALL=(ALL) NOPASSWD: /bin/cat /etc/samba/smb.conf
@@ -1134,17 +1306,21 @@ $REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/smbstatus -b
 $REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/userdel [a-zA-Z]*
 $REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/smbpasswd -x [a-zA-Z]*
 
-# UPS monitoring
+# UPS monitoring (read-only)
 $REAL_USER ALL=(ALL) NOPASSWD: /sbin/apcaccess
-$REAL_USER ALL=(ALL) NOPASSWD: /sbin/apctest
-$REAL_USER ALL=(ALL) NOPASSWD: /bin/upsc *
-$REAL_USER ALL=(ALL) NOPASSWD: /bin/upscmd *
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/apcaccess status
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/upsc localhost
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/upsc ups@localhost
 
-# Crontab management
-$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/crontab *
+# Crontab management (only list and read - edits via temp file)
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/crontab -l
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/crontab /tmp/homepinas-crontab-*
 
-# Journalctl (log viewing)
-$REAL_USER ALL=(ALL) NOPASSWD: /bin/journalctl *
+# Journalctl (log viewing - restricted units)
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/journalctl -u homepinas -n *
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/journalctl -u smbd -n *
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/journalctl -u docker -n *
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/journalctl --since * --until *
 EOF
 
 # Create SnapRAID sync script
@@ -1222,6 +1398,9 @@ WorkingDirectory=$TARGET_DIR
 ExecStart=$(which node) $TARGET_DIR/backend/index.js
 Restart=always
 Environment=NODE_ENV=production
+# Allow binding to ports 80/443 without root
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 
 [Install]
 WantedBy=multi-user.target
@@ -1251,14 +1430,13 @@ CURRENT_HOSTNAME=$(hostname)
 echo -e ""
 echo -e "${GREEN}╔═══════════════════════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║                                                           ║${NC}"
-echo -e "${GREEN}║   Web HomePiNAS: ${CYAN}https://${IP_ADDR}:3001${NC}${GREEN}                ║${NC}"
+echo -e "${GREEN}║   Web HomePiNAS: ${CYAN}https://${IP_ADDR}${NC}${GREEN}                ║${NC}"
 echo -e "${GREEN}║                                                           ║${NC}"
 echo -e "${GREEN}╚═══════════════════════════════════════════════════════════╝${NC}"
 echo -e ""
 echo -e "${YELLOW}Dashboard Access:${NC}"
-echo -e "  ${CYAN}mDNS (Local):${NC}      ${GREEN}https://${CURRENT_HOSTNAME}.local:3001${NC}"
-echo -e "  HTTPS (IP):         ${GREEN}https://${IP_ADDR}:3001${NC}"
-echo -e "  HTTP  (Fallback):   ${BLUE}http://${IP_ADDR}:3000${NC}"
+echo -e "  ${CYAN}mDNS (Local):${NC}      ${GREEN}https://${CURRENT_HOSTNAME}.local${NC}"
+echo -e "  HTTPS (IP):         ${GREEN}https://${IP_ADDR}${NC}"
 echo -e ""
 echo -e "${YELLOW}Note:${NC} Your browser will show a certificate warning for HTTPS."
 echo -e "      This is normal for self-signed certificates. Click 'Advanced'"
@@ -1290,7 +1468,8 @@ echo -e ""
 echo -e "${YELLOW}Network Share (SMB):${NC}"
 echo -e "  - Share name: ${GREEN}Storage${NC}"
 echo -e "  - Path: ${POOL_MOUNT}"
-echo -e "  - Access: \\\\\\\\$(hostname -I | awk '{print \$1}')\\\\Storage"
+LAN_IP=$(hostname -I | awk '{print $1}')
+echo -e "  - Access: \\\\\\\\${LAN_IP}\\\\Storage"
 echo -e "  - User/Pass: Same as dashboard credentials"
 echo -e ""
 echo -e "${YELLOW}Fan control modes:${NC}"
@@ -1323,3 +1502,13 @@ echo -e "${BLUE}Logs:${NC}"
 echo -e "  Fan control: journalctl -u homepinas-fanctl -f"
 echo -e "  SnapRAID:    tail -f /var/log/snapraid-sync.log"
 echo -e "${GREEN}=========================================${NC}"
+
+# Restore disabled repos on successful completion
+if [ "$REPOS_DISABLED" = true ]; then
+    echo -e "${BLUE}Restoring previously disabled repositories...${NC}"
+    for f in /etc/apt/sources.list.d/*.disabled; do
+        [ -f "$f" ] && mv "$f" "${f%.disabled}"
+    done
+    REPOS_DISABLED=false  # Prevent duplicate restore in trap
+    echo -e "${GREEN}Repositories restored${NC}"
+fi

@@ -145,6 +145,86 @@ It's free and open source: https://github.com/juanlusoft/homepinas-v2
 
 ---
 
+---
+
+## r/sysadmin (Active Directory)
+
+### Título
+**HomePiNAS: Raspberry Pi as Active Directory Domain Controller - Free, Open Source**
+
+### Contenido
+Hi r/sysadmin,
+
+Just added Active Directory Domain Controller functionality to HomePiNAS, my open source NAS software for Raspberry Pi.
+
+**What you get:**
+- Full Samba AD DC on a Raspberry Pi 5
+- Join Windows 10/11 PCs to domain
+- Manage users/groups from web dashboard
+- Kerberos authentication
+- DNS server included
+
+**Use cases:**
+- Small office with 2-10 PCs
+- Home lab for learning AD
+- Test environment
+- Backup domain controller
+
+**The kicker:** Synology charges extra for their "Directory Server" package. This is free and takes 2 clicks to set up.
+
+Dashboard walkthrough:
+1. Go to Active Directory section
+2. Enter domain name (e.g., MYCOMPANY)
+3. Set admin password
+4. Click "Create Domain"
+5. Join PCs using standard Windows process
+
+Works with Windows 10/11 Pro and Enterprise.
+
+GitHub: https://github.com/juanlusoft/homepinas-v2
+
+[SCREENSHOT of AD dashboard]
+
+Curious what this community thinks. Would you use a Pi as a DC?
+
+---
+
+## r/homelab (Active Directory update)
+
+### Título
+**Update: HomePiNAS now includes Active Directory Domain Controller**
+
+### Contenido
+Hey r/homelab!
+
+Some of you might remember HomePiNAS, my Pi-based NAS software. Just pushed v2.7 with a big new feature:
+
+**🏢 Active Directory Domain Controller**
+
+Your Raspberry Pi can now be a full Windows domain controller:
+
+- Provision domain in 2 clicks
+- Join Windows PCs to domain
+- Manage AD users/groups from dashboard
+- Step-by-step instructions for Windows 11 included
+
+**Why this matters:**
+- Synology charges extra for Directory Server
+- QNAP's implementation is complex
+- TrueNAS doesn't have it
+- HomePiNAS: included and easy
+
+Perfect for:
+- Home labs learning AD
+- Small offices (2-5 PCs)
+- Test environments
+
+[SCREENSHOT showing the AD setup wizard and joined computers]
+
+GitHub: https://github.com/juanlusoft/homepinas-v2
+
+---
+
 # Tips para publicar:
 
 1. **Mejor hora**: Martes-Jueves, 14:00-18:00 UTC

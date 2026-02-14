@@ -3,7 +3,7 @@ const net = require('net');
 const os = require('os');
 const http = require('http');
 
-const NAS_PORT = 3001;
+const NAS_PORT = 443;
 const SCAN_TIMEOUT = 3000;
 
 /**
@@ -68,7 +68,7 @@ function scanMDNS() {
 }
 
 /**
- * Escanea la subnet local en puerto 3001
+ * Escanea la subnet local en puerto 443
  */
 async function scanSubnet() {
   const devices = [];
