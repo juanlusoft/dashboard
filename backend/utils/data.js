@@ -2,7 +2,8 @@
  * HomePiNAS - Data Storage Utilities
  * v1.5.6 - Modular Architecture
  *
- * JSON file-based configuration storage
+ * JSON file-based configuration storage with atomic writes
+ * to prevent data corruption from concurrent access.
  */
 
 const fs = require('fs');
@@ -69,14 +70,19 @@ function getData() {
 }
 
 /**
- * Save data to JSON file with secure permissions
+ * Save data to JSON file with atomic write (write-to-temp + rename)
+ * This prevents data corruption if the process crashes mid-write.
  */
 function saveData(data) {
     try {
         ensureConfigDir();
-        fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), { mode: 0o600 });
+        const tmpFile = DATA_FILE + '.tmp.' + process.pid;
+        fs.writeFileSync(tmpFile, JSON.stringify(data, null, 2), { mode: 0o600 });
+        fs.renameSync(tmpFile, DATA_FILE);
     } catch (e) {
         console.error('Error saving data file:', e.message);
+        // Clean up temp file on failure
+        try { fs.unlinkSync(DATA_FILE + '.tmp.' + process.pid); } catch {}
         throw new Error('Failed to save configuration');
     }
 }

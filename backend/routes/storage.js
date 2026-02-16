@@ -8,13 +8,14 @@
 const express = require('express');
 const router = express.Router();
 const fs = require('fs');
-const { execSync, spawn } = require('child_process');
+const path = require('path');
+const { execFileSync, spawn } = require('child_process');
 
 const { requireAuth } = require('../middleware/auth');
 const { logSecurityEvent } = require('../utils/security');
 const { getData, saveData } = require('../utils/data');
 const { validateSession } = require('../utils/session');
-const { sanitizeDiskId, validateDiskConfig, escapeShellArg } = require('../utils/sanitize');
+const { sanitizeDiskId, validateDiskConfig } = require('../utils/sanitize');
 
 const STORAGE_MOUNT_BASE = '/mnt/disks';
 const POOL_MOUNT = '/mnt/storage';
@@ -75,7 +76,8 @@ router.get('/pool/status', requireAuth, async (req, res) => {
         // 1. Check MergerFS status
         // ══════════════════════════════════════════════════════════════════
         try {
-            const mounts = execSync('mount | grep mergerfs || echo ""', { encoding: 'utf8' });
+            const mountsRaw = execFileSync('mount', [], { encoding: 'utf8' });
+            const mounts = mountsRaw.split('\n').filter(l => l.includes('mergerfs')).join('\n');
             if (mounts.includes('mergerfs')) {
                 status.mergerfs.running = true;
                 
@@ -86,7 +88,9 @@ router.get('/pool/status', requireAuth, async (req, res) => {
                 }
                 
                 // Get pool capacity
-                const df = execSync(`df -BG ${POOL_MOUNT} 2>/dev/null | tail -1`, { encoding: 'utf8' });
+                const dfRaw = execFileSync('df', ['-BG', POOL_MOUNT], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+                const dfLines = dfRaw.trim().split('\n');
+                const df = dfLines[dfLines.length - 1];
                 const parts = df.trim().split(/\s+/);
                 if (parts.length >= 5) {
                     const total = parseInt(parts[1]) || 0;
@@ -113,17 +117,19 @@ router.get('/pool/status', requireAuth, async (req, res) => {
 
         // Check systemd mount unit status
         try {
-            const unitStatus = execSync('systemctl is-active mnt-storage.mount 2>/dev/null || echo "inactive"', { encoding: 'utf8' }).trim();
-            status.mergerfs.systemdUnit = unitStatus;
+            const unitStatus = execFileSync('systemctl', ['is-active', 'mnt-storage.mount'], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+            status.mergerfs.systemdUnit = unitStatus || 'inactive';
         } catch (e) {
-            status.mergerfs.systemdUnit = 'not-found';
+            // systemctl exits non-zero for inactive/not-found; extract stdout if available
+            const stdout = e.stdout ? e.stdout.toString().trim() : '';
+            status.mergerfs.systemdUnit = stdout || 'not-found';
         }
 
         // ══════════════════════════════════════════════════════════════════
         // 2. Check SnapRAID status
         // ══════════════════════════════════════════════════════════════════
         try {
-            const snapraidConf = execSync(`cat ${SNAPRAID_CONF} 2>/dev/null || echo ""`, { encoding: 'utf8' });
+            const snapraidConf = fs.readFileSync(SNAPRAID_CONF, 'utf8');
             if (snapraidConf.includes('content') && snapraidConf.includes('disk')) {
                 status.snapraid.configured = true;
                 
@@ -137,7 +143,8 @@ router.get('/pool/status', requireAuth, async (req, res) => {
 
         // Get last sync time
         try {
-            const logContent = execSync('tail -50 /var/log/snapraid-sync.log 2>/dev/null || echo ""', { encoding: 'utf8' });
+            const logRaw = fs.readFileSync('/var/log/snapraid-sync.log', 'utf8');
+            const logContent = logRaw.split('\n').slice(-50).join('\n');
             const syncMatch = logContent.match(/=== SnapRAID Sync Finished: (.+?) ===/);
             if (syncMatch) {
                 status.snapraid.lastSync = syncMatch[1].trim();
@@ -159,7 +166,7 @@ router.get('/pool/status', requireAuth, async (req, res) => {
         // Get disk serials and models from lsblk
         let diskDetails = {};
         try {
-            const lsblkJson = execSync('lsblk -Jbo NAME,MODEL,SERIAL 2>/dev/null || echo "{}"', { encoding: 'utf8' });
+            const lsblkJson = execFileSync('lsblk', ['-Jbo', 'NAME,MODEL,SERIAL'], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
             const parsed = JSON.parse(lsblkJson);
             for (const dev of (parsed.blockdevices || [])) {
                 diskDetails[dev.name] = { model: dev.model || '', serial: dev.serial || '' };
@@ -187,12 +194,16 @@ router.get('/pool/status', requireAuth, async (req, res) => {
             // Check if mounted
             if (diskConf.mountPoint) {
                 try {
-                    const mountCheck = execSync(`mountpoint -q ${escapeShellArg(diskConf.mountPoint)} && echo "yes" || echo "no"`, { encoding: 'utf8' }).trim();
-                    diskInfo.mounted = mountCheck === 'yes';
-                    
+                    try {
+                        execFileSync('mountpoint', ['-q', diskConf.mountPoint], { stdio: ['pipe', 'pipe', 'ignore'] });
+                        diskInfo.mounted = true;
+                    } catch { diskInfo.mounted = false; }
+
                     if (diskInfo.mounted) {
                         // Get disk capacity
-                        const df = execSync(`df -BG ${escapeShellArg(diskConf.mountPoint)} 2>/dev/null | tail -1`, { encoding: 'utf8' });
+                        const dfRaw2 = execFileSync('df', ['-BG', diskConf.mountPoint], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+                        const dfLines2 = dfRaw2.trim().split('\n');
+                        const df = dfLines2[dfLines2.length - 1];
                         const parts = df.trim().split(/\s+/);
                         if (parts.length >= 4) {
                             diskInfo.size = formatSize(parseInt(parts[1]) || 0);
@@ -207,7 +218,8 @@ router.get('/pool/status', requireAuth, async (req, res) => {
             
             // Get SMART health (quick check)
             try {
-                const smartResult = execSync(`sudo smartctl -H /dev/${escapeShellArg(diskConf.id)} 2>/dev/null | grep -i "SMART overall-health" || echo ""`, { encoding: 'utf8' });
+                const smartRaw = execFileSync('sudo', ['smartctl', '-H', `/dev/${diskConf.id}`], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+                const smartResult = smartRaw.split('\n').filter(l => /SMART overall-health/i.test(l)).join('\n');
                 if (smartResult.toLowerCase().includes('passed')) {
                     diskInfo.health = 'healthy';
                 } else if (smartResult.toLowerCase().includes('failed')) {
@@ -289,8 +301,6 @@ router.post('/pool/configure', requireAuthOrSetup, async (req, res) => {
     }
 
     // Parity is now optional - SnapRAID will only be configured if parity disks are present
-    const { execFileSync } = require('child_process');
-
     try {
         const results = [];
 
@@ -305,7 +315,7 @@ router.post('/pool/configure', requireAuthOrSetup, async (req, res) => {
                     execFileSync('sudo', ['parted', '-s', `/dev/${safeDiskId}`, 'mklabel', 'gpt'], { encoding: 'utf8', timeout: 30000 });
                     execFileSync('sudo', ['parted', '-s', `/dev/${safeDiskId}`, 'mkpart', 'primary', 'ext4', '0%', '100%'], { encoding: 'utf8', timeout: 30000 });
                     execFileSync('sudo', ['partprobe', `/dev/${safeDiskId}`], { encoding: 'utf8', timeout: 10000 });
-                    execSync('sleep 2', { timeout: 5000 });
+                    execFileSync('sleep', ['2'], { timeout: 5000 });
 
                     const partition = safeDiskId.includes('nvme') ? `${safeDiskId}p1` : `${safeDiskId}1`;
                     // SECURITY: Validate partition name too (derived from validated disk ID)
@@ -434,7 +444,7 @@ exclude .fseventsd
 `;
 
             // SECURITY: Write config to temp file first, then use sudo to copy
-            const tempConfFile = '/mnt/storage/.tmp/homepinas-snapraid-temp.conf';
+            const tempConfFile = '/tmp/homepinas-snapraid-temp.conf';
             fs.writeFileSync(tempConfFile, snapraidConf, 'utf8');
             execFileSync('sudo', ['cp', tempConfFile, SNAPRAID_CONF], { encoding: 'utf8', timeout: 10000 });
             fs.unlinkSync(tempConfFile);
@@ -508,15 +518,27 @@ exclude .fseventsd
         fstabEntries += `# MergerFS Pool\n`;
         fstabEntries += `${mergerfsSource} ${POOL_MOUNT} fuse.mergerfs ${mergerfsOpts},nofail 0 0\n`;
 
-        // SECURITY: Write to temp file, then use sudo to append
-        const tempFstabFile = '/mnt/storage/.tmp/homepinas-fstab-temp';
-        fs.writeFileSync(tempFstabFile, fstabEntries, 'utf8');
-        
-        // Remove ALL old HomePiNAS entries (comment + UUID/mergerfs lines)
-        execSync(`sudo sed -i '/# HomePiNAS Storage/d; /# MergerFS Pool/d; /\\/mnt\\/disks\\//d; /\\/mnt\\/parity/d; /\\/mnt\\/storage.*mergerfs/d; /\\/mnt\\/storage.*fuse\\.mergerfs/d' /etc/fstab`, { encoding: 'utf8', timeout: 10000 });
+        // Remove ALL old HomePiNAS entries from fstab, then append new ones
+        // Read fstab, filter out old HomePiNAS lines in JS, write back via temp + sudo cp
+        const fstabContent = execFileSync('sudo', ['cat', '/etc/fstab'], { encoding: 'utf8', timeout: 10000 });
+        const filteredLines = fstabContent.split('\n').filter(line => {
+            if (/# HomePiNAS Storage/.test(line)) return false;
+            if (/# MergerFS Pool/.test(line)) return false;
+            if (/\/mnt\/disks\//.test(line)) return false;
+            if (/\/mnt\/parity/.test(line)) return false;
+            if (/\/mnt\/storage.*mergerfs/.test(line)) return false;
+            if (/\/mnt\/storage.*fuse\.mergerfs/.test(line)) return false;
+            return true;
+        });
         // Remove trailing blank lines
-        execSync(`sudo sed -i -e :a -e '/^\\n*$/{$d;N;ba' -e '}' /etc/fstab`, { encoding: 'utf8', timeout: 10000 });
-        execFileSync('sudo', ['sh', '-c', `cat ${tempFstabFile} >> /etc/fstab`], { encoding: 'utf8', timeout: 10000 });
+        while (filteredLines.length > 0 && filteredLines[filteredLines.length - 1].trim() === '') {
+            filteredLines.pop();
+        }
+        const cleanedFstab = filteredLines.join('\n') + '\n';
+        // Write cleaned fstab + new entries via temp file + sudo cp
+        const tempFstabFile = '/tmp/homepinas-fstab-temp';
+        fs.writeFileSync(tempFstabFile, cleanedFstab + fstabEntries, 'utf8');
+        execFileSync('sudo', ['cp', tempFstabFile, '/etc/fstab'], { encoding: 'utf8', timeout: 10000 });
         fs.unlinkSync(tempFstabFile);
         results.push('Updated /etc/fstab for persistence (including MergerFS)');
 
@@ -665,7 +687,7 @@ router.get('/snapraid/sync/progress', requireAuth, (req, res) => {
 // Run SnapRAID scrub
 router.post('/snapraid/scrub', requireAuth, async (req, res) => {
     try {
-        execSync('sudo snapraid scrub -p 10', { encoding: 'utf8', timeout: 7200000 });
+        execFileSync('sudo', ['snapraid', 'scrub', '-p', '10'], { encoding: 'utf8', timeout: 7200000 });
         logSecurityEvent('SNAPRAID_SCRUB', {}, req.ip);
         res.json({ success: true, message: 'SnapRAID scrub completed' });
     } catch (e) {
@@ -677,7 +699,7 @@ router.post('/snapraid/scrub', requireAuth, async (req, res) => {
 // Get SnapRAID status
 router.get('/snapraid/status', requireAuth, async (req, res) => {
     try {
-        const status = execSync('sudo snapraid status 2>&1 || echo "Not configured"', { encoding: 'utf8' });
+        const status = execFileSync('sudo', ['snapraid', 'status'], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
         res.json({ status });
     } catch (e) {
         res.json({ status: 'Not configured or error' });
@@ -695,10 +717,7 @@ router.get('/snapraid/status', requireAuth, async (req, res) => {
 router.get('/disks/detect', requireAuth, async (req, res) => {
     try {
         // Get all block devices with details
-        const lsblkJson = execSync(
-            'lsblk -Jbo NAME,SIZE,TYPE,MOUNTPOINT,FSTYPE,MODEL,SERIAL,TRAN 2>/dev/null || echo "{}"',
-            { encoding: 'utf8' }
-        );
+        const lsblkJson = execFileSync('lsblk', ['-Jbo', 'NAME,SIZE,TYPE,MOUNTPOINT,FSTYPE,MODEL,SERIAL,TRAN'], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
         
         let devices = [];
         try {
@@ -714,8 +733,8 @@ router.get('/disks/detect', requireAuth, async (req, res) => {
         // Get currently mounted disks in our pool
         const poolMounts = [];
         try {
-            const mounts = execSync(`ls -1 ${STORAGE_MOUNT_BASE}/ 2>/dev/null || echo ""`, { encoding: 'utf8' });
-            mounts.split('\n').filter(Boolean).forEach(m => poolMounts.push(m));
+            const dirEntries = fs.readdirSync(STORAGE_MOUNT_BASE);
+            dirEntries.forEach(m => poolMounts.push(m));
         } catch (e) {}
 
         const configured = [];
@@ -831,7 +850,7 @@ router.post('/disks/add-to-pool', requireAuth, async (req, res) => {
         
         // 4. Verify it's a block device
         try {
-            const statResult = execSync(`stat -c '%F' ${escapeShellArg(devicePath)} 2>/dev/null`, { encoding: 'utf8' }).trim();
+            const statResult = execFileSync('stat', ['-c', '%F', devicePath], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
             if (!statResult.includes('block')) {
                 return res.status(400).json({
                     error: 'Not a block device',
@@ -864,10 +883,7 @@ router.post('/disks/add-to-pool', requireAuth, async (req, res) => {
         
         try {
             // Check for existing partitions using lsblk
-            const lsblkJson = execSync(
-                `lsblk -Jbo NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT /dev/${escapeShellArg(safeDiskId)} 2>/dev/null || echo "{}"`,
-                { encoding: 'utf8' }
-            );
+            const lsblkJson = execFileSync('lsblk', ['-Jbo', 'NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT', `/dev/${safeDiskId}`], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
             const lsblk = JSON.parse(lsblkJson);
             const device = (lsblk.blockdevices || [])[0];
             
@@ -910,7 +926,8 @@ router.post('/disks/add-to-pool', requireAuth, async (req, res) => {
         
         // 8. Verify disk is not the boot disk
         try {
-            const rootDevice = execSync('findmnt -n -o SOURCE / 2>/dev/null | sed "s/[0-9]*$//" | sed "s/p[0-9]*$//"', { encoding: 'utf8' }).trim();
+            const rootDeviceRaw = execFileSync('findmnt', ['-n', '-o', 'SOURCE', '/'], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+            const rootDevice = rootDeviceRaw.replace(/[0-9]*$/, '').replace(/p[0-9]*$/, '');
             if (rootDevice.includes(safeDiskId)) {
                 return res.status(400).json({
                     error: 'Cannot use boot disk',
@@ -928,7 +945,8 @@ router.post('/disks/add-to-pool', requireAuth, async (req, res) => {
         // Step 1: Unmount ALL partitions of this disk (MUST be first!)
         try {
             // Find all mount points for this disk (any partition)
-            const mountCheck = execSync(`mount | grep "/dev/${safeDiskId}" || true`, { encoding: 'utf8' });
+            const mountAllRaw = execFileSync('mount', [], { encoding: 'utf8' });
+            const mountCheck = mountAllRaw.split('\n').filter(l => l.includes(`/dev/${safeDiskId}`)).join('\n');
             if (mountCheck.trim()) {
                 console.log(`Unmounting all partitions of /dev/${safeDiskId}...`);
                 const mountLines = mountCheck.trim().split('\n');
@@ -937,14 +955,18 @@ router.post('/disks/add-to-pool', requireAuth, async (req, res) => {
                     if (mountedDev) {
                         console.log(`  Unmounting ${mountedDev}...`);
                         try {
-                            execSync(`sudo umount ${escapeShellArg(mountedDev)} 2>/dev/null || sudo umount -l ${escapeShellArg(mountedDev)} 2>/dev/null || true`, { encoding: 'utf8' });
+                            execFileSync('sudo', ['umount', mountedDev], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
                         } catch (e) {
-                            console.log(`  Failed to unmount ${mountedDev}: ${e.message}`);
+                            try {
+                                execFileSync('sudo', ['umount', '-l', mountedDev], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+                            } catch (e2) {
+                                console.log(`  Failed to unmount ${mountedDev}: ${e2.message}`);
+                            }
                         }
                     }
                 }
                 // Wait for unmount to complete
-                execSync('sleep 1', { encoding: 'utf8' });
+                execFileSync('sleep', ['1'], { encoding: 'utf8' });
             }
         } catch (e) {
             console.log('Unmount check/attempt:', e.message);
@@ -954,12 +976,12 @@ router.post('/disks/add-to-pool', requireAuth, async (req, res) => {
         if (!hasPartition || format) {
             try {
                 console.log(`Creating partition on ${devicePath}...`);
-                execSync(`sudo parted -s ${escapeShellArg(devicePath)} mklabel gpt`, { encoding: 'utf8', timeout: 30000 });
-                execSync(`sudo parted -s ${escapeShellArg(devicePath)} mkpart primary ext4 0% 100%`, { encoding: 'utf8', timeout: 30000 });
-                execSync('sync', { encoding: 'utf8' });
-                execSync(`sudo partprobe ${escapeShellArg(devicePath)}`, { encoding: 'utf8', timeout: 10000 });
+                execFileSync('sudo', ['parted', '-s', devicePath, 'mklabel', 'gpt'], { encoding: 'utf8', timeout: 30000 });
+                execFileSync('sudo', ['parted', '-s', devicePath, 'mkpart', 'primary', 'ext4', '0%', '100%'], { encoding: 'utf8', timeout: 30000 });
+                execFileSync('sync', [], { encoding: 'utf8' });
+                execFileSync('sudo', ['partprobe', devicePath], { encoding: 'utf8', timeout: 10000 });
                 // Wait for partition to appear
-                execSync('sleep 2', { encoding: 'utf8' });
+                execFileSync('sleep', ['2'], { encoding: 'utf8' });
                 hasPartition = true;
             } catch (e) {
                 if (!hasPartition) {
@@ -978,7 +1000,7 @@ router.post('/disks/add-to-pool', requireAuth, async (req, res) => {
             const label = `${role}_${safeDiskId}`.substring(0, 16);
             try {
                 console.log(`Formatting ${partitionPath} as ext4...`);
-                execSync(`sudo mkfs.ext4 -F -L ${escapeShellArg(label)} ${escapeShellArg(partitionPath)}`, { encoding: 'utf8', timeout: 300000 });
+                execFileSync('sudo', ['mkfs.ext4', '-F', '-L', label, partitionPath], { encoding: 'utf8', timeout: 300000 });
             } catch (e) {
                 return res.status(500).json({ 
                     error: 'Format failed',
@@ -990,13 +1012,13 @@ router.post('/disks/add-to-pool', requireAuth, async (req, res) => {
         // Step 4: Verify partition is mountable (test mount)
         const testMountPoint = `/mnt/storage/.tmp/homepinas-test-mount-${Date.now()}`;
         try {
-            execSync(`sudo mkdir -p ${testMountPoint}`, { encoding: 'utf8' });
-            execSync(`sudo mount ${escapeShellArg(partitionPath)} ${testMountPoint}`, { encoding: 'utf8', timeout: 30000 });
-            execSync(`sudo umount ${testMountPoint}`, { encoding: 'utf8' });
-            execSync(`sudo rmdir ${testMountPoint}`, { encoding: 'utf8' });
+            execFileSync('sudo', ['mkdir', '-p', testMountPoint], { encoding: 'utf8' });
+            execFileSync('sudo', ['mount', partitionPath, testMountPoint], { encoding: 'utf8', timeout: 30000 });
+            execFileSync('sudo', ['umount', testMountPoint], { encoding: 'utf8' });
+            execFileSync('sudo', ['rmdir', testMountPoint], { encoding: 'utf8' });
         } catch (e) {
-            try { execSync(`sudo umount ${testMountPoint} 2>/dev/null || true`, { encoding: 'utf8' }); } catch {}
-            try { execSync(`sudo rmdir ${testMountPoint} 2>/dev/null || true`, { encoding: 'utf8' }); } catch {}
+            try { execFileSync('sudo', ['umount', testMountPoint], { stdio: 'ignore' }); } catch {}
+            try { execFileSync('sudo', ['rmdir', testMountPoint], { stdio: 'ignore' }); } catch {}
             return res.status(500).json({
                 error: 'Disk not mountable',
                 details: `Failed to mount ${partitionPath}. Is it formatted? Error: ${e.message}`
@@ -1010,7 +1032,7 @@ router.post('/disks/add-to-pool', requireAuth, async (req, res) => {
         // Step 5: Get UUID
         let uuid = '';
         try {
-            uuid = execSync(`sudo blkid -s UUID -o value ${escapeShellArg(partitionPath)} 2>/dev/null`, { encoding: 'utf8' }).trim();
+            uuid = execFileSync('sudo', ['blkid', '-s', 'UUID', '-o', 'value', partitionPath], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
         } catch (e) {
             return res.status(500).json({ error: 'Failed to get disk UUID' });
         }
@@ -1024,14 +1046,14 @@ router.post('/disks/add-to-pool', requireAuth, async (req, res) => {
         const mountPoint = `${STORAGE_MOUNT_BASE}/disk${mountIndex}`;
         
         try {
-            execSync(`sudo mkdir -p ${escapeShellArg(mountPoint)}`, { encoding: 'utf8' });
+            execFileSync('sudo', ['mkdir', '-p', mountPoint], { encoding: 'utf8' });
         } catch (e) {
             return res.status(500).json({ error: 'Failed to create mount point' });
         }
 
         // Step 5: Mount the disk
         try {
-            execSync(`sudo mount UUID=${escapeShellArg(uuid)} ${escapeShellArg(mountPoint)}`, { encoding: 'utf8' });
+            execFileSync('sudo', ['mount', `UUID=${uuid}`, mountPoint], { encoding: 'utf8' });
         } catch (e) {
             return res.status(500).json({ error: `Mount failed: ${e.message}` });
         }
@@ -1040,12 +1062,10 @@ router.post('/disks/add-to-pool', requireAuth, async (req, res) => {
         const fstabEntry = `UUID=${uuid} ${mountPoint} ext4 defaults,nofail 0 2`;
         try {
             // Check if entry already exists
-            const fstab = execSync('cat /etc/fstab', { encoding: 'utf8' });
+            const fstab = fs.readFileSync('/etc/fstab', 'utf8');
             if (!fstab.includes(uuid)) {
-                const tempFile = `/mnt/storage/.tmp/fstab-add-${Date.now()}`;
-                fs.writeFileSync(tempFile, `\n# HomePiNAS: ${safeDiskId} (${role})\n${fstabEntry}\n`);
-                execSync(`sudo sh -c 'cat ${escapeShellArg(tempFile)} >> /etc/fstab'`, { encoding: 'utf8' });
-                fs.unlinkSync(tempFile);
+                const fstabAppend = `\n# HomePiNAS: ${safeDiskId} (${role})\n${fstabEntry}\n`;
+                execFileSync('sudo', ['tee', '-a', '/etc/fstab'], { input: fstabAppend, encoding: 'utf8', stdio: ['pipe', 'ignore', 'pipe'] });
             }
         } catch (e) {
             console.error('fstab update failed:', e);
@@ -1118,7 +1138,8 @@ router.post('/disks/remove-from-pool', requireAuth, async (req, res) => {
         let isMounted = false;
         
         try {
-            const mounts = execSync('mount | grep mergerfs', { encoding: 'utf8' }).trim();
+            const mountsAll = execFileSync('mount', [], { encoding: 'utf8' });
+            const mounts = mountsAll.split('\n').filter(l => l.includes('mergerfs')).join('\n').trim();
             if (mounts) {
                 isMounted = true;
                 const match = mounts.match(/^(.+?) on \/mnt\/storage type fuse\.mergerfs/);
@@ -1132,7 +1153,7 @@ router.post('/disks/remove-from-pool', requireAuth, async (req, res) => {
 
         // Remove this mount point from sources
         const sourcesList = currentSources.split(':').filter(s => s && s !== mountPoint);
-        
+
         if (sourcesList.length === 0) {
             return res.status(400).json({ error: 'Cannot remove last disk from pool. At least one disk must remain.' });
         }
@@ -1142,10 +1163,10 @@ router.post('/disks/remove-from-pool', requireAuth, async (req, res) => {
         // Unmount MergerFS
         if (isMounted) {
             try {
-                execSync(`sudo umount ${POOL_MOUNT}`, { encoding: 'utf8' });
+                execFileSync('sudo', ['umount', POOL_MOUNT], { encoding: 'utf8' });
             } catch (e) {
                 try {
-                    execSync(`sudo umount -l ${POOL_MOUNT}`, { encoding: 'utf8' });
+                    execFileSync('sudo', ['umount', '-l', POOL_MOUNT], { encoding: 'utf8' });
                 } catch (e2) {
                     return res.status(500).json({ error: 'Cannot unmount pool. Files may be in use.' });
                 }
@@ -1154,10 +1175,7 @@ router.post('/disks/remove-from-pool', requireAuth, async (req, res) => {
 
         // Remount with remaining disks
         try {
-            execSync(
-                `sudo mergerfs -o defaults,allow_other,nonempty,use_ino,cache.files=partial,dropcacheonclose=true,category.create=mfs,moveonenospc=true ${escapeShellArg(newSources)} ${POOL_MOUNT}`,
-                { encoding: 'utf8' }
-            );
+            execFileSync('sudo', ['mergerfs', '-o', 'defaults,allow_other,nonempty,use_ino,cache.files=partial,dropcacheonclose=true,category.create=mfs,moveonenospc=true', newSources, POOL_MOUNT], { encoding: 'utf8' });
         } catch (e) {
             return res.status(500).json({ error: `Failed to remount pool: ${e.message}` });
         }
@@ -1212,9 +1230,9 @@ router.post('/disks/mount-standalone', requireAuth, async (req, res) => {
 
         // Create partition if needed
         try {
-            execSync(`sudo parted -s ${escapeShellArg(devicePath)} mklabel gpt`, { encoding: 'utf8' });
-            execSync(`sudo parted -s ${escapeShellArg(devicePath)} mkpart primary ext4 0% 100%`, { encoding: 'utf8' });
-            execSync('sleep 2', { encoding: 'utf8' });
+            execFileSync('sudo', ['parted', '-s', devicePath, 'mklabel', 'gpt'], { encoding: 'utf8' });
+            execFileSync('sudo', ['parted', '-s', devicePath, 'mkpart', 'primary', 'ext4', '0%', '100%'], { encoding: 'utf8' });
+            execFileSync('sleep', ['2'], { encoding: 'utf8' });
         } catch (e) {
             console.log('Partition exists or creation skipped');
         }
@@ -1222,7 +1240,7 @@ router.post('/disks/mount-standalone', requireAuth, async (req, res) => {
         // Format if requested
         if (format) {
             try {
-                execSync(`sudo mkfs.ext4 -F -L ${escapeShellArg(safeName)} ${escapeShellArg(partitionPath)}`, { encoding: 'utf8' });
+                execFileSync('sudo', ['mkfs.ext4', '-F', '-L', safeName, partitionPath], { encoding: 'utf8' });
             } catch (e) {
                 return res.status(500).json({ error: `Format failed: ${e.message}` });
             }
@@ -1231,15 +1249,15 @@ router.post('/disks/mount-standalone', requireAuth, async (req, res) => {
         // Get UUID
         let uuid = '';
         try {
-            uuid = execSync(`sudo blkid -s UUID -o value ${escapeShellArg(partitionPath)} 2>/dev/null`, { encoding: 'utf8' }).trim();
+            uuid = execFileSync('sudo', ['blkid', '-s', 'UUID', '-o', 'value', partitionPath], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
         } catch (e) {
             return res.status(500).json({ error: 'Failed to get UUID' });
         }
 
         // Create mount point and mount
         try {
-            execSync(`sudo mkdir -p ${escapeShellArg(mountPoint)}`, { encoding: 'utf8' });
-            execSync(`sudo mount UUID=${escapeShellArg(uuid)} ${escapeShellArg(mountPoint)}`, { encoding: 'utf8' });
+            execFileSync('sudo', ['mkdir', '-p', mountPoint], { encoding: 'utf8' });
+            execFileSync('sudo', ['mount', `UUID=${uuid}`, mountPoint], { encoding: 'utf8' });
         } catch (e) {
             return res.status(500).json({ error: `Mount failed: ${e.message}` });
         }
@@ -1247,12 +1265,10 @@ router.post('/disks/mount-standalone', requireAuth, async (req, res) => {
         // Add to fstab
         const fstabEntry = `UUID=${uuid} ${mountPoint} ext4 defaults,nofail 0 2`;
         try {
-            const fstab = execSync('cat /etc/fstab', { encoding: 'utf8' });
+            const fstab = fs.readFileSync('/etc/fstab', 'utf8');
             if (!fstab.includes(uuid)) {
-                const tempFile = `/mnt/storage/.tmp/fstab-standalone-${Date.now()}`;
-                fs.writeFileSync(tempFile, `\n# HomePiNAS: Standalone volume ${safeName}\n${fstabEntry}\n`);
-                execSync(`sudo sh -c 'cat ${escapeShellArg(tempFile)} >> /etc/fstab'`, { encoding: 'utf8' });
-                fs.unlinkSync(tempFile);
+                const fstabAppend = `\n# HomePiNAS: Standalone volume ${safeName}\n${fstabEntry}\n`;
+                execFileSync('sudo', ['tee', '-a', '/etc/fstab'], { input: fstabAppend, encoding: 'utf8', stdio: ['pipe', 'ignore', 'pipe'] });
             }
         } catch (e) {
             console.error('fstab update failed:', e);
@@ -1323,9 +1339,13 @@ router.get('/disks/ignored', requireAuth, (req, res) => {
 router.post('/disks/unignore', requireAuth, async (req, res) => {
     try {
         const { diskId } = req.body;
+        const safeDiskId = sanitizeDiskId(diskId);
+        if (!safeDiskId) {
+            return res.status(400).json({ error: 'Invalid disk ID' });
+        }
         const data = getData();
         if (data.ignoredDisks) {
-            data.ignoredDisks = data.ignoredDisks.filter(d => d !== diskId);
+            data.ignoredDisks = data.ignoredDisks.filter(d => d !== safeDiskId);
             saveData(data);
         }
         res.json({ success: true });
@@ -1337,8 +1357,8 @@ router.post('/disks/unignore', requireAuth, async (req, res) => {
 // Helper: Get next disk index for mount point
 async function getNextDiskIndex() {
     try {
-        const existing = execSync(`ls -1 ${STORAGE_MOUNT_BASE}/ 2>/dev/null || echo ""`, { encoding: 'utf8' });
-        const disks = existing.split('\n').filter(d => d.startsWith('disk'));
+        const existing = fs.readdirSync(STORAGE_MOUNT_BASE);
+        const disks = existing.filter(d => d.startsWith('disk'));
         const indices = disks.map(d => parseInt(d.replace('disk', '')) || 0);
         return Math.max(0, ...indices) + 1;
     } catch (e) {
@@ -1354,7 +1374,8 @@ async function addDiskToMergerFS(mountPoint, role) {
         let isMounted = false;
         
         try {
-            const mounts = execSync('mount | grep mergerfs', { encoding: 'utf8' }).trim();
+            const mountsAllRaw = execFileSync('mount', [], { encoding: 'utf8' });
+            const mounts = mountsAllRaw.split('\n').filter(l => l.includes('mergerfs')).join('\n').trim();
             if (mounts) {
                 isMounted = true;
                 const match = mounts.match(/^(.+?) on \/mnt\/storage type fuse\.mergerfs/);
@@ -1385,34 +1406,34 @@ async function addDiskToMergerFS(mountPoint, role) {
                 .filter(p => {
                     try {
                         // Check if it's a mount point (has something mounted)
-                        const stat = execSync(`mountpoint -q ${escapeShellArg(p)} && echo yes || echo no`, { encoding: 'utf8' }).trim();
-                        return stat === 'yes';
+                        execFileSync('mountpoint', ['-q', p], { stdio: ['pipe', 'pipe', 'ignore'] });
+                        return true;
                     } catch {
                         return false;
                     }
                 });
-            
+
             // Include the new mount point if not already in list
             if (!diskDirs.includes(mountPoint)) {
                 diskDirs.push(mountPoint);
             }
-            
+
             if (diskDirs.length === 0) {
                 throw new Error('No disks available for pool');
             }
-            
+
             newSources = diskDirs.join(':');
         }
 
         // Unmount if currently mounted
         if (isMounted) {
             try {
-                execSync(`sudo umount ${POOL_MOUNT}`, { encoding: 'utf8' });
+                execFileSync('sudo', ['umount', POOL_MOUNT], { encoding: 'utf8' });
             } catch (e) {
                 console.error('Failed to unmount MergerFS:', e.message);
                 // Try lazy unmount
                 try {
-                    execSync(`sudo umount -l ${POOL_MOUNT}`, { encoding: 'utf8' });
+                    execFileSync('sudo', ['umount', '-l', POOL_MOUNT], { encoding: 'utf8' });
                 } catch (e2) {
                     throw new Error('Cannot unmount MergerFS pool. Files may be in use.');
                 }
@@ -1421,18 +1442,15 @@ async function addDiskToMergerFS(mountPoint, role) {
 
         // Create pool mount point if needed
         if (!fs.existsSync(POOL_MOUNT)) {
-            execSync(`sudo mkdir -p ${POOL_MOUNT}`, { encoding: 'utf8' });
+            execFileSync('sudo', ['mkdir', '-p', POOL_MOUNT], { encoding: 'utf8' });
         }
 
         // Determine policy
         const hasCache = newSources.includes('cache') || role === 'cache';
         const policy = hasCache ? 'lfs' : 'mfs';
-        
+
         // Mount MergerFS (nofail is only for fstab, not mount command)
-        execSync(
-            `sudo mergerfs -o defaults,allow_other,nonempty,use_ino,cache.files=partial,dropcacheonclose=true,category.create=${policy},moveonenospc=true ${escapeShellArg(newSources)} ${POOL_MOUNT}`,
-            { encoding: 'utf8' }
-        );
+        execFileSync('sudo', ['mergerfs', '-o', `defaults,allow_other,nonempty,use_ino,cache.files=partial,dropcacheonclose=true,category.create=${policy},moveonenospc=true`, newSources, POOL_MOUNT], { encoding: 'utf8' });
 
         // Update fstab for MergerFS
         updateMergerFSFstab(newSources, policy);
@@ -1511,8 +1529,7 @@ router.post('/config', (req, res) => {
  * @param {string[]} diskMountPoints - Array of disk mount points to wait for
  */
 function createMergerFSSystemdUnit(sources, options, diskMountPoints) {
-    const { execFileSync } = require('child_process');
-    
+
     // Generate systemd mount unit name from path: /mnt/storage -> mnt-storage.mount
     const mountUnitName = 'mnt-storage.mount';
     const mountUnitPath = `/etc/systemd/system/${mountUnitName}`;
@@ -1567,7 +1584,12 @@ WantedBy=multi-user.target
         
         // Also remove any MergerFS entry from fstab to avoid conflicts
         try {
-            execSync(`sudo sed -i '/\\/mnt\\/storage.*mergerfs/d' /etc/fstab`, { encoding: 'utf8', timeout: 10000 });
+            const fstabRaw = execFileSync('sudo', ['cat', '/etc/fstab'], { encoding: 'utf8', timeout: 10000 });
+            const fstabFiltered = fstabRaw.split('\n').filter(line => !/\/mnt\/storage.*mergerfs/.test(line)).join('\n');
+            const tempFstabClean = `/tmp/homepinas-fstab-clean-${Date.now()}`;
+            fs.writeFileSync(tempFstabClean, fstabFiltered, 'utf8');
+            execFileSync('sudo', ['cp', tempFstabClean, '/etc/fstab'], { encoding: 'utf8', timeout: 10000 });
+            try { fs.unlinkSync(tempFstabClean); } catch (e2) {}
             console.log('Removed MergerFS fstab entry (now using systemd)');
         } catch (e) {
             // Ignore - fstab entry might not exist

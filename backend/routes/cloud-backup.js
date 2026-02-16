@@ -346,6 +346,8 @@ function loadTransferHistory() {
 function saveTransferHistory(history) {
     const historyPath = '/opt/homepinas/backend/data/transfer-history.json';
     try {
+        const dir = path.dirname(historyPath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         // Keep only last 100 entries
         const trimmed = history.slice(-100);
         fs.writeFileSync(historyPath, JSON.stringify(trimmed, null, 2));
@@ -548,6 +550,8 @@ function loadScheduledSyncs() {
 function saveScheduledSyncs(syncs) {
     const schedulePath = '/opt/homepinas/backend/data/scheduled-syncs.json';
     try {
+        const dir = path.dirname(schedulePath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(schedulePath, JSON.stringify(syncs, null, 2));
     } catch (e) {
         console.error('Error saving scheduled syncs:', e);

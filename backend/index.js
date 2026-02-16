@@ -1,6 +1,6 @@
 /**
  * HomePiNAS - Premium NAS Dashboard for Raspberry Pi CM5
- * v2.1.0 - Extended Features
+ * v2.8.0 - Extended Features
  *
  * Homelabs.club Edition with:
  * - Bcrypt password hashing
@@ -70,7 +70,7 @@ try {
 }
 
 // Configuration
-const VERSION = '2.3.0';
+const VERSION = '2.8.0';
 const HTTPS_PORT = process.env.HTTPS_PORT || 443;
 const HTTP_PORT = process.env.HTTP_PORT || 80;
 const SSL_CERT_PATH = path.join(__dirname, 'certs', 'server.crt');
@@ -86,7 +86,7 @@ function ensureSSLCerts() {
     if (!fs.existsSync(SSL_CERT_PATH) || !fs.existsSync(SSL_KEY_PATH)) {
         console.log('[SSL] Certificates not found, generating self-signed certificates...');
         try {
-            const { execSync } = require('child_process');
+            const { execFileSync } = require('child_process');
             const os = require('os');
             const hostname = os.hostname();
             const interfaces = os.networkInterfaces();
@@ -128,7 +128,13 @@ IP.2 = 127.0.0.1
             const configPath = '/mnt/storage/.tmp/homepinas-ssl.cnf';
             fs.writeFileSync(configPath, sslConfig);
             
-            execSync(`openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout "${SSL_KEY_PATH}" -out "${SSL_CERT_PATH}" -config "${configPath}"`, { stdio: 'pipe' });
+            execFileSync('openssl', [
+                'req', '-x509', '-nodes', '-days', '3650',
+                '-newkey', 'rsa:2048',
+                '-keyout', SSL_KEY_PATH,
+                '-out', SSL_CERT_PATH,
+                '-config', configPath
+            ], { stdio: 'pipe' });
             fs.chmodSync(SSL_KEY_PATH, 0o600);
             fs.unlinkSync(configPath);
             
@@ -138,15 +144,6 @@ IP.2 = 127.0.0.1
         }
     }
 }
-ensureSSLCerts();
-
-// Initialize Express app
-const app = express();
-
-// Initialize session database
-initSessionDb();
-startSessionCleanup();
-
 // Ensure config directory exists
 const configDir = path.join(__dirname, 'config');
 if (!fs.existsSync(configDir)) {
@@ -154,6 +151,7 @@ if (!fs.existsSync(configDir)) {
 }
 
 // Ensure temp directories exist on storage (not eMMC)
+// IMPORTANT: Must run BEFORE ensureSSLCerts() which writes to /mnt/storage/.tmp/
 const storageTmpDirs = ['/mnt/storage/.tmp', '/mnt/storage/.uploads-tmp'];
 for (const dir of storageTmpDirs) {
     try {
@@ -165,6 +163,15 @@ for (const dir of storageTmpDirs) {
     }
 }
 
+ensureSSLCerts();
+
+// Initialize Express app
+const app = express();
+
+// Initialize session database
+initSessionDb();
+startSessionCleanup();
+
 // =============================================================================
 // MIDDLEWARE
 // =============================================================================
@@ -174,10 +181,11 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+            scriptSrc: ["'self'", "https://cdn.jsdelivr.net"],
+            scriptSrcAttr: ["'unsafe-inline'"], // Allow inline onclick handlers (limited scope)
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
-            imgSrc: ["'self'", "data:", "https://api.qrserver.com"],
+            imgSrc: ["'self'", "data:", "https://api.qrserver.com", "https://cdn.jsdelivr.net"],
             connectSrc: ["'self'", "ws:", "wss:", "https://cdn.jsdelivr.net"],
             frameAncestors: ["'none'"], // Prevent clickjacking
             upgradeInsecureRequests: null, // Allow HTTP for local network

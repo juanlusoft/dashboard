@@ -8,7 +8,7 @@
 const express = require('express');
 const router = express.Router();
 const fs = require('fs');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 
 const { requireAuth } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/rbac');
@@ -68,7 +68,7 @@ router.post('/reboot', requireAuth, requireAdmin, criticalLimiter, (req, res) =>
     res.json({ message: 'Rebooting...' });
 
     setTimeout(() => {
-        exec('reboot', (error) => {
+        execFile('reboot', [], (error) => {
             if (error) {
                 console.error('Reboot failed:', error.message);
             }
@@ -82,7 +82,7 @@ router.post('/shutdown', requireAuth, requireAdmin, criticalLimiter, (req, res) 
     res.json({ message: 'Shutting down...' });
 
     setTimeout(() => {
-        exec('shutdown -h now', (error) => {
+        execFile('shutdown', ['-h', 'now'], (error) => {
             if (error) {
                 console.error('Shutdown failed:', error.message);
             }

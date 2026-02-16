@@ -44,8 +44,28 @@ const criticalLimiter = rateLimit({
     message: { error: 'Too many critical actions, please try again later' }
 });
 
+/**
+ * Notification rate limiter - prevent spam via email/telegram
+ */
+const notificationLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20,
+    message: { error: 'Too many notification requests, please try again later' }
+});
+
+/**
+ * DDNS update rate limiter - prevent excessive API calls to providers
+ */
+const ddnsLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000, // 5 minutes
+    max: 10,
+    message: { error: 'Too many DDNS update requests, please try again later' }
+});
+
 module.exports = {
     generalLimiter,
     authLimiter,
-    criticalLimiter
+    criticalLimiter,
+    notificationLimiter,
+    ddnsLimiter
 };

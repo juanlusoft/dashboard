@@ -7,7 +7,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { exec, execSync, execFileSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const path = require('path');
 
 const { requireAuth } = require('../middleware/auth');
@@ -29,8 +29,26 @@ router.get('/check', requireAuth, async (req, res) => {
         let latestVersion = currentVersion;
         let updateAvailable = false;
         let changelog = '';
+        let localChanges = false;
+        let localChangesFiles = [];
 
         try {
+            // Check for local modifications FIRST
+            try {
+                const statusOutput = execFileSync('git', ['status', '--porcelain'], {
+                    cwd: INSTALL_DIR,
+                    encoding: 'utf8',
+                    timeout: 10000
+                }).trim();
+                
+                if (statusOutput) {
+                    localChanges = true;
+                    localChangesFiles = statusOutput.split('\n').slice(0, 5).map(l => l.trim());
+                }
+            } catch (e) {
+                console.error('Git status check failed:', e.message);
+            }
+
             // SECURITY: Use execFileSync with explicit arguments
             execFileSync('git', ['fetch', 'origin', '--quiet'], {
                 cwd: INSTALL_DIR,
@@ -83,6 +101,8 @@ router.get('/check', requireAuth, async (req, res) => {
             latestVersion,
             updateAvailable,
             changelog,
+            localChanges,
+            localChangesFiles,
             installDir: INSTALL_DIR
         });
     } catch (e) {
@@ -159,7 +179,8 @@ router.post('/apply', requireAuth, criticalLimiter, async (req, res) => {
 
             // 3. Restart service
             console.log('[UPDATE] Restarting HomePiNAS service...');
-            exec('sudo systemctl restart homepinas', (error) => {
+            const { execFile } = require('child_process');
+            execFile('sudo', ['systemctl', 'restart', 'homepinas'], (error) => {
                 if (error) {
                     console.error('[UPDATE] Restart failed:', error.message);
                 } else {

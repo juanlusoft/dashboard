@@ -13,7 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const { requireAuth } = require('../middleware/auth');
 const { logSecurityEvent } = require('../utils/security');
-const { sanitizeString } = require('../utils/sanitize');
+// sanitize.js functions available if needed
 
 const execFileAsync = promisify(execFile);
 const readFileAsync = promisify(fs.readFile);
@@ -336,8 +336,8 @@ router.get('/file', async (req, res) => {
     const resolvedPath = path.resolve(baseDir, filePath);
 
     if (!resolvedPath.startsWith(baseDir + '/') && resolvedPath !== baseDir) {
-      logSecurityEvent('logs', 'directory_traversal_attempt', {
-        user: req.user.username,
+      logSecurityEvent('DIRECTORY_TRAVERSAL_ATTEMPT', req.user.username, {
+        ip: req.ip,
         requestedPath: filePath,
         resolvedPath: resolvedPath
       });

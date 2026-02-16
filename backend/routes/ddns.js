@@ -8,6 +8,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
+const { ddnsLimiter } = require('../middleware/rateLimit');
 const { logSecurityEvent } = require('../utils/security');
 const { getData, saveData } = require('../utils/data');
 
@@ -448,7 +449,7 @@ router.delete('/services/:id', (req, res) => {
 /**
  * POST /services/:id/update - Force an IP update for a specific service
  */
-router.post('/services/:id/update', async (req, res) => {
+router.post('/services/:id/update', ddnsLimiter, async (req, res) => {
   try {
     const data = getData();
     if (!data.network) data.network = {};

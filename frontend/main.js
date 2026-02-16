@@ -272,7 +272,7 @@ async function authFetch(url, options = {}) {
         state.isAuthenticated = false;
         state.sessionId = null;
         state.user = null;
-        localStorage.removeItem('sessionId');
+        sessionStorage.removeItem('sessionId');
         switchView('login');
         throw new Error('Session expired');
     }
@@ -283,16 +283,16 @@ async function authFetch(url, options = {}) {
 // Session persistence
 function saveSession(sessionId, csrfToken = null) {
     state.sessionId = sessionId;
-    localStorage.setItem('sessionId', sessionId);
+    sessionStorage.setItem('sessionId', sessionId);
     if (csrfToken) {
         state.csrfToken = csrfToken;
-        localStorage.setItem('csrfToken', csrfToken);
+        sessionStorage.setItem('csrfToken', csrfToken);
     }
 }
 
 function loadSession() {
-    const sessionId = localStorage.getItem('sessionId');
-    const csrfToken = localStorage.getItem('csrfToken');
+    const sessionId = sessionStorage.getItem('sessionId');
+    const csrfToken = sessionStorage.getItem('csrfToken');
     if (sessionId) {
         state.sessionId = sessionId;
     }
@@ -307,8 +307,8 @@ function clearSession() {
     state.csrfToken = null;
     state.user = null;
     state.isAuthenticated = false;
-    localStorage.removeItem('sessionId');
-    localStorage.removeItem('csrfToken');
+    sessionStorage.removeItem('sessionId');
+    sessionStorage.removeItem('csrfToken');
 }
 
 // DOM Elements
@@ -331,7 +331,7 @@ const viewsMap = {
     'active-directory': 'Active Directory',
     'cloud-sync': 'Cloud Sync',
     'cloud-backup': 'Cloud Backup',
-    'homestore': 'HomeStore',
+    'homestore': '🏪 HomeStore',
     'logs': 'Visor de Logs',
     'users': 'Gestión de Usuarios',
     'system': 'Administración del Sistema'
@@ -503,14 +503,19 @@ function stopGlobalPolling() {
 // Public IP Tracker
 async function updatePublicIP() {
     const val = document.getElementById('public-ip-val');
-    // TODO: Replace with real API endpoint (e.g. authFetch(`${API_BASE}/network/public-ip`))
-    // const mockIps = ['84.120.45.122', '84.120.45.123', '84.120.45.124'];
-    // state.publicIP = mockIps[Math.floor(Math.random() * mockIps.length)];
-    state.publicIP = 'N/A';
+    try {
+        const res = await authFetch(`${API_BASE}/ddns/public-ip`);
+        if (res.ok) {
+            const data = await res.json();
+            state.publicIP = data.ip || 'N/A';
+        } else {
+            state.publicIP = 'N/A';
+        }
+    } catch (e) {
+        console.warn('Could not fetch public IP:', e);
+        state.publicIP = 'N/A';
+    }
     if (val) val.textContent = state.publicIP;
-
-    // Don't re-render network view on IP update - causes duplicate cards
-    // The network view already has the IP displayed
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1403,11 +1408,12 @@ async function detectDisksForWizard() {
                 <div class="wizard-no-disks">
                     <div class="wizard-no-disks-icon">💿</div>
                     <p>${t('wizard.noDisks', 'No se detectaron discos disponibles')}</p>
-                    <button class="wizard-btn wizard-btn-next" onclick="detectDisksForWizard()" style="margin-top: 16px;">
+                    <button class="wizard-btn wizard-btn-next" data-action="retry-detect" style="margin-top: 16px;">
                         🔄 ${t('wizard.retry', 'Reintentar')}
                     </button>
                 </div>
             `;
+            detectionContainer.querySelector('[data-action="retry-detect"]')?.addEventListener('click', () => detectDisksForWizard());
             return;
         }
         
@@ -1446,11 +1452,12 @@ async function detectDisksForWizard() {
             <div class="wizard-no-disks">
                 <div class="wizard-no-disks-icon">❌</div>
                 <p>${t('wizard.detectionError', 'Error al detectar discos')}</p>
-                <button class="wizard-btn wizard-btn-next" onclick="detectDisksForWizard()" style="margin-top: 16px;">
+                <button class="wizard-btn wizard-btn-next" data-action="retry-detect" style="margin-top: 16px;">
                     🔄 ${t('wizard.retry', 'Reintentar')}
                 </button>
             </div>
         `;
+        detectionContainer.querySelector('[data-action="retry-detect"]')?.addEventListener('click', () => detectDisksForWizard());
     }
 }
 
@@ -2548,7 +2555,7 @@ async function renderDashboard() {
     // Fetch fan mode
     let fanMode = 'balanced';
     try {
-        const fanModeRes = await fetch(`${API_BASE}/system/fan/mode`);
+        const fanModeRes = await authFetch(`${API_BASE}/system/fan/mode`);
         if (fanModeRes.ok) {
             const fanModeData = await fanModeRes.json();
             fanMode = fanModeData.mode || 'balanced';
@@ -2560,15 +2567,15 @@ async function renderDashboard() {
     // Generate fan mode selector HTML (only mode buttons, no RPM display)
     const fansFullHtml = `
         <div class="fan-mode-selector">
-            <button class="fan-mode-btn ${fanMode === 'silent' ? 'active' : ''}" data-mode="silent" onclick="setFanMode('silent')">
+            <button class="fan-mode-btn ${fanMode === 'silent' ? 'active' : ''}" data-mode="silent">
                 <span class="mode-icon">🤫</span>
                 <span class="mode-name">Silent</span>
             </button>
-            <button class="fan-mode-btn ${fanMode === 'balanced' ? 'active' : ''}" data-mode="balanced" onclick="setFanMode('balanced')">
+            <button class="fan-mode-btn ${fanMode === 'balanced' ? 'active' : ''}" data-mode="balanced">
                 <span class="mode-icon">⚖️</span>
                 <span class="mode-name">Balanced</span>
             </button>
-            <button class="fan-mode-btn ${fanMode === 'performance' ? 'active' : ''}" data-mode="performance" onclick="setFanMode('performance')">
+            <button class="fan-mode-btn ${fanMode === 'performance' ? 'active' : ''}" data-mode="performance">
                 <span class="mode-icon">🚀</span>
                 <span class="mode-name">Performance</span>
             </button>
@@ -2710,6 +2717,11 @@ async function renderDashboard() {
             </div>
         </div>
     `;
+
+    // Add fan mode button event listeners
+    dashboardContent.querySelectorAll('.fan-mode-btn[data-mode]').forEach(btn => {
+        btn.addEventListener('click', () => setFanMode(btn.dataset.mode));
+    });
 }
 
 // Fan speed control - update percentage display while dragging
@@ -4408,6 +4420,17 @@ async function checkForUpdates() {
             throw new Error(data.error || t('common.error', 'Error al buscar actualizaciones'));
         }
 
+        // Warning for local changes
+        const localChangesWarning = data.localChanges ? `
+            <div style="margin-top: 12px; padding: 10px; background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; border-radius: 8px;">
+                <div style="color: #f59e0b; font-weight: 600;">⚠️ Cambios locales detectados</div>
+                <div style="margin-top: 4px; font-size: 0.85rem; color: var(--text-dim);">
+                    Hay archivos modificados localmente. La actualización hará <code>git reset --hard</code> y perderás estos cambios:
+                </div>
+                <code style="display: block; margin-top: 5px; padding: 6px; background: rgba(0,0,0,0.2); border-radius: 4px; font-size: 0.8rem;">${escapeHtml((data.localChangesFiles || []).join('\n'))}</code>
+            </div>
+        ` : '';
+
         if (data.updateAvailable) {
             statusEl.innerHTML = `
                 <div style="color: #10b981; font-weight: 600;">${t('system.updateAvailable', '¡Actualización Disponible!')}</div>
@@ -4419,6 +4442,7 @@ async function checkForUpdates() {
                     <strong>${t('system.changes', 'Cambios')}:</strong><br>
                     <code style="display: block; margin-top: 5px; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 4px; white-space: pre-wrap;">${escapeHtml(data.changelog || t('common.info', 'Ver GitHub para detalles'))}</code>
                 </div>
+                ${localChangesWarning}
             `;
             if (applyBtn) applyBtn.style.display = 'inline-block';
         } else {
@@ -4427,6 +4451,7 @@ async function checkForUpdates() {
                 <div style="margin-top: 8px; color: var(--text-dim);">
                     ${t('system.version', 'Versión')}: <strong>v${escapeHtml(data.currentVersion)}</strong>
                 </div>
+                ${localChangesWarning}
             `;
         }
     } catch (e) {
@@ -4543,16 +4568,77 @@ if (resetBtn) {
 }
 
 
-// Logout handler
-const logoutBtn = document.getElementById("logout-btn");
-if (logoutBtn) {
-    logoutBtn.addEventListener("click", async () => {
+// Power menu handler (logout, reboot, shutdown)
+const powerBtn = document.getElementById("power-btn");
+const powerDropdown = document.getElementById("power-dropdown");
+if (powerBtn && powerDropdown) {
+    // Toggle dropdown
+    powerBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isOpen = powerDropdown.style.display !== 'none';
+        powerDropdown.style.display = isOpen ? 'none' : 'block';
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener("click", () => {
+        powerDropdown.style.display = 'none';
+    });
+    powerDropdown.addEventListener("click", (e) => e.stopPropagation());
+
+    // Hover effect for options
+    powerDropdown.querySelectorAll('.power-option').forEach(opt => {
+        opt.addEventListener('mouseover', () => { opt.style.background = 'var(--hover-bg, rgba(0,0,0,0.05))'; });
+        opt.addEventListener('mouseout', () => { opt.style.background = 'none'; });
+    });
+
+    // Logout
+    document.getElementById("power-logout").addEventListener("click", async () => {
+        powerDropdown.style.display = 'none';
         const confirmed = await showConfirmModal('Cerrar sesión', '¿Seguro que quieres cerrar sesión?');
         if (confirmed) {
             clearSession();
             state.isAuthenticated = false;
             state.user = null;
             window.location.reload();
+        }
+    });
+
+    // Reboot
+    document.getElementById("power-reboot").addEventListener("click", async () => {
+        powerDropdown.style.display = 'none';
+        const confirmed = await showConfirmModal('Reiniciar sistema', '¿Seguro que quieres reiniciar el sistema? Se perderán todas las conexiones activas.');
+        if (confirmed) {
+            try {
+                const res = await authFetch(`${API_BASE}/power/reboot`, { method: 'POST' });
+                if (res.ok) {
+                    showNotification('Sistema reiniciando... La página se recargará en 60 segundos.', 'success', 10000);
+                    setTimeout(() => window.location.reload(), 60000);
+                } else {
+                    const data = await res.json();
+                    showNotification(data.error || 'Error al reiniciar', 'error');
+                }
+            } catch (e) {
+                showNotification('Error al reiniciar: ' + e.message, 'error');
+            }
+        }
+    });
+
+    // Shutdown
+    document.getElementById("power-shutdown").addEventListener("click", async () => {
+        powerDropdown.style.display = 'none';
+        const confirmed = await showConfirmModal('Apagar sistema', '⚠️ ¿Seguro que quieres APAGAR el sistema? Necesitarás acceso físico para volver a encenderlo.');
+        if (confirmed) {
+            try {
+                const res = await authFetch(`${API_BASE}/power/shutdown`, { method: 'POST' });
+                if (res.ok) {
+                    showNotification('Sistema apagándose...', 'warning', 10000);
+                } else {
+                    const data = await res.json();
+                    showNotification(data.error || 'Error al apagar', 'error');
+                }
+            } catch (e) {
+                showNotification('Error al apagar: ' + e.message, 'error');
+            }
         }
     });
 }
@@ -4732,6 +4818,8 @@ function openTerminal(command = 'bash', title = 'Terminal') {
         }
 
         // Connect WebSocket
+        // NOTE: WebSocket API does not support custom headers during handshake.
+        // Token in query string is the standard pattern for WS auth (wss:// encrypts the URL).
         const sessionId = `term-${Date.now()}`;
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${wsProtocol}//${window.location.host}/api/terminal/ws?sessionId=${sessionId}&command=${encodeURIComponent(command)}&token=${state.sessionId}`;
@@ -5025,11 +5113,54 @@ let fmSelectedFiles = new Set(); // Set of full file paths for multi-select
 let fmCurrentFiles = []; // current loaded file list for reference
 let fmClipboard = { action: null, files: [] }; // { action: 'copy'|'cut', files: [{path, name}] }
 
+// Thumbnail loading queue — limits concurrent downloads to avoid overwhelming the Pi
+const _thumbBlobUrls = []; // Track blob URLs for cleanup
+let _thumbQueueActive = 0;
+const _thumbQueuePending = [];
+const THUMB_MAX_CONCURRENT = 3;
+
+function _cleanupThumbBlobs() {
+    while (_thumbBlobUrls.length > 0) {
+        URL.revokeObjectURL(_thumbBlobUrls.pop());
+    }
+    _thumbQueuePending.length = 0;
+    _thumbQueueActive = 0;
+}
+
+function _enqueueThumbLoad(thumb, url) {
+    _thumbQueuePending.push({ thumb, url });
+    _processThumbQueue();
+}
+
+function _processThumbQueue() {
+    while (_thumbQueueActive < THUMB_MAX_CONCURRENT && _thumbQueuePending.length > 0) {
+        const { thumb, url } = _thumbQueuePending.shift();
+        _thumbQueueActive++;
+        authFetch(url)
+            .then(r => r.ok ? r.blob() : null)
+            .then(blob => {
+                if (blob && thumb.isConnected) {
+                    const blobUrl = URL.createObjectURL(blob);
+                    _thumbBlobUrls.push(blobUrl);
+                    thumb.src = blobUrl;
+                }
+            })
+            .catch(() => {})
+            .finally(() => {
+                _thumbQueueActive--;
+                _processThumbQueue();
+            });
+    }
+}
+
 async function renderFilesView() {
     // ══════════════════════════════════════════════════════════════════════════
     // FILE MANAGER - SYNOLOGY STYLE LAYOUT
     // ══════════════════════════════════════════════════════════════════════════
     
+    // Revoke previous thumbnail blob URLs to prevent memory leaks
+    _cleanupThumbBlobs();
+
     // Clear previous content to avoid duplicates
     dashboardContent.innerHTML = '';
     
@@ -5132,12 +5263,23 @@ async function renderFilesView() {
     bulkBar.style.display = 'none';
     bulkBar.innerHTML = `
         <span class="fm-bulk-count" id="fm-bulk-count">0 seleccionados</span>
-        <button class="fm-bulk-btn" onclick="fmBulkDownload()" title="Descargar seleccionados"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Descargar</button>
-        <button class="fm-bulk-btn" onclick="fmBulkCopy()" title="Copiar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copiar</button>
-        <button class="fm-bulk-btn" onclick="fmBulkCut()" title="Mover"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg> Mover</button>
-        <button class="fm-bulk-btn fm-bulk-btn-danger" onclick="fmBulkDelete()" title="Eliminar seleccionados"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg> Eliminar</button>
-        <button class="fm-bulk-btn" onclick="fmClearSelection()" title="Deseleccionar">✕ Limpiar</button>
+        <button class="fm-bulk-btn" data-action="bulk-download" title="Descargar seleccionados"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Descargar</button>
+        <button class="fm-bulk-btn" data-action="bulk-copy" title="Copiar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copiar</button>
+        <button class="fm-bulk-btn" data-action="bulk-cut" title="Mover"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg> Mover</button>
+        <button class="fm-bulk-btn fm-bulk-btn-danger" data-action="bulk-delete" title="Eliminar seleccionados"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg> Eliminar</button>
+        <button class="fm-bulk-btn" data-action="bulk-clear" title="Deseleccionar">✕ Limpiar</button>
     `;
+    bulkBar.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        switch (btn.dataset.action) {
+            case 'bulk-download': fmBulkDownload(); break;
+            case 'bulk-copy': fmBulkCopy(); break;
+            case 'bulk-cut': fmBulkCut(); break;
+            case 'bulk-delete': fmBulkDelete(); break;
+            case 'bulk-clear': fmClearSelection(); break;
+        }
+    });
     toolbar.appendChild(bulkBar);
 
     // Paste bar (when clipboard has items)
@@ -5146,9 +5288,11 @@ async function renderFilesView() {
         pasteBar.className = 'fm-paste-bar';
         pasteBar.innerHTML = `
             <span>📋 ${fmClipboard.files.length} archivo(s) en portapapeles (${fmClipboard.action === 'copy' ? 'copiar' : 'mover'})</span>
-            <button class="btn-primary btn-sm" onclick="fmPaste()">📋 Pegar aquí</button>
-            <button class="fm-bulk-btn" onclick="fmClipboard={action:null,files:[]};renderFilesView()">✕ Cancelar</button>
+            <button class="btn-primary btn-sm" data-action="paste">📋 Pegar aquí</button>
+            <button class="fm-bulk-btn" data-action="clear-clipboard">✕ Cancelar</button>
         `;
+        pasteBar.querySelector('[data-action="paste"]').addEventListener('click', () => fmPaste());
+        pasteBar.querySelector('[data-action="clear-clipboard"]').addEventListener('click', () => { fmClipboard = {action: null, files: []}; renderFilesView(); });
         toolbar.appendChild(pasteBar);
     }
 
@@ -5197,7 +5341,7 @@ async function renderFilesView() {
         const tableHeader = document.createElement('div');
         tableHeader.className = 'fm-table-header';
         tableHeader.innerHTML = `
-            <label class="fm-checkbox-wrap"><input type="checkbox" id="fm-select-all" onchange="fmToggleSelectAll(this.checked)"><span class="fm-checkbox-custom"></span></label>
+            <label class="fm-checkbox-wrap"><input type="checkbox" id="fm-select-all"><span class="fm-checkbox-custom"></span></label>
             <span></span>
             <span>Nombre</span>
             <span>Tamaño</span>
@@ -5205,6 +5349,7 @@ async function renderFilesView() {
             <span class="fm-hide-mobile">Permisos</span>
             <span></span>
         `;
+        tableHeader.querySelector('#fm-select-all').addEventListener('change', function() { fmToggleSelectAll(this.checked); });
         content.appendChild(tableHeader);
     }
 
@@ -5514,7 +5659,8 @@ function renderFilesList(container, files, filePath) {
 
         const checkbox = document.createElement('label');
         checkbox.className = 'fm-checkbox-wrap';
-        checkbox.innerHTML = `<input type="checkbox" ${isSelected ? 'checked' : ''} onchange="fmToggleSelect('${fullPath.replace(/'/g, "\\'")}', this.checked)"><span class="fm-checkbox-custom"></span>`;
+        checkbox.innerHTML = `<input type="checkbox" ${isSelected ? 'checked' : ''} data-path="${fullPath.replace(/"/g, '&quot;')}"><span class="fm-checkbox-custom"></span>`;
+        checkbox.querySelector('input').addEventListener('change', function() { fmToggleSelect(this.dataset.path, this.checked); });
         checkbox.addEventListener('click', (e) => e.stopPropagation());
 
         const iconWrap = document.createElement('span');
@@ -5606,22 +5752,24 @@ function renderFilesGrid(container, files, filePath) {
 
         const checkbox = document.createElement('label');
         checkbox.className = 'fm-checkbox-wrap fm-grid-checkbox';
-        checkbox.innerHTML = `<input type="checkbox" ${isSelected ? 'checked' : ''} onchange="fmToggleSelect('${fullPath.replace(/'/g, "\\'")}', this.checked)"><span class="fm-checkbox-custom"></span>`;
+        checkbox.innerHTML = `<input type="checkbox" ${isSelected ? 'checked' : ''} data-path="${fullPath.replace(/"/g, '&quot;')}"><span class="fm-checkbox-custom"></span>`;
+        checkbox.querySelector('input').addEventListener('change', function() { fmToggleSelect(this.dataset.path, this.checked); });
         checkbox.addEventListener('click', (e) => e.stopPropagation());
 
         const iconArea = document.createElement('div');
         iconArea.className = 'fm-grid-icon';
 
-        // For images, show thumbnail
+        // For images, show thumbnail (fetch via headers to avoid sessionId in URL)
         const ext = file.name.split('.').pop().toLowerCase();
         const imgExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'];
         if (file.type !== 'directory' && imgExts.includes(ext)) {
             const thumb = document.createElement('img');
             thumb.className = 'fm-grid-thumb';
-            thumb.src = `${API_BASE}/files/download?path=${encodeURIComponent(fullPath)}&sessionId=${state.sessionId}`;
             thumb.alt = file.name;
             thumb.loading = 'lazy';
             iconArea.appendChild(thumb);
+            // Enqueue thumbnail load (throttled to THUMB_MAX_CONCURRENT)
+            _enqueueThumbLoad(thumb, `${API_BASE}/files/download?path=${encodeURIComponent(fullPath)}`);
         } else {
             iconArea.innerHTML = file.type === 'directory' ? getFolderSVG(48) : getFileIconSVG(file.name, 48);
         }
@@ -5872,7 +6020,7 @@ async function handleFileUpload(e) {
                             const data = await refreshRes.json();
                             if (data.csrfToken) {
                                 state.csrfToken = data.csrfToken;
-                                localStorage.setItem('csrfToken', data.csrfToken);
+                                sessionStorage.setItem('csrfToken', data.csrfToken);
                                 console.log('CSRF token refreshed, retrying upload...');
                                 await doUpload();
                             } else {
@@ -5881,7 +6029,7 @@ async function handleFileUpload(e) {
                         } else {
                             // Session invalid, force re-login
                             clearSession();
-                            showView('login');
+                            switchView('login');
                             throw new Error('Session expired');
                         }
                     } catch (refreshErr) {
@@ -5953,7 +6101,6 @@ function fmPreviewFile(file, basePath) {
 
     const overlay = document.createElement('div');
     overlay.className = 'fm-preview-overlay';
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
     const modal = document.createElement('div');
     modal.className = 'fm-preview-modal';
@@ -5979,8 +6126,8 @@ function fmPreviewFile(file, basePath) {
     closeBtn.className = 'fm-action-btn';
     closeBtn.title = 'Cerrar';
     closeBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-    closeBtn.addEventListener('click', () => overlay.remove());
-    
+    // closeBtn click handler set after closePreview is defined (below)
+
     actionsDiv.appendChild(downloadBtn);
     actionsDiv.appendChild(closeBtn);
     header.appendChild(titleSpan);
@@ -5990,19 +6137,47 @@ function fmPreviewFile(file, basePath) {
     const body = document.createElement('div');
     body.className = 'fm-preview-body';
 
-    const fileUrl = `${API_BASE}/files/download?path=${encodeURIComponent(fullPath)}&sessionId=${state.sessionId}`;
+    const fileEndpoint = `${API_BASE}/files/download?path=${encodeURIComponent(fullPath)}`;
+    let _previewBlobUrl = null; // Track for cleanup on close
+
+    // Helper: fetch file via authFetch (headers) and create blob URL — avoids leaking sessionId in URL
+    function loadPreviewBlob(callback) {
+        body.innerHTML = '<div class="fm-preview-loading"><div class="fm-spinner"></div></div>';
+        authFetch(fileEndpoint)
+            .then(r => r.ok ? r.blob() : Promise.reject('Download failed'))
+            .then(blob => {
+                _previewBlobUrl = URL.createObjectURL(blob);
+                callback(_previewBlobUrl);
+            })
+            .catch(() => {
+                body.innerHTML = '<p style="color:#ef4444;text-align:center">Error al cargar el archivo</p>';
+            });
+    }
+
+    function closePreview() {
+        if (_previewBlobUrl) { URL.revokeObjectURL(_previewBlobUrl); _previewBlobUrl = null; }
+        overlay.remove();
+    }
 
     if (imgExts.includes(ext)) {
-        body.innerHTML = `<img src="${fileUrl}" alt="${file.name}" class="fm-preview-image" />`;
+        loadPreviewBlob(url => {
+            body.innerHTML = `<img src="${url}" alt="${escapeHtml(file.name)}" class="fm-preview-image" />`;
+        });
     } else if (videoExts.includes(ext)) {
-        body.innerHTML = `<video controls autoplay class="fm-preview-video"><source src="${fileUrl}"></video>`;
+        loadPreviewBlob(url => {
+            body.innerHTML = `<video controls autoplay class="fm-preview-video"><source src="${url}"></video>`;
+        });
     } else if (audioExts.includes(ext)) {
-        body.innerHTML = `<div class="fm-preview-audio-wrap">${getFileIconSVG(file.name, 80)}<audio controls autoplay style="width:100%;margin-top:20px"><source src="${fileUrl}"></audio></div>`;
+        loadPreviewBlob(url => {
+            body.innerHTML = `<div class="fm-preview-audio-wrap">${getFileIconSVG(file.name, 80)}<audio controls autoplay style="width:100%;margin-top:20px"><source src="${url}"></audio></div>`;
+        });
     } else if (ext === 'pdf') {
-        body.innerHTML = `<iframe src="${fileUrl}" class="fm-preview-pdf"></iframe>`;
+        loadPreviewBlob(url => {
+            body.innerHTML = `<iframe src="${url}" class="fm-preview-pdf"></iframe>`;
+        });
     } else if (textExts.includes(ext)) {
         body.innerHTML = '<div class="fm-preview-loading"><div class="fm-spinner"></div></div>';
-        fetch(fileUrl).then(r => r.text()).then(text => {
+        authFetch(fileEndpoint).then(r => r.text()).then(text => {
             const pre = document.createElement('pre');
             pre.className = 'fm-preview-code';
             pre.textContent = text.slice(0, 100000); // Limit to 100KB
@@ -6038,8 +6213,10 @@ function fmPreviewFile(file, basePath) {
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
 
-    // Close on Escape
-    const escHandler = (e) => { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', escHandler); } };
+    // Wire up close handlers (closePreview revokes blob URLs)
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) closePreview(); });
+    closeBtn.addEventListener('click', () => closePreview());
+    const escHandler = (e) => { if (e.key === 'Escape') { closePreview(); document.removeEventListener('keydown', escHandler); } };
     document.addEventListener('keydown', escHandler);
 }
 
@@ -6157,10 +6334,16 @@ window.fmPaste = fmPaste;
 async function createNewFolder() {
     const name = prompt('Nombre de la carpeta:');
     if (!name) return;
+    // Validate folder name: no path traversal or special chars
+    const trimmed = name.trim();
+    if (!trimmed || trimmed.includes('/') || trimmed.includes('\\') || trimmed === '.' || trimmed === '..' || trimmed.includes('\0')) {
+        alert('Nombre de carpeta no válido. No puede contener / \\ ni ser . o ..');
+        return;
+    }
     try {
         const res = await authFetch(`${API_BASE}/files/mkdir`, {
             method: 'POST',
-            body: JSON.stringify({ path: currentFilePath + '/' + name })
+            body: JSON.stringify({ path: currentFilePath + '/' + trimmed })
         });
         if (!res.ok) throw new Error('Failed');
         await loadFiles(currentFilePath);
@@ -6170,7 +6353,22 @@ async function createNewFolder() {
 }
 
 async function downloadFile(filePath) {
-    window.open(`${API_BASE}/files/download?path=${encodeURIComponent(filePath)}&sessionId=${state.sessionId}`, '_blank');
+    // Don't expose sessionId in URL - use header-based auth via fetch + blob
+    try {
+        const res = await authFetch(`${API_BASE}/files/download?path=${encodeURIComponent(filePath)}`);
+        if (!res.ok) throw new Error('Download failed');
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filePath.split('/').pop() || 'download';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        alert('Error al descargar archivo');
+    }
 }
 
 async function deleteFile(filePath, name) {
@@ -6191,11 +6389,17 @@ async function deleteFile(filePath, name) {
 async function renameFile(filePath, oldName) {
     const newName = prompt('Nuevo nombre:', oldName);
     if (!newName || newName === oldName) return;
+    // Validate new name: no path traversal or special chars
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed.includes('/') || trimmed.includes('\\') || trimmed === '.' || trimmed === '..' || trimmed.includes('\0')) {
+        alert('Nombre no válido. No puede contener / \\ ni ser . o ..');
+        return;
+    }
     const dir = filePath.substring(0, filePath.lastIndexOf('/'));
     try {
         const res = await authFetch(`${API_BASE}/files/rename`, {
             method: 'POST',
-            body: JSON.stringify({ oldPath: filePath, newPath: dir + '/' + newName })
+            body: JSON.stringify({ oldPath: filePath, newPath: dir + '/' + trimmed })
         });
         if (!res.ok) throw new Error('Failed');
         await loadFiles(currentFilePath);
@@ -6572,7 +6776,7 @@ async function setup2FA() {
                 <div style="background: var(--bg-card); padding: 20px; border-radius: 12px; display: inline-block; margin-bottom: 15px; border: 1px solid var(--border);">
                     <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 10px;">Introduce esta clave manualmente en tu app de autenticaci\u00f3n:</p>
                     <code id="totp-secret-display" style="display: block; background: var(--bg-hover); padding: 12px 16px; border-radius: 8px; font-size: 1.1rem; letter-spacing: 2px; word-break: break-all; user-select: all; cursor: text; color: var(--primary); font-weight: 600;">${escapeHtml(data.secret)}</code>
-                    <button onclick="navigator.clipboard.writeText(document.getElementById('totp-secret-display').textContent).then(() => this.textContent = '\u2713 Copiado').catch(() => {})" style="margin-top: 10px; padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-hover); color: var(--text); cursor: pointer; font-size: 0.85rem;">Copiar clave</button>
+                    <button id="totp-copy-btn" style="margin-top: 10px; padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-hover); color: var(--text); cursor: pointer; font-size: 0.85rem;">Copiar clave</button>
                 </div>
                 <p style="font-size: 0.8rem; color: var(--text-dim); word-break: break-all; margin-bottom: 20px;">Account: ${escapeHtml(data.uri ? new URL(data.uri).pathname.replace(/^\/\/totp\//, '') : '')}</p>
                 <div style="display: flex; gap: 10px; justify-content: center; align-items: center;">
@@ -6581,6 +6785,12 @@ async function setup2FA() {
                 </div>
             </div>
         `;
+
+        document.getElementById('totp-copy-btn')?.addEventListener('click', function() {
+            navigator.clipboard.writeText(document.getElementById('totp-secret-display').textContent)
+                .then(() => { this.textContent = '\u2713 Copiado'; })
+                .catch(() => {});
+        });
 
         document.getElementById('verify-totp-btn').addEventListener('click', async () => {
             const token = document.getElementById('totp-verify-code').value.trim();
@@ -8291,8 +8501,9 @@ function showAddDeviceForm(editDevice = null) {
                             <div style="background: #0a0a0a; color: #10b981; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 0.75rem; word-break: break-all; white-space: pre-wrap; position: relative;">${escapeHtml(step.command)}</div>
                         </div>
                     `).join('')}
-                    <button class="btn-primary btn-sm" style="margin-top: 5px;" onclick="this.closest('.modal').remove()">Entendido, cerrar</button>
+                    <button class="btn-primary btn-sm" data-action="close-modal" style="margin-top: 5px;">Entendido, cerrar</button>
                 `;
+                info.querySelector('[data-action="close-modal"]')?.addEventListener('click', function() { this.closest('.modal').remove(); });
                 document.getElementById('ab-device-form').style.display = 'none';
             } else if (!isEdit && !isImage && data.sshPublicKey) {
                 // Show SSH key instructions
@@ -8303,9 +8514,14 @@ function showAddDeviceForm(editDevice = null) {
                     <div style="background: #0a0a0a; color: #10b981; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 0.8rem; word-break: break-all; margin-bottom: 10px;">
                         <code id="ab-ssh-cmd">mkdir -p ~/.ssh && echo '${escapeHtml(data.sshPublicKey)}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys</code>
                     </div>
-                    <button class="btn-primary btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('ab-ssh-cmd').textContent);this.textContent='✅ Copiado'">📋 Copiar comando</button>
-                    <button class="btn-primary btn-sm" style="margin-left: 8px; background: #6366f1;" onclick="this.closest('.modal').remove()">Listo, cerrar</button>
+                    <button class="btn-primary btn-sm" data-action="copy-ssh-cmd">📋 Copiar comando</button>
+                    <button class="btn-primary btn-sm" data-action="close-modal" style="margin-left: 8px; background: #6366f1;">Listo, cerrar</button>
                 `;
+                info.querySelector('[data-action="copy-ssh-cmd"]')?.addEventListener('click', function() {
+                    navigator.clipboard.writeText(document.getElementById('ab-ssh-cmd').textContent);
+                    this.textContent = '✅ Copiado';
+                });
+                info.querySelector('[data-action="close-modal"]')?.addEventListener('click', function() { this.closest('.modal').remove(); });
                 document.getElementById('ab-device-form').style.display = 'none';
             } else {
                 modal.remove();
@@ -8356,14 +8572,14 @@ async function showABInstructions(device) {
             <div class="glass-card modal-content" style="max-width: 600px; width: 90%; max-height: 85vh; overflow-y: auto;">
                 <header class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
                     <h3>💽 ${escapeHtml(instr.title)}</h3>
-                    <button class="btn-close" onclick="this.closest('.modal').remove()">&times;</button>
+                    <button class="btn-close" data-action="close-modal">&times;</button>
                 </header>
                 <div style="margin-top: 15px;">
                     ${instr.steps.map(step => `
                         <div style="margin-bottom: 18px;">
                             <p style="font-weight: 600; font-size: 0.9rem; margin-bottom: 6px;">${escapeHtml(step.title)}</p>
                             <p style="font-size: 0.82rem; color: var(--text-dim); margin-bottom: 8px;">${escapeHtml(step.description)}</p>
-                            <div style="background: #0a0a0a; color: #10b981; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 0.75rem; word-break: break-all; white-space: pre-wrap; cursor: pointer; position: relative;" onclick="navigator.clipboard.writeText(this.textContent.trim());this.style.border='1px solid #10b981';setTimeout(()=>this.style.border='',1000)" title="Click para copiar">${escapeHtml(step.command)}</div>
+                            <div class="ab-copy-cmd" style="background: #0a0a0a; color: #10b981; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 0.75rem; word-break: break-all; white-space: pre-wrap; cursor: pointer; position: relative;" title="Click para copiar">${escapeHtml(step.command)}</div>
                         </div>
                     `).join('')}
                 </div>
@@ -8371,6 +8587,14 @@ async function showABInstructions(device) {
         `;
 
         document.body.appendChild(modal);
+        modal.querySelector('[data-action="close-modal"]')?.addEventListener('click', () => modal.remove());
+        modal.querySelectorAll('.ab-copy-cmd').forEach(el => {
+            el.addEventListener('click', () => {
+                navigator.clipboard.writeText(el.textContent.trim());
+                el.style.border = '1px solid #10b981';
+                setTimeout(() => { el.style.border = ''; }, 1000);
+            });
+        });
         modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
     } catch(e) {
         alert('Error al cargar instrucciones');
@@ -8392,12 +8616,13 @@ async function openABImageBrowse(device) {
         panel.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <h3>💽 ${escapeHtml(device.name)} — Imágenes de Backup</h3>
-                <button class="btn-close" style="font-size: 1.5rem;" onclick="document.getElementById('ab-detail-panel').style.display='none'">&times;</button>
+                <button class="btn-close" data-action="close-panel" style="font-size: 1.5rem;">&times;</button>
             </div>
             <div style="margin-bottom: 10px; font-size: 0.85rem; color: var(--text-dim);">
                 Tamaño total: <strong>${formatABSize(data.totalSize || 0)}</strong>
             </div>
         `;
+        panel.querySelector('[data-action="close-panel"]')?.addEventListener('click', () => { document.getElementById('ab-detail-panel').style.display = 'none'; });
 
         if (allItems.length === 0) {
             panel.innerHTML += `
@@ -8504,15 +8729,16 @@ async function openABBrowse(device) {
             panel.innerHTML = `
                 <h3 style="margin-bottom: 15px;">📂 ${escapeHtml(device.name)} — Sin backups</h3>
                 <p style="color: var(--text-dim);">Ejecuta un backup primero para poder explorar archivos.</p>
-                <button class="btn-primary btn-sm" style="margin-top: 10px;" onclick="document.getElementById('ab-detail-panel').style.display='none'">Cerrar</button>
+                <button class="btn-primary btn-sm" data-action="close-panel" style="margin-top: 10px;">Cerrar</button>
             `;
+            panel.querySelector('[data-action="close-panel"]')?.addEventListener('click', () => { document.getElementById('ab-detail-panel').style.display = 'none'; });
             return;
         }
 
         panel.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <h3>📂 ${escapeHtml(device.name)}</h3>
-                <button class="btn-close" style="font-size: 1.5rem;" onclick="document.getElementById('ab-detail-panel').style.display='none'">&times;</button>
+                <button class="btn-close" data-action="close-panel" style="font-size: 1.5rem;">&times;</button>
             </div>
             <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center;">
                 <label style="font-weight: 500;">Versión:</label>
@@ -8523,6 +8749,8 @@ async function openABBrowse(device) {
             <div id="ab-browse-breadcrumb" style="display: flex; gap: 4px; align-items: center; margin-bottom: 10px; font-size: 0.85rem; flex-wrap: wrap;"></div>
             <div id="ab-browse-list" style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden; max-height: 400px; overflow-y: auto;"></div>
         `;
+
+        panel.querySelector('[data-action="close-panel"]')?.addEventListener('click', () => { document.getElementById('ab-detail-panel').style.display = 'none'; });
 
         const vSelect = document.getElementById('ab-version-select');
         vSelect.addEventListener('change', () => {
@@ -8710,7 +8938,8 @@ async function loadRecoveryStatus() {
         }
     } catch (e) {
         container.innerHTML = `<p style="color: var(--text-dim);">Scripts de recovery disponibles. La generación de ISO requiere un sistema x86_64.</p>
-            <button class="btn-primary btn-sm" style="margin-top: 10px;" onclick="window.open('${API_BASE}/active-backup/recovery/scripts','_blank')">📦 Descargar Scripts</button>`;
+            <button class="btn-primary btn-sm" data-action="download-scripts" style="margin-top: 10px;">📦 Descargar Scripts</button>`;
+        container.querySelector('[data-action="download-scripts"]')?.addEventListener('click', () => { window.open(`${API_BASE}/active-backup/recovery/scripts`, '_blank'); });
     }
 }
 
@@ -8817,15 +9046,15 @@ async function renderADContent() {
                     const data = await res.json();
                     
                     if (data.success) {
-                        showNotification('success', 'Samba AD DC instalado correctamente');
+                        showNotification('Samba AD DC instalado correctamente', 'success');
                         await renderADContent();
                     } else {
-                        showNotification('error', data.error || 'Error instalando');
+                        showNotification(data.error || 'Error instalando', 'error');
                         btn.disabled = false;
                         btn.innerHTML = '📦 Instalar Samba AD DC';
                     }
                 } catch (err) {
-                    showNotification('error', 'Error: ' + err.message);
+                    showNotification('Error: ' + err.message, 'error');
                     btn.disabled = false;
                     btn.innerHTML = '📦 Instalar Samba AD DC';
                 }
@@ -9087,7 +9316,7 @@ async function renderADContent() {
                 const passwordConfirm = document.getElementById('ad-password-confirm').value;
                 
                 if (password !== passwordConfirm) {
-                    showNotification('error', 'Las contraseñas no coinciden');
+                    showNotification('Las contraseñas no coinciden', 'error');
                     return;
                 }
                 
@@ -9104,15 +9333,15 @@ async function renderADContent() {
                     const data = await res.json();
                     
                     if (data.success) {
-                        showNotification('success', `Dominio ${data.domain} creado correctamente`);
+                        showNotification(`Dominio ${data.domain} creado correctamente`, 'success');
                         await renderADContent();
                     } else {
-                        showNotification('error', data.error || 'Error creando dominio');
+                        showNotification(data.error || 'Error creando dominio', 'error');
                         btn.disabled = false;
                         btn.innerHTML = '🚀 Crear Dominio';
                     }
                 } catch (err) {
-                    showNotification('error', 'Error: ' + err.message);
+                    showNotification('Error: ' + err.message, 'error');
                     btn.disabled = false;
                     btn.innerHTML = '🚀 Crear Dominio';
                 }
@@ -9384,20 +9613,20 @@ async function renderADContent() {
             const action = status.running ? 'stop' : 'start';
             try {
                 await authFetch(`${API_BASE}/ad/service/${action}`, { method: 'POST' });
-                showNotification('success', `Servicio ${action === 'start' ? 'iniciado' : 'detenido'}`);
+                showNotification(`Servicio ${action === 'start' ? 'iniciado' : 'detenido'}`, 'success');
                 await renderADContent();
             } catch (err) {
-                showNotification('error', 'Error: ' + err.message);
+                showNotification('Error: ' + err.message, 'error');
             }
         });
         
         document.getElementById('ad-restart-btn')?.addEventListener('click', async () => {
             try {
                 await authFetch(`${API_BASE}/ad/service/restart`, { method: 'POST' });
-                showNotification('success', 'Servicio reiniciado');
+                showNotification('Servicio reiniciado', 'success');
                 await renderADContent();
             } catch (err) {
-                showNotification('error', 'Error: ' + err.message);
+                showNotification('Error: ' + err.message, 'error');
             }
         });
         
@@ -9409,9 +9638,10 @@ async function renderADContent() {
             <div class="card" style="text-align: center; padding: 40px;">
                 <h3 style="color: var(--danger);">❌ Error</h3>
                 <p>${escapeHtml(error.message)}</p>
-                <button class="btn btn-primary" onclick="renderADContent()">🔄 Reintentar</button>
+                <button class="btn btn-primary" data-action="retry-ad">🔄 Reintentar</button>
             </div>
         `;
+        container.querySelector('[data-action="retry-ad"]')?.addEventListener('click', () => renderADContent());
     }
 }
 
@@ -9484,10 +9714,10 @@ function renderADTab(tab, data) {
                     
                     try {
                         await authFetch(`${API_BASE}/ad/users/${username}`, { method: 'DELETE' });
-                        showNotification('success', `Usuario ${username} eliminado`);
+                        showNotification(`Usuario ${username} eliminado`, 'success');
                         await renderADContent();
                     } catch (err) {
-                        showNotification('error', 'Error: ' + err.message);
+                        showNotification('Error: ' + err.message, 'error');
                     }
                 });
             });
@@ -9781,14 +10011,14 @@ function showADUserModal() {
             const data = await res.json();
             
             if (data.success) {
-                showNotification('success', `Usuario ${username} creado`);
+                showNotification(`Usuario ${username} creado`, 'success');
                 modal.remove();
                 await renderADContent();
             } else {
-                showNotification('error', data.error || 'Error creando usuario');
+                showNotification(data.error || 'Error creando usuario', 'error');
             }
         } catch (err) {
-            showNotification('error', 'Error: ' + err.message);
+            showNotification('Error: ' + err.message, 'error');
         }
     });
 }
@@ -9837,13 +10067,13 @@ function showADPasswordModal(username) {
             const data = await res.json();
             
             if (data.success) {
-                showNotification('success', `Contraseña de ${username} cambiada`);
+                showNotification(`Contraseña de ${username} cambiada`, 'success');
                 modal.remove();
             } else {
-                showNotification('error', data.error || 'Error cambiando contraseña');
+                showNotification(data.error || 'Error cambiando contraseña', 'error');
             }
         } catch (err) {
-            showNotification('error', 'Error: ' + err.message);
+            showNotification('Error: ' + err.message, 'error');
         }
     });
 }
@@ -9896,14 +10126,14 @@ function showADGroupModal() {
             const data = await res.json();
             
             if (data.success) {
-                showNotification('success', `Grupo ${name} creado`);
+                showNotification(`Grupo ${name} creado`, 'success');
                 modal.remove();
                 await renderADContent();
             } else {
-                showNotification('error', data.error || 'Error creando grupo');
+                showNotification(data.error || 'Error creando grupo', 'error');
             }
         } catch (err) {
-            showNotification('error', 'Error: ' + err.message);
+            showNotification('Error: ' + err.message, 'error');
         }
     });
 }
@@ -10187,8 +10417,7 @@ function renderFoldersList(folders) {
             // Navigate to Files view and open the folder
             state.currentView = 'files';
             state.filesCurrentPath = btn.dataset.folderPath;
-            renderContent();
-            updateSidebarActive();
+            renderContent('files');
         });
     });
     
@@ -10773,8 +11002,7 @@ let systemArch = null;
 async function renderHomeStoreView() {
     dashboardContent.innerHTML = `
         <div class="section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h2>🏪 HomeStore</h2>
+            <div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 10px;">
                 <div id="homestore-status" style="display: flex; gap: 15px; align-items: center;">
                     <div id="homestore-arch-status"></div>
                     <div id="homestore-docker-status"></div>
@@ -10831,16 +11059,17 @@ async function loadHomeStoreCatalog() {
                     <p style="font-size: 48px; margin-bottom: 20px;">🐳</p>
                     <p>Docker no está instalado o no está corriendo.</p>
                     <p style="margin-top: 10px;">Instala Docker primero desde el Gestor de Docker.</p>
-                    <button onclick="navigateTo('/docker')" class="btn" style="margin-top: 20px; background: var(--primary); color: #000; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;">
+                    <button data-action="go-docker" class="btn" style="margin-top: 20px; background: var(--primary); color: #000; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;">
                         Ir a Gestor de Docker
                     </button>
                 </div>
             `;
+            appsDiv.querySelector('[data-action="go-docker"]')?.addEventListener('click', () => navigateTo('/docker'));
             return;
         }
-        
+
         dockerStatusDiv.innerHTML = `<span style="color: #10b981;">✓ Docker activo</span>`;
-        
+
         // Load catalog
         const res = await authFetch(`${API_BASE}/homestore/catalog`);
         const data = await res.json();
@@ -10915,9 +11144,10 @@ async function loadHomeStoreCatalog() {
         appsDiv.innerHTML = `
             <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #ef4444;">
                 <p>Error al cargar el catálogo: ${error.message}</p>
-                <button onclick="loadHomeStoreCatalog()" class="btn" style="margin-top: 20px;">Reintentar</button>
+                <button data-action="retry-catalog" class="btn" style="margin-top: 20px;">Reintentar</button>
             </div>
         `;
+        appsDiv.querySelector('[data-action="retry-catalog"]')?.addEventListener('click', () => loadHomeStoreCatalog());
     }
 }
 
@@ -11029,19 +11259,19 @@ function renderHomeStoreAppCard(app, categories) {
     }
     
     return `
-        <div id="homestore-app-${app.id}" class="card" style="background: rgba(30, 30, 50, 0.7); border: 2px solid ${isCompatible ? 'rgba(100, 100, 140, 0.5)' : '#f59e0b'}; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); ${!isCompatible ? 'opacity: 0.7;' : ''}">
+        <div id="homestore-app-${app.id}" class="card" style="background: rgba(30, 30, 50, 0.95); border: 2px solid ${isCompatible ? 'rgba(100, 100, 140, 0.5)' : '#f59e0b'}; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); color: #fff; ${!isCompatible ? 'opacity: 0.7;' : ''}">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <span style="font-size: 2rem;">${app.icon}</span>
+                    ${app.icon && app.icon.startsWith('http') ? `<img src="${app.icon}" style="width: 48px; height: 48px; border-radius: 8px;" onerror="this.outerHTML='📦'">` : `<span style="font-size: 2rem;">${app.icon || '📦'}</span>`}
                     <div>
-                        <h3 style="margin: 0; font-size: 1.1rem;">${app.name}</h3>
-                        <span style="color: var(--text-secondary); font-size: 0.85rem;">${cat.icon} ${cat.name}</span>
+                        <h3 style="margin: 0; font-size: 1.1rem; color: #fff;">${app.name}</h3>
+                        <span style="color: rgba(255,255,255,0.7); font-size: 0.85rem;">${cat.icon} ${cat.name}</span>
                     </div>
                 </div>
                 ${statusBadge}
             </div>
             ${compatWarning}
-            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px; line-height: 1.4;">
+            <p style="color: rgba(255,255,255,0.8); font-size: 0.9rem; margin-bottom: 12px; line-height: 1.4;">
                 ${app.description}
             </p>
             ${configInfoHtml}
@@ -11178,7 +11408,7 @@ async function showHomeStoreConfigModal(appId) {
         <div style="background: #1a1a2e; border: 1px solid #3a3a5e; border-radius: 16px; width: 90%; max-width: 600px; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.5);">
             <div style="padding: 20px 24px; border-bottom: 1px solid #3a3a5e; display: flex; justify-content: space-between; align-items: center; background: #1a1a2e;">
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <span style="font-size: 2rem;">${app.icon}</span>
+                    ${app.icon && app.icon.startsWith('http') ? `<img src="${app.icon}" style="width: 48px; height: 48px; border-radius: 8px;" onerror="this.outerHTML='📦'">` : `<span style="font-size: 2rem;">${app.icon || '📦'}</span>`}
                     <div>
                         <h3 style="margin: 0; font-size: 1.2rem; color: var(--text);">Configurar ${escapeHtml(app.name)}</h3>
                         <span style="color: var(--text-secondary); font-size: 0.85rem;">Personaliza la instalación</span>
@@ -11285,8 +11515,16 @@ async function showHomeStoreConfigModal(appId) {
                 </div>
             `;
             
+            // Add hover CSS for folder items
+            if (!document.getElementById('folder-item-hover-style')) {
+                const style = document.createElement('style');
+                style.id = 'folder-item-hover-style';
+                style.textContent = '.folder-item-hover:hover { background: rgba(255,255,255,0.1) !important; }';
+                document.head.appendChild(style);
+            }
+
             document.body.appendChild(pickerModal);
-            
+
             const pathInput = document.getElementById('folder-picker-path');
             const listDiv = document.getElementById('folder-picker-list');
             
@@ -11306,18 +11544,16 @@ async function showHomeStoreConfigModal(appId) {
                     // Add parent directory option
                     let html = '';
                     if (path !== '/') {
-                        html += `<div class="folder-item" data-path="${escapeHtml(path.split('/').slice(0, -1).join('/') || '/')}" 
-                                     style="padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; border-radius: 6px; margin-bottom: 4px;"
-                                     onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+                        html += `<div class="folder-item folder-item-hover" data-path="${escapeHtml(path.split('/').slice(0, -1).join('/') || '/')}"
+                                     style="padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; border-radius: 6px; margin-bottom: 4px;">
                                     📁 <span style="color: var(--text-secondary);">..</span>
                                  </div>`;
                     }
                     
                     folders.forEach(f => {
                         const fullPath = path === '/' ? `/${f.name}` : `${path}/${f.name}`;
-                        html += `<div class="folder-item" data-path="${escapeHtml(fullPath)}" 
-                                     style="padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; border-radius: 6px; margin-bottom: 4px;"
-                                     onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+                        html += `<div class="folder-item folder-item-hover" data-path="${escapeHtml(fullPath)}"
+                                     style="padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; border-radius: 6px; margin-bottom: 4px;">
                                     📁 ${escapeHtml(f.name)}
                                  </div>`;
                     });
@@ -11427,9 +11663,9 @@ async function installHomeStoreApp(appId) {
 }
 
 async function uninstallHomeStoreApp(appId) {
-    if (!confirm(`¿Desinstalar ${appId}?\n\n¿Eliminar también los datos?`)) return;
-    
-    const removeData = confirm('¿Eliminar los datos de la aplicación?');
+    if (!confirm(`¿Desinstalar ${appId}?`)) return;
+
+    const removeData = confirm('¿Eliminar también los datos de la aplicación?');
     
     try {
         const res = await authFetch(`${API_BASE}/homestore/uninstall/${appId}`, {
@@ -11859,11 +12095,15 @@ async function openTemplateSelector() {
                         <p style="margin: 4px 0 0; color: #a0a0b0; font-size: 13px;">${escapeHtml(t.description)}</p>
                     </div>
                 </div>
-                <button onclick="useTemplate('${t.id}')" class="btn-primary" style="padding: 8px 16px; background: #10b981; color: white;">
+                <button data-action="use-template" data-template-id="${t.id}" class="btn-primary" style="padding: 8px 16px; background: #10b981; color: white;">
                     Usar
                 </button>
             </div>
         `).join('');
+
+        list.querySelectorAll('[data-action="use-template"]').forEach(btn => {
+            btn.addEventListener('click', () => useTemplate(btn.dataset.templateId));
+        });
     } catch (e) {
         document.getElementById('templates-list').innerHTML = `<div style="color: #ef4444;">Error: ${e.message}</div>`;
     }
@@ -12484,7 +12724,7 @@ async function showAddCloudModal() {
                     <p style="color: #a0a0b0; margin-bottom: 20px;">Selecciona el servicio de nube que quieres configurar:</p>
                     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px;">
                         ${data.providers.map(p => `
-                            <button data-action="select-provider" data-provider="${p.id}" style="
+                            <button data-action="select-provider" data-provider="${p.id}" data-color="${p.color}" class="cloud-provider-btn" style="
                                 background: rgba(255,255,255,0.05);
                                 border: 2px solid rgba(255,255,255,0.1);
                                 border-radius: 12px;
@@ -12492,7 +12732,7 @@ async function showAddCloudModal() {
                                 cursor: pointer;
                                 text-align: center;
                                 transition: all 0.2s;
-                            " onmouseover="this.style.borderColor='${p.color}'" onmouseout="this.style.borderColor='rgba(255,255,255,0.1)'">
+                            ">
                                 <div style="font-size: 2rem; margin-bottom: 8px;">${p.icon}</div>
                                 <div style="color: #fff; font-size: 0.9rem;">${p.name}</div>
                             </button>
@@ -12503,12 +12743,19 @@ async function showAddCloudModal() {
         `;
         
         document.body.appendChild(modal);
-        
+
+        // Add hover effect for cloud provider buttons
+        modal.querySelectorAll('.cloud-provider-btn').forEach(btn => {
+            const color = btn.dataset.color;
+            btn.addEventListener('mouseover', () => { btn.style.borderColor = color; });
+            btn.addEventListener('mouseout', () => { btn.style.borderColor = 'rgba(255,255,255,0.1)'; });
+        });
+
         // Add event listeners to modal
         modal.addEventListener('click', (e) => {
             const btn = e.target.closest('button[data-action]');
             if (!btn) return;
-            
+
             const action = btn.dataset.action;
             if (action === 'close-modal') {
                 modal.remove();
@@ -12527,20 +12774,25 @@ async function showAddCloudModal() {
 
 async function startCloudConfig(provider) {
     document.getElementById('add-cloud-modal')?.remove();
-    
-    const res = await authFetch(`${API_BASE}/cloud-backup/config/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider, name: `${provider}_${Date.now()}` })
-    });
-    const data = await res.json();
-    
-    if (data.needsOAuth) {
-        // Show OAuth instructions
-        showOAuthModal(provider, data.instructions);
-    } else {
-        // Show config form
-        showConfigFormModal(provider, data.fields);
+
+    try {
+        const res = await authFetch(`${API_BASE}/cloud-backup/config/create`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ provider, name: `${provider}_${Date.now()}` })
+        });
+        const data = await res.json();
+
+        if (data.needsOAuth) {
+            // Show OAuth instructions
+            showOAuthModal(provider, data.instructions);
+        } else {
+            // Show config form
+            showConfigFormModal(provider, data.fields);
+        }
+    } catch (err) {
+        console.error('[Cloud Backup] Error in startCloudConfig:', err);
+        showNotification('Error configurando nube: ' + err.message, 'error');
     }
 }
 
@@ -12795,8 +13047,12 @@ async function loadRemoteFiles(remoteName, path) {
             </div>
         `).join('');
         
+        // Clone and replace listDiv to remove old event listeners, preventing accumulation
+        const newListDiv = listDiv.cloneNode(true);
+        listDiv.parentNode.replaceChild(newListDiv, listDiv);
+
         // Add event delegation for file list
-        listDiv.addEventListener('click', (e) => {
+        newListDiv.addEventListener('click', (e) => {
             const item = e.target.closest('[data-action="navigate"]');
             if (item) {
                 navigateRemoteFolder(item.dataset.path);
@@ -12928,7 +13184,7 @@ function showSyncWizard(remoteName, remotePath = '') {
         
         switch (btn.dataset.action) {
             case 'cancel': modal.remove(); break;
-            case 'browse-source': browseForSync('source'); break;
+            case 'browse-source': browseRemote(remoteName); break;
             case 'browse-dest': browseLocalForSync(); break;
             case 'start-sync': await startSync(); break;
         }
@@ -13131,6 +13387,9 @@ window.browseLocalForSync = browseLocalForSync;
 window.toggleScheduledSync = toggleScheduledSync;
 window.deleteScheduledSync = deleteScheduledSync;
 window.clearTransferHistory = clearTransferHistory;
+window.navigateTo = navigateTo;
+window.renderADContent = renderADContent;
+window.detectDisksForWizard = detectDisksForWizard;
 
 init();
 console.log("HomePiNAS Core v2.6.0 Loaded - Cloud Backup");

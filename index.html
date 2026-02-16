@@ -40,7 +40,7 @@
     <link rel="stylesheet" href="frontend/style.css">
     <link rel="stylesheet" href="frontend/responsive.css">
     <!-- xterm.js for web terminal -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" integrity="sha384-9ftsg11+LSxVUaknegCfeKvlkO9EdIPI2op725RqY87IvhyGjElmpjZlP3LhTQjn" crossorigin="anonymous">
 </head>
 
 <body>
@@ -418,7 +418,20 @@
                         <div class="header-user-avatar" id="user-avatar-letter">U</div>
                         <span class="header-user-name" id="username-display">Usuario</span>
                     </div>
-                    <button class="header-btn" id="logout-btn" title="Cerrar sesión">⏻</button>
+                    <div class="power-menu-wrapper" style="position:relative;display:inline-block;">
+                        <button class="header-btn" id="power-btn" title="Opciones de energía">⏻</button>
+                        <div class="power-dropdown" id="power-dropdown" style="display:none;position:absolute;right:0;top:100%;min-width:200px;background:var(--card-bg,#fff);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.15);z-index:9999;overflow:hidden;margin-top:8px;">
+                            <button class="power-option" id="power-logout" style="display:flex;align-items:center;gap:10px;width:100%;padding:12px 16px;border:none;background:none;cursor:pointer;font-size:14px;color:var(--text-primary,#333);transition:background 0.2s;">
+                                <span style="font-size:18px;">🚪</span> Cerrar sesión
+                            </button>
+                            <button class="power-option" id="power-reboot" style="display:flex;align-items:center;gap:10px;width:100%;padding:12px 16px;border:none;background:none;cursor:pointer;font-size:14px;color:var(--text-primary,#333);transition:background 0.2s;">
+                                <span style="font-size:18px;">🔄</span> Reiniciar sistema
+                            </button>
+                            <button class="power-option" id="power-shutdown" style="display:flex;align-items:center;gap:10px;width:100%;padding:12px 16px;border:none;background:none;cursor:pointer;font-size:14px;color:#e74c3c;transition:background 0.2s;">
+                                <span style="font-size:18px;">⏻</span> Apagar sistema
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </header>
 
@@ -628,148 +641,15 @@
     </div>
 
     <!-- Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js" integrity="sha384-xjfWUeCWdMtvpAb/SmM6lMzS6pQGcQa0loOl1d97j6Odw0vjK9nW3+dTb/bn/mwH" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js" integrity="sha384-dpjGwSSISUTz2taP54Bor7qkyMR20sSO9oe11UVYnGs2/YdUBf7HW30XKQx9PCzn" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js" integrity="sha384-iAAiqSZrWZz/YKZSTKOPNaRhVOg9JY14avg2EWEpYNnUsrnATA+Sg8pV7mak84/G" crossorigin="anonymous"></script>
     
-    <!-- Theme and Language Toggle Script -->
-    <script>
-        (function() {
-            const html = document.documentElement;
-            const themeToggle = document.getElementById('theme-toggle');
-            const langToggle = document.getElementById('lang-toggle');
-
-            // Load saved theme or default to light
-            const savedTheme = localStorage.getItem('homepinas-theme') || 'light';
-            html.setAttribute('data-theme', savedTheme);
-            updateThemeIcon(savedTheme);
-
-            // Load saved language or default to Spanish
-            const savedLang = localStorage.getItem('homepinas-lang') || 'es';
-            html.setAttribute('data-lang', savedLang);
-            html.setAttribute('lang', savedLang);
-            updateLangIcon(savedLang);
-
-            themeToggle.addEventListener('click', () => {
-                const current = html.getAttribute('data-theme');
-                const next = current === 'light' ? 'dark' : 'light';
-                html.setAttribute('data-theme', next);
-                localStorage.setItem('homepinas-theme', next);
-                updateThemeIcon(next);
-            });
-
-            langToggle.addEventListener('click', () => {
-                const current = html.getAttribute('data-lang') || 'es';
-                const next = current === 'es' ? 'en' : 'es';
-                html.setAttribute('data-lang', next);
-                html.setAttribute('lang', next);
-                localStorage.setItem('homepinas-lang', next);
-                updateLangIcon(next);
-                // Trigger i18n update event
-                window.dispatchEvent(new CustomEvent('langchange', { detail: { lang: next } }));
-            });
-
-            function updateThemeIcon(theme) {
-                themeToggle.textContent = theme === 'light' ? '🌙' : '☀️';
-                themeToggle.title = theme === 'light' ? 'Modo oscuro' : 'Modo claro';
-            }
-
-            function updateLangIcon(lang) {
-                langToggle.textContent = lang === 'es' ? '🇪🇸' : '🇬🇧';
-                langToggle.title = lang === 'es' ? 'Switch to English' : 'Cambiar a Español';
-            }
-        })();
-    </script>
+    <!-- Theme and Language Toggle (external for CSP compliance) -->
+    <script src="frontend/theme-init.js"></script>
     <script type="module" src="frontend/main.js"></script>
-    
-    <!-- Service Worker Registration -->
-    <script>
-        // Register Service Worker for PWA
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js')
-                    .then((registration) => {
-                        console.log('[PWA] Service Worker registered:', registration.scope);
-                        
-                        // Check for updates
-                        registration.addEventListener('updatefound', () => {
-                            const newWorker = registration.installing;
-                            console.log('[PWA] Service Worker update found');
-                            
-                            newWorker.addEventListener('statechange', () => {
-                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    // New version available
-                                    console.log('[PWA] New version available');
-                                    // Could show update notification here
-                                }
-                            });
-                        });
-                    })
-                    .catch((error) => {
-                        console.error('[PWA] Service Worker registration failed:', error);
-                    });
-            });
-        }
-
-        // Mobile Menu Toggle Handler
-        document.addEventListener('DOMContentLoaded', () => {
-            const menuToggle = document.getElementById('mobile-menu-toggle');
-            const sidebar = document.querySelector('.sidebar');
-            const overlay = document.getElementById('sidebar-overlay');
-            
-            function toggleMobileMenu() {
-                const isOpen = sidebar?.classList.toggle('open');
-                menuToggle?.classList.toggle('active', isOpen);
-                overlay?.classList.toggle('active', isOpen);
-                menuToggle?.setAttribute('aria-expanded', isOpen);
-                
-                // Prevent body scroll when menu is open
-                document.body.style.overflow = isOpen ? 'hidden' : '';
-            }
-            
-            function closeMobileMenu() {
-                sidebar?.classList.remove('open');
-                menuToggle?.classList.remove('active');
-                overlay?.classList.remove('active');
-                menuToggle?.setAttribute('aria-expanded', 'false');
-                document.body.style.overflow = '';
-            }
-            
-            menuToggle?.addEventListener('click', toggleMobileMenu);
-            overlay?.addEventListener('click', closeMobileMenu);
-            
-            // Close menu when clicking nav links
-            document.querySelectorAll('.nav-links li').forEach(link => {
-                link.addEventListener('click', () => {
-                    if (window.innerWidth <= 768) {
-                        closeMobileMenu();
-                    }
-                });
-            });
-            
-            // Close menu on window resize if larger than mobile
-            window.addEventListener('resize', () => {
-                if (window.innerWidth > 768) {
-                    closeMobileMenu();
-                }
-            });
-            
-            // Handle escape key
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape' && sidebar?.classList.contains('open')) {
-                    closeMobileMenu();
-                }
-            });
-        });
-
-        // PWA Install Prompt Handler
-        let deferredPrompt;
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            console.log('[PWA] Install prompt available');
-        });
-    </script>
+    <!-- Service Worker, Mobile Menu, PWA Install (external for CSP compliance) -->
+    <script src="frontend/pwa-init.js"></script>
 </body>
 
 </html>

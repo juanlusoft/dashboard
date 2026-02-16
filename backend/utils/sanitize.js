@@ -7,6 +7,7 @@
  */
 
 const path = require('path');
+const fs = require('fs');
 
 // ============================================================================
 // USERNAME SANITIZATION
@@ -30,6 +31,21 @@ function validatePassword(password) {
     if (!password || typeof password !== 'string') return false;
     if (password.length < 6 || password.length > 128) return false;
     return true;
+}
+
+// ============================================================================
+// STRING SANITIZATION
+// ============================================================================
+
+function sanitizeString(str) {
+    if (!str || typeof str !== 'string') return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;')
+        .substring(0, 1000);
 }
 
 // ============================================================================
@@ -71,11 +87,33 @@ function sanitizePathWithinBase(inputPath, baseDir) {
     // Strip leading slashes so path.resolve treats it as relative to baseDir
     sanitized = sanitized.replace(/^\/+/, '');
     const fullPath = path.resolve(baseDir, sanitized);
-    const realBase = path.resolve(baseDir);
-    if (!fullPath.startsWith(realBase + path.sep) && fullPath !== realBase) {
+    // Use realpath to resolve symlinks and prevent symlink-based escapes
+    let realBase;
+    try { realBase = fs.realpathSync(baseDir); } catch (e) { realBase = path.resolve(baseDir); }
+    let realFull;
+    try {
+        realFull = fs.realpathSync(fullPath);
+    } catch (e) {
+        // Path may not exist yet (e.g., mkdir). Resolve parent instead.
+        const parentDir = path.dirname(fullPath);
+        try {
+            const realParent = fs.realpathSync(parentDir);
+            if (!realParent.startsWith(realBase + path.sep) && realParent !== realBase) {
+                return null;
+            }
+        } catch (e2) {
+            // Parent doesn't exist either — fall back to path.resolve check
+        }
+        // Fallback: check the resolved (non-realpath) path
+        if (!fullPath.startsWith(realBase + path.sep) && fullPath !== realBase) {
+            return null;
+        }
+        return fullPath;
+    }
+    if (!realFull.startsWith(realBase + path.sep) && realFull !== realBase) {
         return null;
     }
-    return fullPath;
+    return realFull;
 }
 
 function sanitizePath(inputPath) {
@@ -241,6 +279,7 @@ function sanitizeForLog(str) {
 }
 
 module.exports = {
+    sanitizeString,
     sanitizeUsername,
     validateUsername,
     validatePassword,

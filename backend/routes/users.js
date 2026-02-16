@@ -8,7 +8,7 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 
 const { requireAuth } = require('../middleware/auth');
-const { logSecurityEvent, safeExec } = require('../utils/security');
+const { logSecurityEvent } = require('../utils/security');
 const { validateUsername, validatePassword } = require('../utils/sanitize');
 const { getData, saveData } = require('../utils/data');
 
@@ -183,9 +183,8 @@ router.put('/me/password', async (req, res) => {
     }
 
     // Validate new password strength
-    const passwordError = validatePassword(newPassword);
-    if (passwordError) {
-      return res.status(400).json({ error: passwordError });
+    if (!validatePassword(newPassword)) {
+      return res.status(400).json({ error: 'Invalid password. Must be 6-128 characters' });
     }
 
     const users = getUsers();
@@ -200,7 +199,8 @@ router.put('/me/password', async (req, res) => {
     // Verify current password
     const valid = await bcrypt.compare(currentPassword, users[userIndex].password);
     if (!valid) {
-      logSecurityEvent('PASSWORD_CHANGE_FAILED', {
+      logSecurityEvent('PASSWORD_CHANGE_FAILED', req.user.username, {
+        ip: req.ip,
         reason: 'incorrect current password',
       });
       return res.status(401).json({ error: 'Current password is incorrect' });
@@ -306,7 +306,8 @@ router.post('/', requireAdmin, async (req, res) => {
     // Create Samba user for share access
     await createSambaUser(username, password);
 
-    logSecurityEvent('USER_CREATED', {
+    logSecurityEvent('USER_CREATED', req.user.username, {
+      ip: req.ip,
       newUser: username,
       role: userRole,
     });
@@ -351,9 +352,8 @@ router.put('/:username', requireAdmin, async (req, res) => {
 
     // Validate and update password if provided
     if (password !== undefined) {
-      const passwordError = validatePassword(password);
-      if (passwordError) {
-        return res.status(400).json({ error: passwordError });
+      if (!validatePassword(password)) {
+        return res.status(400).json({ error: 'Invalid password. Must be 6-128 characters' });
       }
       users[userIndex].password = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
@@ -378,7 +378,8 @@ router.put('/:username', requireAdmin, async (req, res) => {
 
     saveUsers(users);
 
-    logSecurityEvent('USER_UPDATED', {
+    logSecurityEvent('USER_UPDATED', req.user.username, {
+      ip: req.ip,
       targetUser: targetUsername,
       updatedFields: [
         ...(role !== undefined ? ['role'] : []),
@@ -425,7 +426,8 @@ router.delete('/:username', requireAdmin, async (req, res) => {
     // Remove from Samba
     await removeSambaUser(deletedUser.username);
 
-    logSecurityEvent('USER_DELETED', {
+    logSecurityEvent('USER_DELETED', req.user.username, {
+      ip: req.ip,
       deletedUser: deletedUser.username,
       role: deletedUser.role,
     });

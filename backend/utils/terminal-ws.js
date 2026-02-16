@@ -1,6 +1,6 @@
 /**
  * HomePiNAS - Terminal WebSocket Handler
- * v2.2.2 - PTY WebSocket integration with auto-install
+ * v2.2.3 - PTY WebSocket integration (manual install only)
  *
  * Handles WebSocket connections for web terminal
  */
@@ -51,28 +51,6 @@ function commandExists(cmd) {
     }
 }
 
-// Try to install missing command
-function tryInstallCommand(cmd) {
-    const pkg = COMMAND_PACKAGES[cmd];
-    if (!pkg) return false;
-
-    try {
-        console.log(`[Terminal] Installing missing package: ${pkg}`);
-        execFileSync('sudo', ['/usr/bin/apt-get', 'update'], {
-            stdio: 'ignore',
-            timeout: 30000
-        });
-        execFileSync('sudo', ['/usr/bin/apt-get', 'install', '-y', pkg], {
-            stdio: 'ignore',
-            timeout: 60000
-        });
-        return commandExists(cmd);
-    } catch (err) {
-        console.error(`[Terminal] Failed to install ${pkg}:`, err.message);
-        return false;
-    }
-}
-
 function setupTerminalWebSocket(server) {
     const wss = new WebSocket.Server({ 
         server,
@@ -108,32 +86,21 @@ function setupTerminalWebSocket(server) {
         // Get base command (first word)
         const baseCmd = command.split(' ')[0].split('/').pop();
 
-        // Check if command exists, try to install if missing
+        // Check if command exists — do NOT auto-install (security risk)
         if (!commandExists(baseCmd)) {
             console.log(`[Terminal] Command not found: ${baseCmd}`);
-            ws.send(JSON.stringify({ 
-                type: 'output', 
-                data: `\x1b[33m[HomePiNAS] Comando '${baseCmd}' no encontrado. Instalando...\x1b[0m\r\n` 
+            const pkg = COMMAND_PACKAGES[baseCmd] || baseCmd;
+            ws.send(JSON.stringify({
+                type: 'output',
+                data: `\x1b[31m[HomePiNAS] Comando '${baseCmd}' no encontrado.\x1b[0m\r\n`
             }));
-            
-            if (tryInstallCommand(baseCmd)) {
-                ws.send(JSON.stringify({ 
-                    type: 'output', 
-                    data: `\x1b[32m[HomePiNAS] ✓ '${baseCmd}' instalado correctamente.\x1b[0m\r\n\r\n` 
-                }));
-            } else {
-                ws.send(JSON.stringify({ 
-                    type: 'output', 
-                    data: `\x1b[31m[HomePiNAS] ✗ No se pudo instalar '${baseCmd}'.\x1b[0m\r\n` 
-                }));
-                ws.send(JSON.stringify({ 
-                    type: 'output', 
-                    data: `\x1b[33mPrueba manualmente: sudo apt install ${COMMAND_PACKAGES[baseCmd] || baseCmd}\x1b[0m\r\n` 
-                }));
-                ws.send(JSON.stringify({ type: 'exit', exitCode: 1 }));
-                ws.close(1000, 'Command not available');
-                return;
-            }
+            ws.send(JSON.stringify({
+                type: 'output',
+                data: `\x1b[33mInstala manualmente: sudo apt install ${pkg}\x1b[0m\r\n`
+            }));
+            ws.send(JSON.stringify({ type: 'exit', exitCode: 1 }));
+            ws.close(1000, 'Command not available');
+            return;
         }
 
         // Create PTY process

@@ -18,7 +18,7 @@ const router = express.Router();
 const Docker = require('dockerode');
 const fs = require('fs');
 const path = require('path');
-const { execSync, exec } = require('child_process');
+// Note: child_process used via local require() in handlers that need execFileSync
 
 const { requireAuth } = require('../middleware/auth');
 const { logSecurityEvent } = require('../utils/security');

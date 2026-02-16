@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const nodemailer = require('nodemailer');
 const { requireAuth } = require('../middleware/auth');
+const { notificationLimiter } = require('../middleware/rateLimit');
 const { logSecurityEvent } = require('../utils/security');
 const { sanitizeString } = require('../utils/sanitize');
 const { getData, saveData } = require('../utils/data');
@@ -114,8 +115,7 @@ router.post('/config/email', async (req, res) => {
     data.notifications.email = emailConfig;
     saveData(data);
 
-    logSecurityEvent('notifications', 'email_config_updated', {
-      user: req.user.username,
+    logSecurityEvent('EMAIL_CONFIG_UPDATED', req.user.username, {
       host: emailConfig.host,
       port: emailConfig.port
     });
@@ -157,8 +157,7 @@ router.post('/config/telegram', async (req, res) => {
     data.notifications.telegram = telegramConfig;
     saveData(data);
 
-    logSecurityEvent('notifications', 'telegram_config_updated', {
-      user: req.user.username,
+    logSecurityEvent('TELEGRAM_CONFIG_UPDATED', req.user.username, {
       enabled: telegramConfig.enabled
     });
 
@@ -173,7 +172,7 @@ router.post('/config/telegram', async (req, res) => {
  * POST /test/email
  * Send a test email using the stored SMTP configuration.
  */
-router.post('/test/email', async (req, res) => {
+router.post('/test/email', notificationLimiter, async (req, res) => {
   try {
     const data = getData();
     const emailConfig = data.notifications?.email;
@@ -202,8 +201,7 @@ router.post('/test/email', async (req, res) => {
       html: '<h2>HomePiNAS Test Notification</h2><p>This is a test notification from HomePiNAS. If you received this email, your notification settings are working correctly!</p>'
     });
 
-    logSecurityEvent('notifications', 'test_email_sent', {
-      user: req.user.username,
+    logSecurityEvent('TEST_EMAIL_SENT', req.user.username, {
       messageId: info.messageId
     });
 
@@ -218,7 +216,7 @@ router.post('/test/email', async (req, res) => {
  * POST /test/telegram
  * Send a test message via Telegram bot API.
  */
-router.post('/test/telegram', async (req, res) => {
+router.post('/test/telegram', notificationLimiter, async (req, res) => {
   try {
     const data = getData();
     const telegramConfig = data.notifications?.telegram;
@@ -244,8 +242,7 @@ router.post('/test/telegram', async (req, res) => {
       return res.status(400).json({ success: false, error: `Telegram API error: ${result.description}` });
     }
 
-    logSecurityEvent('notifications', 'test_telegram_sent', {
-      user: req.user.username,
+    logSecurityEvent('TEST_TELEGRAM_SENT', req.user.username, {
       chatId: telegramConfig.chatId
     });
 
@@ -262,7 +259,7 @@ router.post('/test/telegram', async (req, res) => {
  * Used by other features to trigger notifications.
  * Expects: { title, message, channels: ['email', 'telegram'] }
  */
-router.post('/send', async (req, res) => {
+router.post('/send', notificationLimiter, async (req, res) => {
   try {
     const { title, message, channels } = req.body;
 

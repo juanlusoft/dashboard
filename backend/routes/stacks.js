@@ -7,7 +7,7 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const { execSync, spawn } = require('child_process');
+const { execFileSync, spawn } = require('child_process');
 const { requireAuth } = require('../middleware/auth');
 
 const STACKS_DIR = '/opt/homepinas/stacks';
@@ -131,88 +131,6 @@ volumes:
   db_data:
 `
     },
-    'monitoring': {
-        name: 'Monitoring Stack',
-        description: 'Prometheus + Grafana',
-        icon: '📊',
-        compose: `version: '3.8'
-services:
-  prometheus:
-    image: prom/prometheus:latest
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-    restart: unless-stopped
-
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3000:3000"
-    environment:
-      GF_SECURITY_ADMIN_PASSWORD: \${GRAFANA_PASSWORD:-admin}
-    volumes:
-      - grafana_data:/var/lib/grafana
-    depends_on:
-      - prometheus
-    restart: unless-stopped
-
-volumes:
-  prometheus_data:
-  grafana_data:
-`
-    },
-    'media': {
-        name: 'Media Stack',
-        description: 'Sonarr + Radarr + Prowlarr',
-        icon: '🎬',
-        compose: `version: '3.8'
-services:
-  sonarr:
-    image: lscr.io/linuxserver/sonarr:latest
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/Madrid
-    volumes:
-      - ./sonarr:/config
-      - /mnt/storage/media/tv:/tv
-      - /mnt/storage/downloads:/downloads
-    ports:
-      - "8989:8989"
-    restart: unless-stopped
-
-  radarr:
-    image: lscr.io/linuxserver/radarr:latest
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/Madrid
-    volumes:
-      - ./radarr:/config
-      - /mnt/storage/media/movies:/movies
-      - /mnt/storage/downloads:/downloads
-    ports:
-      - "7878:7878"
-    restart: unless-stopped
-
-  prowlarr:
-    image: lscr.io/linuxserver/prowlarr:latest
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/Madrid
-    volumes:
-      - ./prowlarr:/config
-    ports:
-      - "9696:9696"
-    restart: unless-stopped
-`
-    }
 };
 
 // List all stacks
@@ -241,18 +159,18 @@ router.get('/list', requireAuth, async (req, res) => {
                     let status = 'stopped';
                     let services = [];
                     try {
-                        const ps = execSync(`docker compose -f "${composePath}" ps --format json 2>/dev/null || echo "[]"`, 
-                            { encoding: 'utf8', timeout: 10000 });
+                        const ps = execFileSync('docker', ['compose', '-f', composePath, 'ps', '--format', 'json'],
+                            { encoding: 'utf8', timeout: 10000, stdio: 'pipe' });
                         const containers = ps.trim().split('\n').filter(l => l).map(l => {
                             try { return JSON.parse(l); } catch { return null; }
                         }).filter(c => c);
-                        
+
                         services = containers.map(c => ({
                             name: c.Service || c.Name,
                             state: c.State || 'unknown',
                             status: c.Status || ''
                         }));
-                        
+
                         if (services.length > 0) {
                             const running = services.filter(s => s.state === 'running').length;
                             if (running === services.length) status = 'running';
@@ -425,10 +343,11 @@ router.post('/:id/up', requireAuth, async (req, res) => {
             return res.status(404).json({ error: 'Stack not found' });
         }
 
-        const output = execSync(`docker compose -f "${composePath}" up -d 2>&1`, {
+        const output = execFileSync('docker', ['compose', '-f', composePath, 'up', '-d'], {
             encoding: 'utf8',
             timeout: 120000,
-            cwd: stackPath
+            cwd: stackPath,
+            stdio: 'pipe'
         });
         
         res.json({ success: true, message: 'Stack started', output });
@@ -451,10 +370,11 @@ router.post('/:id/down', requireAuth, async (req, res) => {
             return res.status(404).json({ error: 'Stack not found' });
         }
 
-        const output = execSync(`docker compose -f "${composePath}" down 2>&1`, {
+        const output = execFileSync('docker', ['compose', '-f', composePath, 'down'], {
             encoding: 'utf8',
             timeout: 60000,
-            cwd: stackPath
+            cwd: stackPath,
+            stdio: 'pipe'
         });
         
         res.json({ success: true, message: 'Stack stopped', output });
@@ -476,10 +396,11 @@ router.post('/:id/restart', requireAuth, async (req, res) => {
             return res.status(404).json({ error: 'Stack not found' });
         }
 
-        execSync(`docker compose -f "${composePath}" restart 2>&1`, {
+        execFileSync('docker', ['compose', '-f', composePath, 'restart'], {
             encoding: 'utf8',
             timeout: 60000,
-            cwd: stackPath
+            cwd: stackPath,
+            stdio: 'pipe'
         });
         
         res.json({ success: true, message: 'Stack restarted' });
@@ -506,15 +427,15 @@ router.get('/:id/logs', requireAuth, (req, res) => {
             return res.status(404).json({ error: 'Stack not found' });
         }
 
-        const serviceArg = service ? ` ${service}` : '';
-        const logs = execSync(
-            `docker compose -f "${composePath}" logs --tail=${lines}${serviceArg} 2>&1`,
-            { encoding: 'utf8', timeout: 30000, cwd: stackPath }
+        const args = ['compose', '-f', composePath, 'logs', `--tail=${lines}`];
+        if (service) args.push(service);
+        const logs = execFileSync('docker', args,
+            { encoding: 'utf8', timeout: 30000, cwd: stackPath, stdio: 'pipe' }
         );
         
         res.json({ success: true, logs });
     } catch (e) {
-        res.json({ success: true, logs: e.message });
+        res.json({ success: false, error: e.message });
     }
 });
 
@@ -534,10 +455,11 @@ router.delete('/:id', requireAuth, async (req, res) => {
         // Stop containers first
         if (fs.existsSync(composePath)) {
             try {
-                execSync(`docker compose -f "${composePath}" down -v 2>&1`, {
+                execFileSync('docker', ['compose', '-f', composePath, 'down', '-v'], {
                     encoding: 'utf8',
                     timeout: 60000,
-                    cwd: stackPath
+                    cwd: stackPath,
+                    stdio: 'pipe'
                 });
             } catch (e) {
                 console.error('Error stopping stack:', e.message);
@@ -566,10 +488,11 @@ router.post('/:id/pull', requireAuth, async (req, res) => {
             return res.status(404).json({ error: 'Stack not found' });
         }
         
-        const output = execSync(`docker compose -f "${composePath}" pull 2>&1`, {
+        const output = execFileSync('docker', ['compose', '-f', composePath, 'pull'], {
             encoding: 'utf8',
             timeout: 300000,
-            cwd: stackPath
+            cwd: stackPath,
+            stdio: 'pipe'
         });
         
         res.json({ success: true, message: 'Images pulled', output });

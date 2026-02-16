@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { exec, execFile, spawn } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const fs = require('fs').promises;
 const path = require('path');
 const { requireAuth } = require('../middleware/auth');
@@ -18,8 +18,12 @@ function validateAppId(id) {
 
 // Helper: Load catalog
 async function loadCatalog() {
-    const data = await fs.readFile(CATALOG_PATH, 'utf8');
-    return JSON.parse(data);
+    try {
+        const data = await fs.readFile(CATALOG_PATH, 'utf8');
+        return JSON.parse(data);
+    } catch {
+        return { apps: [], categories: [] };
+    }
 }
 
 // Helper: Load installed apps
@@ -78,7 +82,7 @@ async function ensureDirectory(dirPath) {
 // Helper: Check if Docker is available
 async function checkDocker() {
     return new Promise((resolve) => {
-        exec('docker --version', (err) => resolve(!err));
+        execFile('docker', ['--version'], (err) => resolve(!err));
     });
 }
 
@@ -302,58 +306,56 @@ router.post('/install/:id', requireAuth, async (req, res) => {
             }
         }
         
-        // Build docker run command
-        let cmd = `docker run -d --name homestore-${id} --restart unless-stopped`;
-        
+        // Build docker run args array
+        const dockerArgs = ['run', '-d', '--name', `homestore-${id}`, '--restart', 'unless-stopped'];
+
         // Add ports
         for (const [host, container] of Object.entries(finalPorts)) {
             // Handle port formats like "51820/udp"
             const hostPort = host.split('/')[0];
             const protocol = host.includes('/') ? host.split('/')[1] : '';
             const containerPort = container.includes('/') ? container : (protocol ? `${container}/${protocol}` : container);
-            cmd += ` -p ${hostPort}:${containerPort}`;
+            dockerArgs.push('-p', `${hostPort}:${containerPort}`);
         }
-        
+
         // Add volumes
         for (const [container, host] of Object.entries(finalVolumes)) {
-            cmd += ` -v ${host}:${container}`;
+            dockerArgs.push('-v', `${host}:${container}`);
         }
-        
+
         // Add environment variables (merge defaults with user config)
         const envVars = { ...app.env, ...(config?.env || {}) };
         for (const [key, value] of Object.entries(envVars)) {
-            // Escape quotes in values for shell
-            const escapedValue = String(value).replace(/"/g, '\\"');
-            cmd += ` -e ${key}="${escapedValue}"`;
+            dockerArgs.push('-e', `${key}=${String(value)}`);
         }
-        
+
         // Add capabilities
         if (app.capabilities) {
             for (const cap of app.capabilities) {
-                cmd += ` --cap-add=${cap}`;
+                dockerArgs.push('--cap-add', cap);
             }
         }
-        
+
         // Add sysctls
         if (app.sysctls) {
             for (const [key, value] of Object.entries(app.sysctls)) {
-                cmd += ` --sysctl ${key}=${value}`;
+                dockerArgs.push('--sysctl', `${key}=${value}`);
             }
         }
-        
+
         // Add privileged if needed
         if (app.privileged) {
-            cmd += ' --privileged';
+            dockerArgs.push('--privileged');
         }
-        
+
         // Add image
-        cmd += ` ${app.image}`;
-        
-        console.log('Installing app:', cmd);
-        
+        dockerArgs.push(app.image);
+
+        console.log('Installing app:', 'docker', dockerArgs.join(' '));
+
         // Execute
         await new Promise((resolve, reject) => {
-            exec(cmd, { timeout: 300000 }, (err, stdout, stderr) => {
+            execFile('docker', dockerArgs, { timeout: 300000 }, (err, stdout, stderr) => {
                 if (err) {
                     console.error('Install error:', stderr);
                     reject(new Error(stderr || err.message));
@@ -440,7 +442,7 @@ router.post('/uninstall/:id', requireAuth, async (req, res) => {
         if (removeData) {
             const appDir = `${APPS_BASE}/${id}`;
             await new Promise((resolve) => {
-                exec(`rm -rf "${appDir}"`, (err) => resolve());
+                execFile('rm', ['-rf', appDir], (err) => resolve());
             });
         }
         
@@ -588,50 +590,49 @@ router.post('/update/:id', requireAuth, async (req, res) => {
         const finalPorts = config.ports || app.ports || {};
         const finalEnv = config.env || app.env || {};
         
-        // Build docker run command with saved configuration
-        let cmd = `docker run -d --name homestore-${id} --restart unless-stopped`;
-        
+        // Build docker run args array with saved configuration
+        const dockerArgs = ['run', '-d', '--name', `homestore-${id}`, '--restart', 'unless-stopped'];
+
         // Add ports
         for (const [host, container] of Object.entries(finalPorts)) {
             const hostPort = host.split('/')[0];
             const protocol = host.includes('/') ? host.split('/')[1] : '';
             const containerPort = container.includes('/') ? container : (protocol ? `${container}/${protocol}` : container);
-            cmd += ` -p ${hostPort}:${containerPort}`;
+            dockerArgs.push('-p', `${hostPort}:${containerPort}`);
         }
-        
+
         // Add volumes
         for (const [container, host] of Object.entries(finalVolumes)) {
-            cmd += ` -v ${host}:${container}`;
+            dockerArgs.push('-v', `${host}:${container}`);
         }
-        
+
         // Add environment variables
         for (const [key, value] of Object.entries(finalEnv)) {
-            const escapedValue = String(value).replace(/"/g, '\\"');
-            cmd += ` -e ${key}="${escapedValue}"`;
+            dockerArgs.push('-e', `${key}=${String(value)}`);
         }
-        
+
         if (app.capabilities) {
             for (const cap of app.capabilities) {
-                cmd += ` --cap-add=${cap}`;
+                dockerArgs.push('--cap-add', cap);
             }
         }
-        
+
         if (app.sysctls) {
             for (const [key, value] of Object.entries(app.sysctls)) {
-                cmd += ` --sysctl ${key}=${value}`;
+                dockerArgs.push('--sysctl', `${key}=${value}`);
             }
         }
-        
+
         if (app.privileged) {
-            cmd += ' --privileged';
+            dockerArgs.push('--privileged');
         }
-        
-        cmd += ` ${app.image}`;
-        
-        console.log('Updating app with config:', cmd);
-        
+
+        dockerArgs.push(app.image);
+
+        console.log('Updating app with config:', 'docker', dockerArgs.join(' '));
+
         await new Promise((resolve, reject) => {
-            exec(cmd, { timeout: 300000 }, (err, stdout, stderr) => {
+            execFile('docker', dockerArgs, { timeout: 300000 }, (err, stdout, stderr) => {
                 if (err) reject(new Error(stderr || err.message));
                 else resolve();
             });

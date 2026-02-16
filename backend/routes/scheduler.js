@@ -27,7 +27,19 @@ const DANGEROUS_PATTERNS = [
   'dd if=',
   ':(){ :|:& };:',
   '> /dev/sda',
-  'chmod -R 777 /'
+  'chmod -R 777 /',
+  '$(', '`',       // command substitution
+  '| ', ' |',      // pipes
+  '; ',             // command chaining
+  '&& ', '|| ',    // logical operators
+  '> /dev/',        // writing to devices
+  '/etc/shadow',    // sensitive files
+  '/etc/passwd',
+  'curl ', 'wget ', // downloads
+  'python ', 'perl ', 'ruby ', // script interpreters
+  'nc ', 'ncat ',   // netcat
+  'base64',         // encoding tricks
+  'eval ',          // eval
 ];
 
 /**

@@ -8,8 +8,9 @@
 const express = require('express');
 const router = express.Router();
 const fs = require('fs');
+const path = require('path');
 const si = require('systeminformation');
-const { exec, execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 
 const { requireAuth } = require('../middleware/auth');
 const { logSecurityEvent } = require('../utils/security');
@@ -112,43 +113,47 @@ router.get('/stats', requireAuth, async (req, res) => {
         // Try to get fan speeds
         let fans = [];
         try {
-            const fanData = await new Promise((resolve) => {
-                const cmd = `
-                    for hwmon in /sys/class/hwmon/hwmon*; do
-                        if [ -d "$hwmon" ]; then
-                            name=$(cat "$hwmon/name" 2>/dev/null || echo "unknown")
-                            for fan in "$hwmon"/fan*_input; do
-                                if [ -f "$fan" ]; then
-                                    rpm=$(cat "$fan" 2>/dev/null || echo "0")
-                                    fannum=$(echo "$fan" | grep -oP 'fan\\K[0-9]+')
-                                    echo "$name:$fannum:$rpm"
-                                fi
-                            done
-                        fi
-                    done
-                    if [ -f /sys/devices/platform/cooling_fan/hwmon/hwmon*/fan1_input ]; then
-                        rpm=$(cat /sys/devices/platform/cooling_fan/hwmon/hwmon*/fan1_input 2>/dev/null || echo "0")
-                        echo "rpi_fan:1:$rpm"
-                    fi
-                `;
-                exec(cmd, { shell: '/bin/bash' }, (err, stdout) => {
-                    if (err || !stdout.trim()) {
-                        resolve([]);
-                        return;
+            const fanList = [];
+            // Read fan speeds from /sys/class/hwmon without shell
+            const hwmonBase = '/sys/class/hwmon';
+            if (fs.existsSync(hwmonBase)) {
+                const hwmonDirs = fs.readdirSync(hwmonBase);
+                for (const hwmon of hwmonDirs) {
+                    const hwmonPath = path.join(hwmonBase, hwmon);
+                    let hwmonName = 'unknown';
+                    try { hwmonName = fs.readFileSync(path.join(hwmonPath, 'name'), 'utf8').trim(); } catch (e) {}
+
+                    // Find fan*_input files
+                    try {
+                        const entries = fs.readdirSync(hwmonPath);
+                        for (const entry of entries) {
+                            const fanMatch = entry.match(/^fan(\d+)_input$/);
+                            if (fanMatch) {
+                                try {
+                                    const rpm = parseInt(fs.readFileSync(path.join(hwmonPath, entry), 'utf8').trim()) || 0;
+                                    fanList.push({
+                                        id: fanList.length + 1,
+                                        name: `${hwmonName} Fan ${fanMatch[1]}`,
+                                        rpm
+                                    });
+                                } catch (e) {}
+                            }
+                        }
+                    } catch (e) {}
+                }
+            }
+            // Check RPi cooling fan
+            try {
+                const rpiFanPaths = fs.readdirSync('/sys/devices/platform/cooling_fan/hwmon/');
+                for (const hwDir of rpiFanPaths) {
+                    const fanInputPath = `/sys/devices/platform/cooling_fan/hwmon/${hwDir}/fan1_input`;
+                    if (fs.existsSync(fanInputPath)) {
+                        const rpm = parseInt(fs.readFileSync(fanInputPath, 'utf8').trim()) || 0;
+                        fanList.push({ id: fanList.length + 1, name: 'RPi Fan 1', rpm });
                     }
-                    const lines = stdout.trim().split('\n').filter(s => s && s.includes(':'));
-                    const fanList = lines.map((line, idx) => {
-                        const [name, num, rpm] = line.split(':');
-                        return {
-                            id: idx + 1,
-                            name: name === 'rpi_fan' ? `RPi Fan ${num}` : `${name} Fan ${num}`,
-                            rpm: parseInt(rpm) || 0
-                        };
-                    });
-                    resolve(fanList);
-                });
-            });
-            fans = fanData;
+                }
+            } catch (e) {}
+            fans = fanList;
         } catch (e) {
             fans = [];
         }
@@ -213,32 +218,69 @@ router.post('/fan', requireAuth, (req, res) => {
     const fanNum = validatedFanId;
 
     try {
-        // SECURITY: Use validated integers directly (no string interpolation from user input)
-        const cmd = `
-            for hwmon in /sys/class/hwmon/hwmon*; do
-                if [ -f "$hwmon/pwm${fanNum}" ]; then
-                    echo ${pwmValue} | sudo tee "$hwmon/pwm${fanNum}" > /dev/null 2>&1
-                    echo "success"
-                    exit 0
-                fi
-            done
-            if [ -f /sys/devices/platform/cooling_fan/hwmon/hwmon*/pwm1 ]; then
-                echo ${pwmValue} | sudo tee /sys/devices/platform/cooling_fan/hwmon/hwmon*/pwm1 > /dev/null 2>&1
-                echo "success"
-                exit 0
-            fi
-            if [ -d /sys/class/thermal/cooling_device0 ]; then
-                max_state=$(cat /sys/class/thermal/cooling_device0/max_state 2>/dev/null || echo "255")
-                state=$(( ${pwmValue} * max_state / 255 ))
-                echo $state | sudo tee /sys/class/thermal/cooling_device0/cur_state > /dev/null 2>&1
-                echo "success"
-                exit 0
-            fi
-            echo "no_pwm_found"
-        `;
-        const result = execSync(cmd, { shell: '/bin/bash', encoding: 'utf8', timeout: 10000 }).trim();
+        let found = false;
 
-        if (result === 'success') {
+        // Method 1: Search hwmon devices for pwm control
+        const hwmonBase = '/sys/class/hwmon';
+        if (fs.existsSync(hwmonBase)) {
+            const hwmonDirs = fs.readdirSync(hwmonBase);
+            for (const hwmon of hwmonDirs) {
+                const pwmPath = path.join(hwmonBase, hwmon, `pwm${fanNum}`);
+                if (fs.existsSync(pwmPath)) {
+                    execFileSync('sudo', ['tee', pwmPath], {
+                        input: String(pwmValue),
+                        encoding: 'utf8',
+                        timeout: 10000,
+                        stdio: ['pipe', 'pipe', 'pipe']
+                    });
+                    found = true;
+                    break;
+                }
+            }
+        }
+
+        // Method 2: RPi cooling fan
+        if (!found) {
+            try {
+                const rpiFanBase = '/sys/devices/platform/cooling_fan/hwmon/';
+                if (fs.existsSync(rpiFanBase)) {
+                    const rpiFanDirs = fs.readdirSync(rpiFanBase);
+                    for (const dir of rpiFanDirs) {
+                        const pwmPath = path.join(rpiFanBase, dir, 'pwm1');
+                        if (fs.existsSync(pwmPath)) {
+                            execFileSync('sudo', ['tee', pwmPath], {
+                                input: String(pwmValue),
+                                encoding: 'utf8',
+                                timeout: 10000,
+                                stdio: ['pipe', 'pipe', 'pipe']
+                            });
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // Method 3: Thermal cooling device
+        if (!found) {
+            const coolingStatePath = '/sys/class/thermal/cooling_device0/cur_state';
+            const coolingMaxPath = '/sys/class/thermal/cooling_device0/max_state';
+            if (fs.existsSync(coolingStatePath)) {
+                let maxState = 255;
+                try { maxState = parseInt(fs.readFileSync(coolingMaxPath, 'utf8').trim()) || 255; } catch (e) {}
+                const state = Math.round(pwmValue * maxState / 255);
+                execFileSync('sudo', ['tee', coolingStatePath], {
+                    input: String(state),
+                    encoding: 'utf8',
+                    timeout: 10000,
+                    stdio: ['pipe', 'pipe', 'pipe']
+                });
+                found = true;
+            }
+        }
+
+        if (found) {
             logSecurityEvent('FAN_CONTROL', { fanId: fanNum, speed, pwmValue }, req.ip);
             res.json({ success: true, message: `Fan ${fanNum} speed set to ${speed}%` });
         } else {
@@ -255,7 +297,8 @@ router.get('/fan/mode', requireAuth, (req, res) => {
     try {
         let currentMode = 'balanced';
         try {
-            const configContent = execSync(`cat ${FANCTL_CONF} 2>/dev/null || echo ""`, { encoding: 'utf8' });
+            let configContent = '';
+            try { configContent = fs.readFileSync(FANCTL_CONF, 'utf8'); } catch (e) {}
 
             if (configContent.includes('SILENT preset')) {
                 currentMode = 'silent';
@@ -294,21 +337,16 @@ router.post('/fan/mode', requireAuth, (req, res) => {
 
     try {
         const preset = FAN_PRESETS[validatedMode];
-        const tempFile = '/mnt/storage/.tmp/homepinas-fanctl-temp.conf';
+        // Use os.tmpdir() for temp file — /mnt/storage/.tmp may not exist yet
+        const os = require('os');
+        const tempFile = path.join(os.tmpdir(), 'homepinas-fanctl-temp.conf');
         fs.writeFileSync(tempFile, preset, 'utf8');
-
-        // SECURITY: Use execSync with timeout to prevent hanging
-        execSync(`sudo cp ${tempFile} ${FANCTL_CONF} && sudo chmod 644 ${FANCTL_CONF}`, { 
-            shell: '/bin/bash',
-            timeout: 10000 
-        });
+        execFileSync('sudo', ['cp', tempFile, FANCTL_CONF], { encoding: 'utf8', timeout: 10000 });
+        execFileSync('sudo', ['chmod', '644', FANCTL_CONF], { encoding: 'utf8', timeout: 10000 });
         fs.unlinkSync(tempFile);
 
         try {
-            execSync('sudo systemctl restart homepinas-fanctl 2>/dev/null || true', { 
-                shell: '/bin/bash',
-                timeout: 10000 
-            });
+            execFileSync('sudo', ['systemctl', 'restart', 'homepinas-fanctl'], { encoding: 'utf8', timeout: 10000 });
         } catch (e) {}
 
         logSecurityEvent('FAN_MODE_CHANGE', { mode: validatedMode, user: req.user.username }, req.ip);
@@ -326,7 +364,7 @@ router.get('/disks', async (req, res) => {
         // Get disk info from lsblk (no sudo needed, includes serial)
         let lsblkData = {};
         try {
-            const lsblkJson = execSync('lsblk -Jbo NAME,SIZE,TYPE,MODEL,SERIAL,TRAN 2>/dev/null', { encoding: 'utf8' });
+            const lsblkJson = execFileSync('lsblk', ['-J', '-b', '-o', 'NAME,SIZE,TYPE,MODEL,SERIAL,TRAN'], { encoding: 'utf8' });
             const parsed = JSON.parse(lsblkJson);
             for (const dev of (parsed.blockdevices || [])) {
                 lsblkData[dev.name] = {
@@ -340,14 +378,6 @@ router.get('/disks', async (req, res) => {
         } catch (e) {
             console.log('lsblk parse error:', e.message);
         }
-
-        // Get temperature from /sys (no sudo needed)
-        const temps = {};
-        try {
-            const hwmonDirs = execSync('ls -d /sys/class/block/sd*/device/hwmon/hwmon*/temp*_input 2>/dev/null || true', { encoding: 'utf8' });
-            // Fallback: try reading from drivetemp if available
-            const drivetemps = execSync('cat /sys/class/hwmon/hwmon*/temp1_input 2>/dev/null || true', { encoding: 'utf8' });
-        } catch (e) {}
 
         const blockDevices = await si.blockDevices();
         const diskLayout = await si.diskLayout();
@@ -389,26 +419,50 @@ router.get('/disks', async (req, res) => {
                 const finalModel = (lsblkModel && lsblkModel.length > 3) ? lsblkModel : 
                                    (layoutModel || lsblkModel || 'Unknown Drive');
 
-                // Try to get temperature (read from /sys without sudo)
+                // Try to get temperature
                 let temp = null;
                 try {
-                    // drivetemp module exposes temps via hwmon
-                    const tempPath = `/sys/block/${dev.name}/device/hwmon/`;
-                    const hwmonDir = execSync(`ls ${tempPath} 2>/dev/null | head -1`, { encoding: 'utf8' }).trim();
-                    if (hwmonDir) {
-                        const tempVal = parseInt(execSync(`cat ${tempPath}${hwmonDir}/temp1_input 2>/dev/null`, { encoding: 'utf8' }));
-                        if (!isNaN(tempVal)) temp = Math.round(tempVal / 1000);
+                    // Method 1: drivetemp module exposes temps via hwmon
+                    const tempBasePath = `/sys/block/${dev.name}/device/hwmon/`;
+                    if (fs.existsSync(tempBasePath)) {
+                        const hwmonDirs = fs.readdirSync(tempBasePath);
+                        if (hwmonDirs.length > 0) {
+                            const tempFile = path.join(tempBasePath, hwmonDirs[0], 'temp1_input');
+                            if (fs.existsSync(tempFile)) {
+                                const tempVal = parseInt(fs.readFileSync(tempFile, 'utf8').trim());
+                                if (!isNaN(tempVal)) temp = Math.round(tempVal / 1000);
+                            }
+                        }
                     }
                 } catch (e) {}
+
+                // Method 2: smartctl fallback if hwmon didn't work
+                if (temp === null) {
+                    try {
+                        const smartOut = execFileSync('sudo', ['smartctl', '-A', `/dev/${dev.name}`], { encoding: 'utf8', timeout: 5000 });
+                        // SMART attributes format: ID ATTR_NAME FLAGS VALUE WORST THRESH TYPE UPDATED WHEN_FAILED RAW_VALUE
+                        // We need RAW_VALUE (last column), not VALUE. Match the number after the dash (-) near end of line
+                        const tempMatch = smartOut.match(/(?:Temperature_Celsius|Airflow_Temperature_Cel|Temperature_Internal|Temperature_Case)\s+\S+\s+\d+\s+\d+\s+\d+\s+\S+\s+\S+\s+\S+\s+(\d+)/);
+                        if (tempMatch) {
+                            temp = parseInt(tempMatch[1]);
+                        } else {
+                            // NVMe / newer format: "Temperature:    XX Celsius"
+                            const nvmeMatch = smartOut.match(/Temperature:\s+(\d+)\s*Celsius/i);
+                            if (nvmeMatch) temp = parseInt(nvmeMatch[1]);
+                        }
+                    } catch (e) {}
+                }
 
                 // Get disk usage from mounted partitions
                 let usage = 0;
                 try {
-                    // Find mounted partition for this disk (e.g., sda1, sdb1)
-                    // Filter to only /dev/ lines to avoid udev entries
-                    const dfOutput = execSync(`df -P /dev/${dev.name}* 2>/dev/null | grep "^/dev/${dev.name}" | head -1`, { encoding: 'utf8' }).trim();
-                    if (dfOutput) {
-                        const parts = dfOutput.split(/\s+/);
+                    // Use execFileSync to avoid shell interpolation
+                    const dfOutput = execFileSync('df', ['-P'], { encoding: 'utf8' });
+                    // Filter lines matching this disk's partitions (e.g., /dev/sda1, /dev/sdb1)
+                    const diskLine = dfOutput.split('\n')
+                        .find(line => line.startsWith(`/dev/${dev.name}`));
+                    if (diskLine) {
+                        const parts = diskLine.trim().split(/\s+/);
                         if (parts.length >= 5) {
                             usage = parseInt(parts[4]) || 0; // Use% column
                         }
@@ -422,7 +476,7 @@ router.get('/disks', async (req, res) => {
                     size: sizeGBraw >= 1024 ? (sizeGBraw / 1024).toFixed(1) + ' TB' : sizeGB + ' GB',
                     model: finalModel,
                     serial: serial || 'N/A',
-                    temp: temp || (35 + Math.floor(Math.random() * 10)),
+                    temp: temp,
                     usage
                 };
             });
