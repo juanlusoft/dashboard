@@ -440,8 +440,9 @@ router.get('/disks', async (req, res) => {
                 if (temp === null) {
                     try {
                         const smartOut = execFileSync('sudo', ['smartctl', '-A', `/dev/${dev.name}`], { encoding: 'utf8', timeout: 5000 });
-                        // Look for Temperature_Celsius or Airflow_Temperature_Cel
-                        const tempMatch = smartOut.match(/(?:Temperature_Celsius|Airflow_Temperature_Cel|Temperature_Internal)\s+\S+\s+(\d+)/);
+                        // SMART attributes format: ID ATTR_NAME FLAGS VALUE WORST THRESH TYPE UPDATED WHEN_FAILED RAW_VALUE
+                        // We need RAW_VALUE (last column), not VALUE. Match the number after the dash (-) near end of line
+                        const tempMatch = smartOut.match(/(?:Temperature_Celsius|Airflow_Temperature_Cel|Temperature_Internal|Temperature_Case)\s+\S+\s+\d+\s+\d+\s+\d+\s+\S+\s+\S+\s+\S+\s+(\d+)/);
                         if (tempMatch) {
                             temp = parseInt(tempMatch[1]);
                         } else {
