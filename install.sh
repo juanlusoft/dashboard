@@ -1,0 +1,1533 @@
+#!/bin/bash
+
+# HomePiNAS - Premium Dashboard for Raspberry Pi / Debian / Ubuntu
+# Universal Installer with automatic OS detection
+# Version: 2.0.0 (Homelabs.club Edition)
+
+# Version - CHANGE THIS FOR EACH RELEASE
+VERSION="2.7.0"
+
+# Parse command line arguments
+CLEAN_INSTALL=false
+for arg in "$@"; do
+    case $arg in
+        --clean)
+            CLEAN_INSTALL=true
+            echo "Clean install mode: will NOT preserve existing users/config"
+            ;;
+    esac
+done
+
+# Determine the real user early (before any operations that need it)
+REAL_USER=${SUDO_USER:-$USER}
+REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+
+# Track if repos were disabled for cleanup
+REPOS_DISABLED=false
+
+# Cleanup function for trap
+cleanup() {
+    local exit_code=$?
+    if [ "$REPOS_DISABLED" = true ]; then
+        echo -e "${YELLOW}Restoring disabled repositories...${NC}"
+        for f in /etc/apt/sources.list.d/*.disabled; do
+            [ -f "$f" ] && mv "$f" "${f%.disabled}"
+        done
+    fi
+    if [ $exit_code -ne 0 ]; then
+        echo -e "${RED}Installation failed. Check the errors above.${NC}"
+    fi
+}
+trap cleanup EXIT
+
+set -e
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+echo -e "${BLUE}=========================================${NC}"
+echo -e "${BLUE}   HomePiNAS v${VERSION} Universal Installer  ${NC}"
+echo -e "${BLUE}   Homelabs.club Edition                ${NC}"
+echo -e "${BLUE}=========================================${NC}"
+
+# Check for root
+if [ "$EUID" -ne 0 ]; then
+  echo -e "${RED}Please run as root (use sudo)${NC}"
+  exit 1
+fi
+
+# Prevent interactive prompts during apt operations
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+export NEEDRESTART_SUSPEND=1
+
+# Configure apt to not prompt for kernel updates or service restarts
+mkdir -p /etc/needrestart/conf.d
+cat > /etc/needrestart/conf.d/homepinas.conf <<'NREOF'
+# HomePiNAS: Disable interactive restarts during installation
+$nrconf{restart} = 'a';
+$nrconf{kernelhints} = 0;
+NREOF
+
+TARGET_DIR="/opt/homepinas"
+REPO_URL="https://github.com/juanlusoft/homepinas-v2.git"
+BRANCH="main"
+FANCTL_SCRIPT="/usr/local/bin/homepinas-fanctl.sh"
+FANCTL_CONF="/usr/local/bin/homepinas-fanctl.conf"
+CONFIG_FILE="/boot/firmware/config.txt"
+STORAGE_MOUNT_BASE="/mnt/disks"
+POOL_MOUNT="/mnt/storage"
+SNAPRAID_CONF="/etc/snapraid.conf"
+MERGERFS_CONF="/etc/mergerfs.conf"
+
+# APT options to suppress all interactive prompts
+APT_OPTS="-o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef"
+
+#######################################
+# PHASE 1: OS DETECTION
+#######################################
+echo -e "${BLUE}[1/7] Detecting operating system...${NC}"
+
+# Initialize detection variables
+OS_ID=""
+OS_VER=""
+OS_CODENAME=""
+OS_PRETTY=""
+ARCH=""
+IS_RASPBERRY_PI=false
+IS_TESTING=false
+
+# Detect architecture
+ARCH=$(dpkg --print-architecture 2>/dev/null || uname -m)
+case "$ARCH" in
+    aarch64) ARCH="arm64" ;;
+    x86_64)  ARCH="amd64" ;;
+esac
+
+# Detect if running on Raspberry Pi
+if [ -f /proc/device-tree/model ]; then
+    if grep -qi "raspberry" /proc/device-tree/model 2>/dev/null; then
+        IS_RASPBERRY_PI=true
+    fi
+fi
+
+# Read OS information
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    OS_ID="$ID"
+    OS_VER="$VERSION_ID"
+    OS_CODENAME="$VERSION_CODENAME"
+    OS_PRETTY="$PRETTY_NAME"
+fi
+
+# Detect if this is a testing/unstable release
+case "$OS_CODENAME" in
+    trixie|sid|testing|unstable|devel)
+        IS_TESTING=true
+        ;;
+esac
+
+# Display detected information
+echo -e "${CYAN}┌─────────────────────────────────────────┐${NC}"
+echo -e "${CYAN}│ System Detection Results                │${NC}"
+echo -e "${CYAN}├─────────────────────────────────────────┤${NC}"
+echo -e "${CYAN}│${NC} OS:          ${GREEN}$OS_PRETTY${NC}"
+echo -e "${CYAN}│${NC} ID:          ${GREEN}$OS_ID${NC}"
+echo -e "${CYAN}│${NC} Codename:    ${GREEN}$OS_CODENAME${NC}"
+echo -e "${CYAN}│${NC} Architecture:${GREEN}$ARCH${NC}"
+echo -e "${CYAN}│${NC} Raspberry Pi:${GREEN}$IS_RASPBERRY_PI${NC}"
+echo -e "${CYAN}│${NC} Testing/Dev: ${GREEN}$IS_TESTING${NC}"
+echo -e "${CYAN}└─────────────────────────────────────────┘${NC}"
+
+#######################################
+# PHASE 2: REPOSITORY CONFIGURATION
+#######################################
+echo -e "${BLUE}[2/7] Configuring repositories...${NC}"
+
+# Clean up any problematic repository files
+echo -e "${BLUE}Cleaning old repository configurations...${NC}"
+rm -f /etc/apt/sources.list.d/docker.list 2>/dev/null || true
+rm -f /etc/apt/keyrings/docker.asc 2>/dev/null || true
+
+# Temporarily disable any third-party repos that might cause issues
+for f in /etc/apt/sources.list.d/*.list; do
+    if [ -f "$f" ] && [ "$f" != "/etc/apt/sources.list.d/raspi.list" ]; then
+        echo -e "${YELLOW}Temporarily disabling: $f${NC}"
+        mv "$f" "${f}.disabled" 2>/dev/null || true
+        REPOS_DISABLED=true
+    fi
+done
+
+# Function to ensure repositories are properly configured
+configure_repositories() {
+    local sources_file="/etc/apt/sources.list"
+    local sources_dir="/etc/apt/sources.list.d"
+    local need_update=false
+
+    echo -e "${BLUE}Checking repository configuration...${NC}"
+
+    # First, clean apt cache to ensure fresh data
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+
+    # Quick update to test repos
+    apt-get update -qq 2>/dev/null || true
+
+    # Check if essential packages are actually installable (not just in cache)
+    if ! apt-get install --dry-run git &>/dev/null; then
+        echo -e "${YELLOW}Essential packages not available - fixing repositories...${NC}"
+        echo -e "${YELLOW}Current sources.list before fix:${NC}"
+        cat "$sources_file" 2>/dev/null || echo "(empty or missing)"
+        echo -e ""
+        need_update=true
+
+        # Backup current sources.list
+        cp "$sources_file" "${sources_file}.backup.$(date +%Y%m%d)" 2>/dev/null || true
+
+        # Create proper sources.list based on detected OS
+        case "$OS_CODENAME" in
+            trixie|sid)
+                echo -e "${BLUE}Configuring Debian Trixie repositories...${NC}"
+                cat > "$sources_file" <<EOF
+# Debian Trixie (Testing) - Configured by HomePiNAS
+deb http://deb.debian.org/debian trixie main contrib non-free non-free-firmware
+deb-src http://deb.debian.org/debian trixie main contrib non-free non-free-firmware
+
+deb http://deb.debian.org/debian trixie-updates main contrib non-free non-free-firmware
+deb-src http://deb.debian.org/debian trixie-updates main contrib non-free non-free-firmware
+
+deb http://deb.debian.org/debian-security trixie-security main contrib non-free-firmware
+deb-src http://deb.debian.org/debian-security trixie-security main contrib non-free-firmware
+EOF
+                ;;
+            bookworm)
+                echo -e "${BLUE}Configuring Debian Bookworm repositories...${NC}"
+                cat > "$sources_file" <<EOF
+# Debian Bookworm (Stable) - Configured by HomePiNAS
+deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
+deb-src http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
+
+deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
+deb-src http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
+
+deb http://deb.debian.org/debian-security bookworm-security main contrib non-free-firmware
+deb-src http://deb.debian.org/debian-security bookworm-security main contrib non-free-firmware
+EOF
+                ;;
+            bullseye)
+                echo -e "${BLUE}Configuring Debian Bullseye repositories...${NC}"
+                cat > "$sources_file" <<EOF
+# Debian Bullseye (Oldstable) - Configured by HomePiNAS
+deb http://deb.debian.org/debian bullseye main contrib non-free
+deb-src http://deb.debian.org/debian bullseye main contrib non-free
+
+deb http://deb.debian.org/debian bullseye-updates main contrib non-free
+deb-src http://deb.debian.org/debian bullseye-updates main contrib non-free
+
+deb http://deb.debian.org/debian-security bullseye-security main contrib non-free
+deb-src http://deb.debian.org/debian-security bullseye-security main contrib non-free
+EOF
+                ;;
+            *)
+                # For Ubuntu or unknown
+                if [ "$OS_ID" = "ubuntu" ]; then
+                    echo -e "${BLUE}Ubuntu detected, using default repos${NC}"
+                else
+                    echo -e "${YELLOW}Unknown OS codename: $OS_CODENAME${NC}"
+                fi
+                ;;
+        esac
+
+        # Keep Raspberry Pi repos if they exist
+        if [ "$IS_RASPBERRY_PI" = true ]; then
+            if ! grep -q "archive.raspberrypi" "$sources_file" 2>/dev/null; then
+                echo "" >> "$sources_file"
+                echo "# Raspberry Pi Archive" >> "$sources_file"
+                echo "deb http://archive.raspberrypi.com/debian $OS_CODENAME main" >> "$sources_file"
+            fi
+        fi
+    fi
+
+    # For Ubuntu, ensure universe is enabled
+    if [ "$OS_ID" = "ubuntu" ]; then
+        add-apt-repository -y universe 2>/dev/null || true
+        need_update=true
+    fi
+
+    # Return whether update is needed
+    if [ "$need_update" = true ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Configure repositories
+if configure_repositories; then
+    echo -e "${BLUE}Repositories were updated, refreshing package lists...${NC}"
+fi
+
+# Update package lists
+echo -e "${BLUE}Updating package lists...${NC}"
+apt-get update
+
+# Verify packages are now available
+echo -e "${BLUE}Verifying package availability...${NC}"
+if ! apt-get install --dry-run git &>/dev/null; then
+    echo -e "${RED}=========================================${NC}"
+    echo -e "${RED}ERROR: Package repositories not working!${NC}"
+    echo -e "${RED}=========================================${NC}"
+    echo -e "${YELLOW}Git package is not installable.${NC}"
+    echo -e "${YELLOW}Current sources.list:${NC}"
+    echo -e "${CYAN}---${NC}"
+    cat /etc/apt/sources.list
+    echo -e "${CYAN}---${NC}"
+    echo -e ""
+    echo -e "${YELLOW}Please verify your internet connection and try:${NC}"
+    echo -e "  sudo apt-get update"
+    echo -e "  sudo apt-get install git"
+    echo -e ""
+    exit 1
+fi
+echo -e "${GREEN}✓ Repository configuration verified${NC}"
+
+#######################################
+# PHASE 3: INSTALL PACKAGES
+#######################################
+echo -e "${BLUE}[3/7] Installing required packages...${NC}"
+
+# Define packages based on OS
+declare -a BASE_PACKAGES
+declare -a DOCKER_PACKAGES
+
+# Common packages for all systems
+BASE_PACKAGES=(
+    "curl"
+    "ca-certificates"
+    "gnupg"
+    "sudo"
+    "parted"
+    "python3"
+    "avahi-daemon"
+    "avahi-utils"
+    "libnss-mdns"
+    "rsync"
+    "openssh-client"
+)
+
+# Packages that might have different names
+install_package_safe() {
+    local pkg="$1"
+    local alt="$2"
+
+    if apt-get install -y $APT_OPTS "$pkg" 2>/dev/null; then
+        echo -e "${GREEN}✓ $pkg${NC}"
+        return 0
+    elif [ -n "$alt" ] && apt-get install -y $APT_OPTS "$alt" 2>/dev/null; then
+        echo -e "${GREEN}✓ $alt (alternative)${NC}"
+        return 0
+    else
+        echo -e "${YELLOW}✗ $pkg not available${NC}"
+        return 1
+    fi
+}
+
+# Install base packages
+echo -e "${BLUE}Installing base packages...${NC}"
+for pkg in "${BASE_PACKAGES[@]}"; do
+    install_package_safe "$pkg"
+done
+
+# Install packages with possible alternatives
+echo -e "${BLUE}Installing system packages...${NC}"
+install_package_safe "git" ""
+install_package_safe "build-essential" "base-devel"
+install_package_safe "smartmontools" ""
+install_package_safe "lm-sensors" "sensors"
+install_package_safe "pigz" ""
+install_package_safe "samba" ""
+install_package_safe "samba-common-bin" ""
+install_package_safe "mc" ""
+install_package_safe "tmux" ""
+install_package_safe "htop" ""
+
+# Install Docker based on OS type
+echo -e "${BLUE}Installing Docker...${NC}"
+
+install_docker() {
+    # Check if already installed
+    if command -v docker &> /dev/null; then
+        echo -e "${GREEN}Docker already installed${NC}"
+        return 0
+    fi
+
+    # For testing releases (Trixie, Sid), use convenience script
+    if [ "$IS_TESTING" = true ]; then
+        echo -e "${YELLOW}Testing release detected - using Docker convenience script${NC}"
+        curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+        if sh /tmp/get-docker.sh; then
+            echo -e "${GREEN}Docker installed successfully${NC}"
+            rm -f /tmp/get-docker.sh
+            return 0
+        else
+            echo -e "${YELLOW}Docker installation failed (common on testing releases)${NC}"
+            echo -e "${YELLOW}You can try installing manually later${NC}"
+            rm -f /tmp/get-docker.sh
+            return 1
+        fi
+    fi
+
+    # For stable releases, try docker.io first
+    if apt-get install -y $APT_OPTS docker.io 2>/dev/null; then
+        echo -e "${GREEN}Docker installed from system repos${NC}"
+        return 0
+    fi
+
+    # Fallback to Docker official repo
+    echo -e "${YELLOW}Trying Docker official repository...${NC}"
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/$OS_ID/gpg -o /etc/apt/keyrings/docker.asc 2>/dev/null || \
+    curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+    chmod a+r /etc/apt/keyrings/docker.asc
+
+    # Determine repo codename (use stable codename for testing)
+    local docker_codename="$OS_CODENAME"
+    case "$OS_CODENAME" in
+        trixie|sid) docker_codename="bookworm" ;;
+    esac
+
+    local docker_url="https://download.docker.com/linux/$OS_ID"
+    if [ "$OS_ID" = "raspbian" ]; then
+        docker_url="https://download.docker.com/linux/debian"
+    fi
+
+    echo "deb [arch=$ARCH signed-by=/etc/apt/keyrings/docker.asc] $docker_url $docker_codename stable" > /etc/apt/sources.list.d/docker.list
+
+    apt-get update
+    if apt-get install -y $APT_OPTS docker-ce docker-ce-cli containerd.io 2>/dev/null; then
+        echo -e "${GREEN}Docker installed from official repo${NC}"
+        return 0
+    fi
+
+    echo -e "${RED}Docker installation failed${NC}"
+    return 1
+}
+
+install_docker || echo -e "${YELLOW}Continuing without Docker...${NC}"
+
+# Fix any broken packages
+apt-get install -f -y $APT_OPTS 2>/dev/null || true
+
+#######################################
+# PHASE 4: INSTALL SNAPRAID + MERGERFS
+#######################################
+echo -e "${BLUE}[4/7] Installing SnapRAID + MergerFS...${NC}"
+
+# Install MergerFS
+install_mergerfs() {
+    if command -v mergerfs &> /dev/null; then
+        echo -e "${GREEN}MergerFS already installed${NC}"
+        return 0
+    fi
+
+    echo -e "${BLUE}Installing MergerFS...${NC}"
+
+    # Get latest mergerfs release (portable grep without -P)
+    MERGERFS_VERSION=$(curl -sS --fail https://api.github.com/repos/trapexit/mergerfs/releases/latest 2>/dev/null | sed -n 's/.*"tag_name": "\([^"]*\)".*/\1/p' | head -1)
+    [ -z "$MERGERFS_VERSION" ] && MERGERFS_VERSION="2.40.2"
+
+    # Determine correct package name based on distro
+    local mergerfs_distro="debian-bookworm"
+    case "$OS_CODENAME" in
+        trixie|sid) mergerfs_distro="debian-trixie" ;;
+        bookworm)   mergerfs_distro="debian-bookworm" ;;
+        bullseye)   mergerfs_distro="debian-bullseye" ;;
+        jammy|noble) mergerfs_distro="ubuntu-jammy" ;;
+        focal)      mergerfs_distro="ubuntu-focal" ;;
+    esac
+
+    local mergerfs_deb="mergerfs_${MERGERFS_VERSION}.${mergerfs_distro}_${ARCH}.deb"
+    echo -e "${BLUE}Downloading: $mergerfs_deb${NC}"
+
+    if curl -L -o /tmp/mergerfs.deb "https://github.com/trapexit/mergerfs/releases/download/${MERGERFS_VERSION}/${mergerfs_deb}" 2>/dev/null; then
+        dpkg -i /tmp/mergerfs.deb || apt-get install -f -y $APT_OPTS
+        rm -f /tmp/mergerfs.deb
+        echo -e "${GREEN}MergerFS installed${NC}"
+    else
+        # Try bookworm as fallback
+        echo -e "${YELLOW}Trying bookworm package as fallback...${NC}"
+        mergerfs_deb="mergerfs_${MERGERFS_VERSION}.debian-bookworm_${ARCH}.deb"
+        if curl -L -o /tmp/mergerfs.deb "https://github.com/trapexit/mergerfs/releases/download/${MERGERFS_VERSION}/${mergerfs_deb}" 2>/dev/null; then
+            dpkg -i /tmp/mergerfs.deb || apt-get install -f -y $APT_OPTS
+            rm -f /tmp/mergerfs.deb
+            echo -e "${GREEN}MergerFS installed${NC}"
+        else
+            # Last resort: apt
+            apt-get install -y $APT_OPTS mergerfs || echo -e "${RED}MergerFS installation failed${NC}"
+        fi
+    fi
+}
+
+install_mergerfs
+
+# Install SnapRAID
+install_snapraid() {
+    if command -v snapraid &> /dev/null; then
+        echo -e "${GREEN}SnapRAID already installed${NC}"
+        return 0
+    fi
+
+    echo -e "${BLUE}Installing SnapRAID...${NC}"
+
+    # Try apt first
+    if apt-get install -y $APT_OPTS snapraid 2>/dev/null; then
+        echo -e "${GREEN}SnapRAID installed from repos${NC}"
+        return 0
+    fi
+
+    # Build from source
+    echo -e "${YELLOW}Building SnapRAID from source...${NC}"
+
+    # Get version (portable grep without -P)
+    local snapraid_version=$(curl -sS --fail https://api.github.com/repos/amadvance/snapraid/releases/latest 2>/dev/null | sed -n 's/.*"tag_name": "v\([^"]*\)".*/\1/p' | head -1)
+    [ -z "$snapraid_version" ] && snapraid_version="12.3"
+    echo -e "${BLUE}Building SnapRAID v${snapraid_version}...${NC}"
+
+    cd /tmp
+    if ! curl -fsSL -o snapraid.tar.gz "https://github.com/amadvance/snapraid/releases/download/v${snapraid_version}/snapraid-${snapraid_version}.tar.gz"; then
+        echo -e "${RED}Failed to download SnapRAID${NC}"
+        return 1
+    fi
+    tar xzf snapraid.tar.gz || { echo -e "${RED}Failed to extract SnapRAID${NC}"; return 1; }
+    cd "snapraid-${snapraid_version}"
+
+    # Configure and build (releases include pre-generated configure)
+    if [ -f configure ]; then
+        ./configure
+        make -j$(nproc)
+        make install
+        echo -e "${GREEN}SnapRAID installed${NC}"
+    else
+        echo -e "${RED}SnapRAID build failed${NC}"
+    fi
+
+    cd /tmp
+    rm -rf "snapraid-${snapraid_version}" snapraid.tar.gz
+}
+
+install_snapraid
+
+#######################################
+# PHASE 5: CONFIGURE SAMBA
+#######################################
+echo -e "${BLUE}[5/7] Configuring Samba...${NC}"
+
+# Only configure Samba if it's installed
+if command -v smbd &> /dev/null; then
+    echo -e "${BLUE}Setting up Samba file sharing...${NC}"
+    # Create /etc/samba directory if it doesn't exist
+    mkdir -p /etc/samba
+
+    # Backup original smb.conf
+    if [ -f /etc/samba/smb.conf ] && [ ! -f /etc/samba/smb.conf.backup ]; then
+        cp /etc/samba/smb.conf /etc/samba/smb.conf.backup
+    fi
+
+    # Create Samba configuration
+    cat > /etc/samba/smb.conf <<'SMBEOF'
+[global]
+   workgroup = WORKGROUP
+   server string = HomePiNAS
+   server role = standalone server
+   log file = /var/log/samba/log.%m
+   max log size = 1000
+   logging = file
+   panic action = /usr/share/samba/panic-action %d
+   obey pam restrictions = yes
+   unix password sync = yes
+   passwd program = /usr/bin/passwd %u
+   passwd chat = *Enter\snew\s*\spassword:* %n\n *Retype\snew\s*\spassword:* %n\n *password\supdated\ssuccessfully* .
+   pam password change = yes
+   map to guest = never
+   usershare allow guests = no
+   guest account = nobody
+
+   # Security settings
+   server min protocol = SMB2
+   client min protocol = SMB2
+
+   # Performance tuning
+   socket options = TCP_NODELAY IPTOS_LOWDELAY
+   read raw = yes
+   write raw = yes
+   use sendfile = yes
+   aio read size = 16384
+   aio write size = 16384
+
+[Storage]
+   comment = HomePiNAS Storage Pool
+   path = /mnt/storage
+   browseable = yes
+   read only = no
+   create mask = 0775
+   directory mask = 0775
+   valid users = @sambashare
+   force group = sambashare
+   inherit permissions = yes
+SMBEOF
+
+    # Create sambashare group if it doesn't exist
+    getent group sambashare > /dev/null || groupadd sambashare
+
+    # Add service user to sambashare group (needed for File Manager)
+    usermod -aG sambashare $REAL_USER 2>/dev/null || true
+
+    # Enable and start Samba services
+    systemctl enable smbd nmbd
+    systemctl restart smbd nmbd || true
+
+    echo -e "${GREEN}Samba configured${NC}"
+else
+    echo -e "${YELLOW}Skipping Samba configuration (not installed)${NC}"
+    # Still create sambashare group for later use
+    getent group sambashare > /dev/null || groupadd sambashare
+fi
+
+#######################################
+# PHASE 5.5: CONFIGURE mDNS / AVAHI
+#######################################
+echo -e "${BLUE}[5.5/7] Configuring mDNS (Avahi)...${NC}"
+
+# Configure Avahi for local network discovery
+if command -v avahi-daemon &> /dev/null; then
+    echo -e "${BLUE}Setting up mDNS/Zeroconf discovery...${NC}"
+    
+    # Create Avahi services directory
+    mkdir -p /etc/avahi/services
+    
+    # Install HomePiNAS service file (using AVAHIEOF without quotes for variable expansion)
+    cat > /etc/avahi/services/homepinas.service <<AVAHIEOF
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<!--
+  HomePiNAS mDNS/Zeroconf Service Configuration
+  This file announces HomePiNAS on the local network as homepinas.local
+  Version: ${VERSION}
+-->
+<service-group>
+  <name replace-wildcards="yes">HomePiNAS on %h</name>
+
+  <!-- HTTP Service (port 80) -->
+  <service>
+    <type>_http._tcp</type>
+    <port>80</port>
+    <txt-record>path=/</txt-record>
+    <txt-record>version=${VERSION}</txt-record>
+    <txt-record>product=HomePiNAS</txt-record>
+  </service>
+
+  <!-- HTTPS Service (port 443) -->
+  <service>
+    <type>_https._tcp</type>
+    <port>443</port>
+    <txt-record>path=/</txt-record>
+    <txt-record>version=${VERSION}</txt-record>
+    <txt-record>product=HomePiNAS</txt-record>
+  </service>
+
+  <!-- Web Admin Interface -->
+  <service>
+    <type>_http-alt._tcp</type>
+    <port>443</port>
+    <txt-record>txtvers=1</txt-record>
+    <txt-record>type=NAS Dashboard</txt-record>
+  </service>
+
+  <!-- SMB/CIFS File Sharing -->
+  <service>
+    <type>_smb._tcp</type>
+    <port>445</port>
+  </service>
+
+  <!-- Device Info Service -->
+  <service>
+    <type>_device-info._tcp</type>
+    <port>0</port>
+    <txt-record>model=HomePiNAS</txt-record>
+  </service>
+</service-group>
+AVAHIEOF
+
+    # Configure Avahi daemon
+    if [ -f /etc/avahi/avahi-daemon.conf ]; then
+        # Enable publishing
+        sed -i 's/^#*publish-workstation=.*/publish-workstation=yes/' /etc/avahi/avahi-daemon.conf 2>/dev/null || true
+        sed -i 's/^#*publish-hinfo=.*/publish-hinfo=yes/' /etc/avahi/avahi-daemon.conf 2>/dev/null || true
+        
+        # Ensure IPv4 is enabled
+        sed -i 's/^#*use-ipv4=.*/use-ipv4=yes/' /etc/avahi/avahi-daemon.conf 2>/dev/null || true
+    fi
+
+    # Configure NSS for mDNS resolution
+    if [ -f /etc/nsswitch.conf ]; then
+        if ! grep -q "mdns" /etc/nsswitch.conf; then
+            # Add mdns4_minimal to hosts line
+            sed -i 's/^hosts:.*/hosts:          files mdns4_minimal [NOTFOUND=return] dns/' /etc/nsswitch.conf
+            echo -e "${GREEN}mDNS name resolution configured${NC}"
+        fi
+    fi
+
+    # Set hostname to homepinas for easy access via homepinas.local
+    CURRENT_HOSTNAME=$(hostname)
+    if [ "$CURRENT_HOSTNAME" != "homepinas" ] && [ "$CURRENT_HOSTNAME" != "PiNas" ]; then
+        echo -e "${YELLOW}Note: Keeping current hostname '$CURRENT_HOSTNAME'${NC}"
+        echo -e "${CYAN}To change it manually, run: sudo hostnamectl set-hostname homepinas${NC}"
+        # Add homepinas as an alias in /etc/hosts if not present
+        if ! grep -q "homepinas" /etc/hosts; then
+            echo "127.0.1.1       homepinas" >> /etc/hosts
+            echo -e "${GREEN}Added 'homepinas' alias to /etc/hosts${NC}"
+        fi
+    fi
+
+    # Enable and start Avahi
+    systemctl enable avahi-daemon
+    systemctl restart avahi-daemon || true
+
+    echo -e "${GREEN}mDNS/Avahi configured${NC}"
+    echo -e "${CYAN}Your NAS will be discoverable as: ${CURRENT_HOSTNAME}.local${NC}"
+else
+    echo -e "${YELLOW}Skipping mDNS configuration (avahi-daemon not installed)${NC}"
+fi
+
+# Try to install WSDD for Windows discovery (optional)
+echo -e "${BLUE}Installing WSDD for Windows network discovery...${NC}"
+if apt-get install -y $APT_OPTS wsdd 2>/dev/null; then
+    systemctl enable wsdd
+    systemctl start wsdd || true
+    echo -e "${GREEN}WSDD (Windows discovery) configured${NC}"
+else
+    echo -e "${YELLOW}WSDD not available - Windows may need IP address to find NAS${NC}"
+fi
+
+# Create mount directories
+echo -e "${BLUE}Creating storage directories...${NC}"
+mkdir -p "$STORAGE_MOUNT_BASE"
+mkdir -p "$POOL_MOUNT"
+mkdir -p /mnt/parity1
+mkdir -p /mnt/parity2
+
+# Create disk mount points for up to 6 data disks
+for i in 1 2 3 4 5 6; do
+    mkdir -p "${STORAGE_MOUNT_BASE}/disk${i}"
+done
+
+# Create cache mount point for NVMe
+mkdir -p "${STORAGE_MOUNT_BASE}/cache1"
+mkdir -p "${STORAGE_MOUNT_BASE}/cache2"
+
+#######################################
+# PHASE 6: DEPLOY APPLICATION
+#######################################
+echo -e "${BLUE}[6/7] Deploying HomePiNAS application...${NC}"
+
+cd /tmp
+
+# Preserve existing config (users, sessions, settings) during reinstall
+CONFIG_BACKUP=""
+STACKS_BACKUP=""
+if [ "$CLEAN_INSTALL" = false ]; then
+    if [ -d "$TARGET_DIR/backend/config" ]; then
+        echo -e "${BLUE}Backing up existing configuration...${NC}"
+        CONFIG_BACKUP="/tmp/homepinas-config-backup-$$"
+        cp -r "$TARGET_DIR/backend/config" "$CONFIG_BACKUP"
+        echo -e "${GREEN}Config backed up to $CONFIG_BACKUP${NC}"
+    fi
+
+    # Also preserve stacks
+    if [ -d "$TARGET_DIR/stacks" ]; then
+        echo -e "${BLUE}Backing up existing stacks...${NC}"
+        STACKS_BACKUP="/tmp/homepinas-stacks-backup-$$"
+        cp -r "$TARGET_DIR/stacks" "$STACKS_BACKUP"
+        echo -e "${GREEN}Stacks backed up to $STACKS_BACKUP${NC}"
+    fi
+else
+    echo -e "${YELLOW}Clean install: skipping config/stacks backup${NC}"
+fi
+
+if [ -d "$TARGET_DIR" ]; then
+    echo -e "${BLUE}Cleaning up old installation...${NC}"
+    rm -rf "$TARGET_DIR"
+fi
+
+# Check if git is available
+if ! command -v git &> /dev/null; then
+    echo -e "${RED}Git is not installed. Cannot clone repository.${NC}"
+    exit 1
+fi
+
+echo -e "${BLUE}Cloning repository (branch: $BRANCH)...${NC}"
+git clone -b $BRANCH $REPO_URL $TARGET_DIR
+
+cd $TARGET_DIR
+
+# Restore backed up config if exists and has files
+if [ -n "$CONFIG_BACKUP" ] && [ -d "$CONFIG_BACKUP" ] && [ "$(ls -A "$CONFIG_BACKUP" 2>/dev/null)" ]; then
+    echo -e "${BLUE}Restoring configuration...${NC}"
+    mkdir -p "$TARGET_DIR/backend/config"
+    cp -r "$CONFIG_BACKUP"/. "$TARGET_DIR/backend/config/" 2>/dev/null || true
+    rm -rf "$CONFIG_BACKUP"
+    echo -e "${GREEN}Configuration restored!${NC}"
+elif [ -n "$CONFIG_BACKUP" ]; then
+    rm -rf "$CONFIG_BACKUP" 2>/dev/null || true
+fi
+
+# Restore backed up stacks if exists and has files
+if [ -n "$STACKS_BACKUP" ] && [ -d "$STACKS_BACKUP" ] && [ "$(ls -A "$STACKS_BACKUP" 2>/dev/null)" ]; then
+    echo -e "${BLUE}Restoring stacks...${NC}"
+    mkdir -p "$TARGET_DIR/stacks"
+    cp -r "$STACKS_BACKUP"/. "$TARGET_DIR/stacks/" 2>/dev/null || true
+    rm -rf "$STACKS_BACKUP"
+    echo -e "${GREEN}Stacks restored!${NC}"
+elif [ -n "$STACKS_BACKUP" ]; then
+    rm -rf "$STACKS_BACKUP" 2>/dev/null || true
+fi
+
+# Update package.json version to match installer
+sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"${VERSION}\"/" package.json 2>/dev/null || true
+
+# CRITICAL CHECK: Verify structure
+if [ ! -d "backend" ]; then
+    echo -e "${RED}FATAL: Repository cloned but 'backend' folder is missing!${NC}"
+    echo -e "Files found in $TARGET_DIR:"
+    ls -la
+    exit 1
+fi
+
+# Install Node.js if needed (requires Node 20+ for dependencies)
+NODE_REQUIRED_MAJOR=20
+CURRENT_NODE_MAJOR=$(node -v 2>/dev/null | cut -d. -f1 | tr -d 'v' || echo "0")
+
+if ! command -v node &> /dev/null || [ "$CURRENT_NODE_MAJOR" -lt "$NODE_REQUIRED_MAJOR" ]; then
+    echo -e "${BLUE}Installing Node.js 22 LTS...${NC}"
+    if [ "$CURRENT_NODE_MAJOR" -gt 0 ] && [ "$CURRENT_NODE_MAJOR" -lt "$NODE_REQUIRED_MAJOR" ]; then
+        echo -e "${YELLOW}Upgrading from Node.js v${CURRENT_NODE_MAJOR} to v22 (required for dependencies)${NC}"
+    fi
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    apt-get install -y $APT_OPTS nodejs
+else
+    echo -e "${GREEN}Node.js v${CURRENT_NODE_MAJOR} already installed${NC}"
+fi
+
+# Build application
+echo -e "${BLUE}Installing npm dependencies...${NC}"
+
+# Verify package.json exists and is valid JSON
+if [ ! -f "package.json" ]; then
+    echo -e "${RED}FATAL: package.json not found!${NC}"
+    exit 1
+fi
+if ! node -e "JSON.parse(require('fs').readFileSync('package.json'))" 2>/dev/null; then
+    echo -e "${RED}FATAL: package.json is not valid JSON!${NC}"
+    exit 1
+fi
+
+# Ensure native module compilation dependencies
+if command -v apt-get &> /dev/null; then
+    apt-get install -y $APT_OPTS make g++ python3 2>/dev/null || true
+fi
+
+# Install with verbose logging for native modules
+npm install --no-optional 2>&1 | tee /tmp/npm-install.log
+if [ $? -ne 0 ]; then
+    echo -e "${YELLOW}Warning: npm install had errors, but continuing...${NC}"
+fi
+
+# Verify node-pty compiled successfully
+if node -e "require('node-pty')" 2>/dev/null; then
+    echo -e "${GREEN}Terminal support (node-pty) installed successfully${NC}"
+else
+    echo -e "${YELLOW}Warning: node-pty compilation may have failed. Terminal features may not work.${NC}"
+    echo -e "${YELLOW}Check /tmp/npm-install.log for details.${NC}"
+    # Try to rebuild node-pty specifically
+    npm rebuild node-pty 2>&1 || true
+fi
+
+# Generate self-signed SSL certificates for HTTPS with SANs
+echo -e "${BLUE}Generating SSL certificates...${NC}"
+mkdir -p $TARGET_DIR/backend/certs
+if [ ! -f "$TARGET_DIR/backend/certs/server.key" ]; then
+    # Get local IP for SAN
+    LOCAL_IP=$(hostname -I | awk '{print $1}')
+    
+    # Create openssl config with SANs
+    cat > /tmp/ssl.cnf <<SSLEOF
+[req]
+distinguished_name = req_distinguished_name
+x509_extensions = v3_req
+prompt = no
+
+[req_distinguished_name]
+C = ES
+ST = Local
+L = HomeLab
+O = HomePiNAS
+OU = NAS
+CN = $(hostname)
+
+[v3_req]
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = $(hostname)
+DNS.2 = homepinas.local
+DNS.3 = localhost
+IP.1 = ${LOCAL_IP}
+IP.2 = 127.0.0.1
+SSLEOF
+
+    openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+        -keyout $TARGET_DIR/backend/certs/server.key \
+        -out $TARGET_DIR/backend/certs/server.crt \
+        -config /tmp/ssl.cnf \
+        2>/dev/null
+    rm -f /tmp/ssl.cnf
+    echo -e "${GREEN}SSL certificates generated with SANs (valid for 10 years)${NC}"
+else
+    echo -e "${GREEN}SSL certificates already exist${NC}"
+fi
+
+# Set ownership (REAL_USER defined at script start)
+chown -R $REAL_USER:$REAL_USER $TARGET_DIR
+chmod -R 755 $TARGET_DIR
+chmod 600 $TARGET_DIR/backend/certs/server.key
+
+#######################################
+# PHASE 7: CONFIGURE SERVICES
+#######################################
+echo -e "${BLUE}[7/7] Configuring system services...${NC}"
+
+# Fan Control Setup (only for Raspberry Pi)
+NEEDS_REBOOT=0
+
+if [ "$IS_RASPBERRY_PI" = true ]; then
+    echo -e "${BLUE}Configuring Raspberry Pi fan control...${NC}"
+
+    I2C_LINE="dtparam=i2c_arm=on"
+    OVERLAY_LINE="dtoverlay=i2c-fan,emc2301,addr=0x2e,i2c_csi_dsi0"
+
+    if [ -f "$CONFIG_FILE" ]; then
+    if ! grep -q "^${I2C_LINE}$" "$CONFIG_FILE" 2>/dev/null; then
+        echo -e "${YELLOW}Adding I2C support to config.txt...${NC}"
+        echo "" >> "$CONFIG_FILE"
+        echo "# HomePinas fan controller" >> "$CONFIG_FILE"
+        echo "$I2C_LINE" >> "$CONFIG_FILE"
+        NEEDS_REBOOT=1
+    fi
+
+    if ! grep -q "^${OVERLAY_LINE}$" "$CONFIG_FILE" 2>/dev/null; then
+        echo -e "${YELLOW}Adding fan controller overlay to config.txt...${NC}"
+        if ! grep -q "# HomePinas fan controller" "$CONFIG_FILE"; then
+            echo "" >> "$CONFIG_FILE"
+            echo "# HomePinas fan controller" >> "$CONFIG_FILE"
+        fi
+        echo "$OVERLAY_LINE" >> "$CONFIG_FILE"
+        NEEDS_REBOOT=1
+    fi
+fi
+
+# Create fan control script (custom for EMC2305) with hysteresis
+echo -e "${BLUE}Creating fan control script with hysteresis...${NC}"
+cat > "$FANCTL_SCRIPT" <<'FANEOF'
+#!/bin/bash
+# HomePiNAS Fan Control Script for EMC2305
+# Controls PWM fans based on CPU and disk temperatures
+# Version 1.5.5: Added hysteresis to prevent fan speed oscillation
+
+CONFIG_FILE="/usr/local/bin/homepinas-fanctl.conf"
+STATE_FILE="/tmp/homepinas-fanctl.state"
+
+# Default values (BALANCED)
+MIN_PWM1=65
+MIN_PWM2=80
+PWM1_T30=65
+PWM1_T35=90
+PWM1_T40=130
+PWM1_T45=180
+PWM1_TMAX=230
+PWM2_T40=80
+PWM2_T50=120
+PWM2_T60=170
+PWM2_TMAX=255
+
+# Hysteresis settings (degrees Celsius)
+# Fan speed only decreases when temp drops below threshold minus hysteresis
+HYST_TEMP=3
+
+# Load config if exists (use . instead of source for POSIX compatibility)
+if [ -f "$CONFIG_FILE" ]; then
+    . "$CONFIG_FILE"
+fi
+
+# Load previous state (last PWM values and temps)
+LAST_PWM1=0
+LAST_PWM2=0
+LAST_TEMP1=0
+LAST_CPU_TEMP=0
+if [ -f "$STATE_FILE" ]; then
+    . "$STATE_FILE"
+fi
+
+# Find EMC2305 hwmon path
+HWMON=""
+for hw in /sys/class/hwmon/hwmon*; do
+    name=$(cat "$hw/name" 2>/dev/null)
+    if [ "$name" = "emc2305" ]; then
+        HWMON=$hw
+        break
+    fi
+done
+
+if [ -z "$HWMON" ]; then
+    echo "EMC2305 not found"
+    exit 0
+fi
+
+# Get CPU temperature (millidegrees to degrees)
+CPU_TEMP=$(cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null || echo 0)
+CPU_TEMP=$((CPU_TEMP / 1000))
+
+# Get max disk temperature from SMART data
+DISK_TEMP=0
+for disk in /dev/sd[a-z] /dev/nvme[0-9]n1; do
+    if [ -b "$disk" ]; then
+        # Parse SMART attribute 194 (Temperature_Celsius) - value is in column 10
+        t=$(smartctl -A "$disk" 2>/dev/null | grep -E "^194|Temperature_Celsius" | awk '{print $10}')
+        if [ -n "$t" ] && [ "$t" -gt 0 ] && [ "$t" -lt 100 ] 2>/dev/null; then
+            if [ "$t" -gt "$DISK_TEMP" ]; then
+                DISK_TEMP=$t
+            fi
+        fi
+    fi
+done
+
+# Use higher of CPU or DISK temp for PWM1 (disk fans)
+TEMP1=$DISK_TEMP
+if [ "$CPU_TEMP" -gt "$TEMP1" ]; then
+    TEMP1=$CPU_TEMP
+fi
+
+# Function to calculate PWM1 based on temperature
+calc_pwm1() {
+    local temp=$1
+    if [ "$temp" -ge 45 ]; then
+        echo $PWM1_TMAX
+    elif [ "$temp" -ge 40 ]; then
+        echo $PWM1_T45
+    elif [ "$temp" -ge 35 ]; then
+        echo $PWM1_T40
+    elif [ "$temp" -ge 30 ]; then
+        echo $PWM1_T35
+    else
+        echo $PWM1_T30
+    fi
+}
+
+# Function to calculate PWM2 based on CPU temperature
+calc_pwm2() {
+    local temp=$1
+    if [ "$temp" -ge 70 ]; then
+        echo $PWM2_TMAX
+    elif [ "$temp" -ge 60 ]; then
+        echo $PWM2_T60
+    elif [ "$temp" -ge 50 ]; then
+        echo $PWM2_T50
+    elif [ "$temp" -ge 40 ]; then
+        echo $PWM2_T40
+    else
+        echo $MIN_PWM2
+    fi
+}
+
+# Calculate target PWM values
+TARGET_PWM1=$(calc_pwm1 $TEMP1)
+TARGET_PWM2=$(calc_pwm2 $CPU_TEMP)
+
+# Apply hysteresis: only allow decrease if temperature dropped significantly
+# For PWM1 (disk/general fan)
+if [ "$TARGET_PWM1" -lt "$LAST_PWM1" ]; then
+    # Temperature is suggesting lower speed - check hysteresis
+    TEMP1_WITH_HYST=$((TEMP1 + HYST_TEMP))
+    HYST_PWM1=$(calc_pwm1 $TEMP1_WITH_HYST)
+    if [ "$HYST_PWM1" -ge "$LAST_PWM1" ]; then
+        # Temperature hasn't dropped enough, keep current speed
+        TARGET_PWM1=$LAST_PWM1
+    fi
+fi
+
+# For PWM2 (CPU fan)
+if [ "$TARGET_PWM2" -lt "$LAST_PWM2" ]; then
+    # Temperature is suggesting lower speed - check hysteresis
+    CPU_TEMP_WITH_HYST=$((CPU_TEMP + HYST_TEMP))
+    HYST_PWM2=$(calc_pwm2 $CPU_TEMP_WITH_HYST)
+    if [ "$HYST_PWM2" -ge "$LAST_PWM2" ]; then
+        # Temperature hasn't dropped enough, keep current speed
+        TARGET_PWM2=$LAST_PWM2
+    fi
+fi
+
+# Ensure minimum values
+PWM1=$TARGET_PWM1
+PWM2=$TARGET_PWM2
+if [ "$PWM1" -lt "$MIN_PWM1" ]; then
+    PWM1=$MIN_PWM1
+fi
+if [ "$PWM2" -lt "$MIN_PWM2" ]; then
+    PWM2=$MIN_PWM2
+fi
+
+# Apply PWM values to hardware
+echo $PWM1 > "$HWMON/pwm1" 2>/dev/null
+echo $PWM2 > "$HWMON/pwm2" 2>/dev/null
+
+# Save state for next iteration
+cat > "$STATE_FILE" <<EOF
+LAST_PWM1=$PWM1
+LAST_PWM2=$PWM2
+LAST_TEMP1=$TEMP1
+LAST_CPU_TEMP=$CPU_TEMP
+EOF
+
+# Log output (with hysteresis indicator if applied)
+HYST_IND1=""
+HYST_IND2=""
+[ "$PWM1" -eq "$LAST_PWM1" ] && [ "$TARGET_PWM1" -ne "$LAST_PWM1" ] 2>/dev/null && HYST_IND1=" [H]"
+[ "$PWM2" -eq "$LAST_PWM2" ] && [ "$TARGET_PWM2" -ne "$LAST_PWM2" ] 2>/dev/null && HYST_IND2=" [H]"
+
+echo "CPU: ${CPU_TEMP}C, Disk: ${DISK_TEMP}C -> PWM1: ${PWM1}${HYST_IND1}, PWM2: ${PWM2}${HYST_IND2}"
+FANEOF
+
+if [ -f "$FANCTL_SCRIPT" ]; then
+    chmod +x "$FANCTL_SCRIPT"
+
+    # Create default balanced config
+    if [ ! -f "$FANCTL_CONF" ]; then
+        cat > "$FANCTL_CONF" <<EOF
+# =========================================
+# HomePinas Fan Control - BALANCED preset
+# Recommended default settings
+# v1.5.5 with hysteresis support
+# =========================================
+
+# PWM1 (HDD / SSD)
+PWM1_T30=65
+PWM1_T35=90
+PWM1_T40=130
+PWM1_T45=180
+PWM1_TMAX=230
+
+# PWM2 (NVMe + CPU)
+PWM2_T40=80
+PWM2_T50=120
+PWM2_T60=170
+PWM2_TMAX=255
+
+# Safety limits
+MIN_PWM1=65
+MIN_PWM2=80
+MAX_PWM=255
+
+# Hysteresis: 3C is balanced between stability and responsiveness
+# Fans won't slow down until temperature drops 3C below threshold
+HYST_TEMP=3
+EOF
+    fi
+
+    # Create systemd service
+    cat > /etc/systemd/system/homepinas-fanctl.service <<EOF
+[Unit]
+Description=HomePinas Fan Control (HDD/SSD + NVMe/CPU)
+After=multi-user.target
+Wants=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=$FANCTL_SCRIPT
+Restart=on-failure
+RestartSec=5s
+User=root
+Group=root
+StandardOutput=journal
+StandardError=journal
+EOF
+
+    # Create systemd timer (runs every 30 seconds)
+    cat > /etc/systemd/system/homepinas-fanctl.timer <<EOF
+[Unit]
+Description=Run HomePinas Fan Control periodically
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30s
+AccuracySec=5s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    echo -e "${GREEN}Fan control service configured${NC}"
+fi
+
+else
+    echo -e "${YELLOW}Skipping fan control (not a Raspberry Pi)${NC}"
+fi  # End IS_RASPBERRY_PI check
+
+# Configure user permissions
+echo -e "${BLUE}Configuring user permissions...${NC}"
+usermod -aG docker $REAL_USER 2>/dev/null || true
+
+# Sudoers for system control, fan PWM, storage and Samba management
+cat > /etc/sudoers.d/homepinas <<EOF
+# HomePiNAS Sudoers - SECURITY HARDENED v1.5.3
+# Only allows specific commands with restricted arguments
+
+# System control (safe - no arguments needed)
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/reboot
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/shutdown
+
+# Fan control (restricted to specific paths)
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/class/hwmon/hwmon[0-9]/pwm[0-9]
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/class/hwmon/hwmon[0-9][0-9]/pwm[0-9]
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /usr/local/bin/homepinas-fanctl.conf
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/cp /tmp/homepinas-fanctl-temp.conf /usr/local/bin/homepinas-fanctl.conf
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart homepinas-fanctl
+
+# Storage configuration (restricted to specific config files)
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/snapraid.conf
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/fstab
+
+# Mount/Umount (restricted to /mnt paths only)
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/mount /mnt/*
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/mount -a
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/umount /mnt/*
+
+# Filesystem creation (restricted to /dev/sd* and /dev/nvme* only)
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/mkfs.ext4 /dev/sd[a-z][0-9]*
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/mkfs.ext4 /dev/nvme[0-9]n[0-9]p[0-9]*
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/mkfs.xfs /dev/sd[a-z][0-9]*
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/mkfs.xfs /dev/nvme[0-9]n[0-9]p[0-9]*
+
+# Terminal tools installation (auto-install missing tools)
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/apt-get update
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/apt-get install -y htop
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/apt-get install -y mc
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/apt-get install -y nano
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/apt-get install -y vim
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/apt-get install -y tmux
+
+# SnapRAID (restricted to safe operations with config file)
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/snapraid -c /etc/snapraid.conf status
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/snapraid -c /etc/snapraid.conf diff
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/snapraid -c /etc/snapraid.conf sync
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/snapraid -c /etc/snapraid.conf scrub
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/snapraid -c /etc/snapraid.conf fix
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/snapraid -c /etc/snapraid.conf smart
+
+# MergerFS (only mount operations)
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/mergerfs -o * /mnt/disks/* /mnt/storage
+
+# Systemctl (only specific services)
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl daemon-reload
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart smbd
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart nmbd
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart homepinas
+
+# Disk management - allow parted, partprobe, blkid, mkdir, mount, umount for storage setup
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/parted *
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/partprobe *
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/partprobe *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/blkid *
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/blkid *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/blkid *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/mkdir *
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/mkdir *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/rmdir *
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/rmdir *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/mount *
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/mount *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/umount *
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/umount *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/mkfs.ext4 *
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/mkfs.ext4 *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/mkfs.xfs *
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/mkfs.xfs *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/sed *
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/sed *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/snapraid *
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/local/bin/snapraid *
+
+# Legacy disk management (keep for backwards compatibility)
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted /dev/sd[a-z] --script mklabel gpt
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted /dev/sd[a-z] --script mkpart primary ext4 0% 100%
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted /dev/sd[a-z] --script print
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted /dev/nvme[0-9]n[0-9] --script mklabel gpt
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted /dev/nvme[0-9]n[0-9] --script mkpart primary ext4 0% 100%
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/parted /dev/nvme[0-9]n[0-9] --script print
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/partprobe /dev/sd[a-z]
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/partprobe /dev/nvme[0-9]n[0-9]
+
+# Samba user management (restricted arguments)
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/useradd -M -s /sbin/nologin [a-zA-Z]*
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/usermod -aG sambashare [a-zA-Z]*
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/smbpasswd -a -s [a-zA-Z]*
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/smbpasswd -e [a-zA-Z]*
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/pdbedit -L
+
+# File permissions (RESTRICTED to /mnt/storage only)
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/chown -R *\:sambashare /mnt/storage
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/chmod -R 2775 /mnt/storage
+
+# SMART monitoring (allow all smartctl operations)
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/smartctl *
+
+# Samba config management
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/cat /etc/samba/smb.conf
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/cp /etc/samba/smb.conf /etc/samba/smb.conf.bak
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/mv /tmp/homepinas-smb.conf /etc/samba/smb.conf
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/smbstatus -b
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/userdel [a-zA-Z]*
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/smbpasswd -x [a-zA-Z]*
+
+# UPS monitoring (read-only)
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/apcaccess
+$REAL_USER ALL=(ALL) NOPASSWD: /sbin/apcaccess status
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/upsc localhost
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/upsc ups@localhost
+
+# Crontab management (only list and read - edits via temp file)
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/crontab -l
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/crontab /tmp/homepinas-crontab-*
+
+# Journalctl (log viewing - restricted units)
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/journalctl -u homepinas -n *
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/journalctl -u smbd -n *
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/journalctl -u docker -n *
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/journalctl --since * --until *
+EOF
+
+# Fix sudo audit plugin issue (common on some Debian/Ubuntu systems)
+# This error prevents sudo from working: "error initializing audit plugin sudoers_audit"
+if [ -f /etc/sudo.conf ]; then
+    if grep -q "^Plugin sudoers_audit" /etc/sudo.conf 2>/dev/null; then
+        echo -e "${YELLOW}Fixing sudo audit plugin issue...${NC}"
+        sed -i 's/^Plugin sudoers_audit/#Plugin sudoers_audit/' /etc/sudo.conf
+    fi
+fi
+# Also check if sudo works and try alternative fix if needed
+if ! sudo -n -u $REAL_USER true 2>/dev/null; then
+    if sudo -n -u $REAL_USER true 2>&1 | grep -q "audit plugin"; then
+        echo -e "${YELLOW}Applying alternative audit plugin fix...${NC}"
+        # Disable audit in PAM if that's the issue
+        if [ -f /etc/pam.d/sudo ]; then
+            sed -i 's/^session.*pam_audit.so/#&/' /etc/pam.d/sudo 2>/dev/null || true
+        fi
+    fi
+fi
+
+# Create SnapRAID sync script
+cat > /usr/local/bin/homepinas-snapraid-sync.sh <<'SYNCEOF'
+#!/bin/bash
+# HomePiNAS SnapRAID Sync Script
+# Runs daily to sync parity
+
+LOGFILE="/var/log/snapraid-sync.log"
+CONF="/etc/snapraid.conf"
+
+echo "=== SnapRAID Sync Started: $(date) ===" >> "$LOGFILE"
+
+if [ ! -f "$CONF" ]; then
+    echo "ERROR: SnapRAID not configured yet" >> "$LOGFILE"
+    exit 1
+fi
+
+# Run sync
+snapraid sync >> "$LOGFILE" 2>&1
+SYNC_STATUS=$?
+
+if [ $SYNC_STATUS -eq 0 ]; then
+    echo "Sync completed successfully" >> "$LOGFILE"
+    # Run scrub on 5% of data after successful sync
+    snapraid scrub -p 5 -o 30 >> "$LOGFILE" 2>&1
+else
+    echo "ERROR: Sync failed with status $SYNC_STATUS" >> "$LOGFILE"
+fi
+
+echo "=== SnapRAID Sync Finished: $(date) ===" >> "$LOGFILE"
+SYNCEOF
+chmod +x /usr/local/bin/homepinas-snapraid-sync.sh
+
+# Create SnapRAID sync timer (runs daily at 3 AM)
+cat > /etc/systemd/system/homepinas-snapraid-sync.service <<EOF
+[Unit]
+Description=HomePiNAS SnapRAID Sync
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/homepinas-snapraid-sync.sh
+User=root
+Group=root
+StandardOutput=journal
+StandardError=journal
+EOF
+
+cat > /etc/systemd/system/homepinas-snapraid-sync.timer <<EOF
+[Unit]
+Description=Run SnapRAID sync daily
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=1800
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+# Main HomePiNAS service
+cat > /etc/systemd/system/homepinas.service <<EOF
+[Unit]
+Description=HomePiNAS Backend Service
+After=network.target docker.service
+Wants=homepinas-fanctl.timer
+
+[Service]
+Type=simple
+User=$REAL_USER
+Group=$REAL_USER
+WorkingDirectory=$TARGET_DIR
+ExecStart=$(which node) $TARGET_DIR/backend/index.js
+Restart=always
+Environment=NODE_ENV=production
+# Allow binding to ports 80/443 without root
+# Also allow sudo for disk management (CAP_SETUID, CAP_SETGID, CAP_DAC_OVERRIDE)
+AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_SETUID CAP_SETGID CAP_DAC_OVERRIDE CAP_CHOWN CAP_FOWNER
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Reload and enable services
+systemctl daemon-reload
+systemctl enable homepinas
+systemctl restart homepinas
+
+# Enable fan control timer if script exists
+if [ -f "$FANCTL_SCRIPT" ]; then
+    systemctl enable homepinas-fanctl.timer
+    systemctl start homepinas-fanctl.timer || true
+fi
+
+# Enable snapraid sync timer (will only work after storage is configured)
+systemctl enable homepinas-snapraid-sync.timer || true
+
+echo -e "${GREEN}=========================================${NC}"
+echo -e "${GREEN}    SECURE INSTALLATION COMPLETE!       ${NC}"
+echo -e "${GREEN}      HomePiNAS v${VERSION}                  ${NC}"
+echo -e "${GREEN}=========================================${NC}"
+echo -e ""
+IP_ADDR=$(hostname -I | awk '{print $1}')
+CURRENT_HOSTNAME=$(hostname)
+echo -e ""
+echo -e "${GREEN}╔═══════════════════════════════════════════════════════════╗${NC}"
+echo -e "${GREEN}║                                                           ║${NC}"
+echo -e "${GREEN}║   Web HomePiNAS: ${CYAN}https://${IP_ADDR}${NC}${GREEN}                ║${NC}"
+echo -e "${GREEN}║                                                           ║${NC}"
+echo -e "${GREEN}╚═══════════════════════════════════════════════════════════╝${NC}"
+echo -e ""
+echo -e "${YELLOW}Dashboard Access:${NC}"
+echo -e "  ${CYAN}mDNS (Local):${NC}      ${GREEN}https://${CURRENT_HOSTNAME}.local${NC}"
+echo -e "  HTTPS (IP):         ${GREEN}https://${IP_ADDR}${NC}"
+echo -e ""
+echo -e "${YELLOW}Note:${NC} Your browser will show a certificate warning for HTTPS."
+echo -e "      This is normal for self-signed certificates. Click 'Advanced'"
+echo -e "      and 'Proceed' to access the dashboard securely."
+echo -e ""
+echo -e "${YELLOW}Features enabled:${NC}"
+echo -e "  - ${GREEN}HTTPS${NC} with self-signed certificates"
+echo -e "  - ${GREEN}PWA${NC} Progressive Web App (install on mobile/desktop)"
+echo -e "  - ${GREEN}mDNS${NC} Local network discovery (${CURRENT_HOSTNAME}.local)"
+echo -e "  - Bcrypt password hashing"
+echo -e "  - ${GREEN}Persistent sessions${NC} (SQLite-backed)"
+echo -e "  - Rate limiting protection"
+echo -e "  - Input sanitization (command injection protection)"
+echo -e "  - Restricted sudoers permissions"
+echo -e "  - Fan control with PWM curves and ${GREEN}hysteresis${NC}"
+echo -e "  - ${GREEN}OTA updates${NC} from dashboard"
+echo -e "  - ${GREEN}SnapRAID${NC} parity protection"
+echo -e "  - ${GREEN}MergerFS${NC} disk pooling"
+echo -e "  - ${GREEN}Samba${NC} network file sharing"
+echo -e "  - ${GREEN}Responsive UI${NC} for mobile devices"
+echo -e ""
+echo -e "${YELLOW}Storage:${NC}"
+echo -e "  - Data disks mount: ${STORAGE_MOUNT_BASE}/disk[1-6]"
+echo -e "  - Parity disks mount: /mnt/parity[1-2]"
+echo -e "  - Cache (NVMe) mount: ${STORAGE_MOUNT_BASE}/cache[1-2]"
+echo -e "  - Merged pool: ${POOL_MOUNT}"
+echo -e "  - SnapRAID sync: Daily at 3:00 AM"
+echo -e ""
+echo -e "${YELLOW}Network Share (SMB):${NC}"
+echo -e "  - Share name: ${GREEN}Storage${NC}"
+echo -e "  - Path: ${POOL_MOUNT}"
+LAN_IP=$(hostname -I | awk '{print $1}')
+echo -e "  - Access: \\\\\\\\${LAN_IP}\\\\Storage"
+echo -e "  - User/Pass: Same as dashboard credentials"
+echo -e ""
+echo -e "${YELLOW}Fan control modes:${NC}"
+echo -e "  - Silent: Quiet operation"
+echo -e "  - Balanced: Default (recommended)"
+echo -e "  - Performance: Maximum cooling"
+echo -e ""
+
+if [ "$NEEDS_REBOOT" -eq 1 ]; then
+    echo -e "${RED}=========================================${NC}"
+    echo -e "${RED}    REBOOT REQUIRED FOR FAN CONTROL     ${NC}"
+    echo -e "${RED}=========================================${NC}"
+    echo -e ""
+    echo -e "${YELLOW}I2C configuration was added to config.txt${NC}"
+    echo -e "${YELLOW}Please reboot to enable fan controller:${NC}"
+    echo -e "  sudo reboot"
+    echo -e ""
+fi
+
+echo -e "Next steps:"
+echo -e "1. Logout and Login again for Docker permissions"
+if [ "$NEEDS_REBOOT" -eq 1 ]; then
+    echo -e "2. ${RED}REBOOT${NC} to enable fan controller hardware"
+    echo -e "3. Access the dashboard and configure your storage pool"
+else
+    echo -e "2. Access the dashboard and configure your storage pool"
+fi
+echo -e ""
+echo -e "${BLUE}Logs:${NC}"
+echo -e "  Fan control: journalctl -u homepinas-fanctl -f"
+echo -e "  SnapRAID:    tail -f /var/log/snapraid-sync.log"
+echo -e "${GREEN}=========================================${NC}"
+
+# Restore disabled repos on successful completion
+if [ "$REPOS_DISABLED" = true ]; then
+    echo -e "${BLUE}Restoring previously disabled repositories...${NC}"
+    for f in /etc/apt/sources.list.d/*.disabled; do
+        [ -f "$f" ] && mv "$f" "${f%.disabled}"
+    done
+    REPOS_DISABLED=false  # Prevent duplicate restore in trap
+    echo -e "${GREEN}Repositories restored${NC}"
+fi

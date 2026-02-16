@@ -1,0 +1,91 @@
+name: Build Backup Agent
+
+on:
+  push:
+    paths:
+      - 'agent/**'
+      - 'agent-linux/**'
+      - '.github/workflows/build-agent.yml'
+    branches: [develop, main]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: agent
+        run: npm install
+        timeout-minutes: 10
+
+      - name: Build Windows
+        working-directory: agent
+        run: npx electron-builder --win --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: HomePiNAS-Backup-Windows
+          path: |
+            agent/build/dist/*.exe
+          retention-days: 30
+
+  build-mac:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: agent
+        run: npm install
+        timeout-minutes: 10
+
+      - name: Build Mac
+        working-directory: agent
+        run: npx electron-builder --mac --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Mac installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: HomePiNAS-Backup-Mac
+          path: |
+            agent/build/dist/*.dmg
+          retention-days: 30
+
+  package-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package Linux agent
+        run: |
+          mkdir -p dist
+          cp agent-linux/homepinas-agent.sh dist/
+          cp agent-linux/README.md dist/
+          chmod +x dist/homepinas-agent.sh
+
+      - name: Upload Linux agent
+        uses: actions/upload-artifact@v4
+        with:
+          name: HomePiNAS-Backup-Linux
+          path: |
+            dist/homepinas-agent.sh
+            dist/README.md
+          retention-days: 30
