@@ -331,7 +331,7 @@ const viewsMap = {
     'active-directory': 'Active Directory',
     'cloud-sync': 'Cloud Sync',
     'cloud-backup': 'Cloud Backup',
-    'homestore': 'HomeStore',
+    'homestore': '🏪 HomeStore',
     'logs': 'Visor de Logs',
     'users': 'Gestión de Usuarios',
     'system': 'Administración del Sistema'
@@ -11002,8 +11002,7 @@ let systemArch = null;
 async function renderHomeStoreView() {
     dashboardContent.innerHTML = `
         <div class="section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h2>🏪 HomeStore</h2>
+            <div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 10px;">
                 <div id="homestore-status" style="display: flex; gap: 15px; align-items: center;">
                     <div id="homestore-arch-status"></div>
                     <div id="homestore-docker-status"></div>
