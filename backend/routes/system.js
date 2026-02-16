@@ -419,10 +419,10 @@ router.get('/disks', async (req, res) => {
                 const finalModel = (lsblkModel && lsblkModel.length > 3) ? lsblkModel : 
                                    (layoutModel || lsblkModel || 'Unknown Drive');
 
-                // Try to get temperature (read from /sys without sudo or shell)
+                // Try to get temperature
                 let temp = null;
                 try {
-                    // drivetemp module exposes temps via hwmon
+                    // Method 1: drivetemp module exposes temps via hwmon
                     const tempBasePath = `/sys/block/${dev.name}/device/hwmon/`;
                     if (fs.existsSync(tempBasePath)) {
                         const hwmonDirs = fs.readdirSync(tempBasePath);
@@ -435,6 +435,22 @@ router.get('/disks', async (req, res) => {
                         }
                     }
                 } catch (e) {}
+
+                // Method 2: smartctl fallback if hwmon didn't work
+                if (temp === null) {
+                    try {
+                        const smartOut = execFileSync('sudo', ['smartctl', '-A', `/dev/${dev.name}`], { encoding: 'utf8', timeout: 5000 });
+                        // Look for Temperature_Celsius or Airflow_Temperature_Cel
+                        const tempMatch = smartOut.match(/(?:Temperature_Celsius|Airflow_Temperature_Cel|Temperature_Internal)\s+\S+\s+(\d+)/);
+                        if (tempMatch) {
+                            temp = parseInt(tempMatch[1]);
+                        } else {
+                            // NVMe / newer format: "Temperature:    XX Celsius"
+                            const nvmeMatch = smartOut.match(/Temperature:\s+(\d+)\s*Celsius/i);
+                            if (nvmeMatch) temp = parseInt(nvmeMatch[1]);
+                        }
+                    } catch (e) {}
+                }
 
                 // Get disk usage from mounted partitions
                 let usage = 0;

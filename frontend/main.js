@@ -503,14 +503,19 @@ function stopGlobalPolling() {
 // Public IP Tracker
 async function updatePublicIP() {
     const val = document.getElementById('public-ip-val');
-    // TODO: Replace with real API endpoint (e.g. authFetch(`${API_BASE}/network/public-ip`))
-    // const mockIps = ['84.120.45.122', '84.120.45.123', '84.120.45.124'];
-    // state.publicIP = mockIps[Math.floor(Math.random() * mockIps.length)];
-    state.publicIP = 'N/A';
+    try {
+        const res = await authFetch(`${API_BASE}/ddns/public-ip`);
+        if (res.ok) {
+            const data = await res.json();
+            state.publicIP = data.ip || 'N/A';
+        } else {
+            state.publicIP = 'N/A';
+        }
+    } catch (e) {
+        console.warn('Could not fetch public IP:', e);
+        state.publicIP = 'N/A';
+    }
     if (val) val.textContent = state.publicIP;
-
-    // Don't re-render network view on IP update - causes duplicate cards
-    // The network view already has the IP displayed
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
