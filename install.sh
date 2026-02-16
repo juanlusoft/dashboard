@@ -75,7 +75,7 @@ $nrconf{kernelhints} = 0;
 NREOF
 
 TARGET_DIR="/opt/homepinas"
-REPO_URL="https://github.com/juanlusoft/homepinas-v2.git"
+REPO_URL="https://github.com/juanlusoft/dashboard.git"
 BRANCH="main"
 FANCTL_SCRIPT="/usr/local/bin/homepinas-fanctl.sh"
 FANCTL_CONF="/usr/local/bin/homepinas-fanctl.conf"

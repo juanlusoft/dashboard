@@ -75,8 +75,8 @@ $nrconf{kernelhints} = 0;
 NREOF
 
 TARGET_DIR="/opt/homepinas"
-REPO_URL="https://github.com/juanlusoft/homepinas-v2.git"
-BRANCH="ui-redesign-homelabs"
+REPO_URL="https://github.com/juanlusoft/dashboard.git"
+BRANCH="main"
 STORAGE_MOUNT_BASE="/mnt/disks"
 POOL_MOUNT="/mnt/storage"
 SNAPRAID_CONF="/etc/snapraid.conf"
