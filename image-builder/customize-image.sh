@@ -527,10 +527,6 @@ RestartSec=10
 Environment=NODE_ENV=production
 Environment=PORT=443
 
-# Capabilities para puertos privilegiados
-AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
-
 [Install]
 WantedBy=multi-user.target
 EOF
@@ -545,9 +541,6 @@ After=network.target
 Type=simple
 ExecStart=/usr/bin/node -e "require('http').createServer((q,r)=>{r.writeHead(301,{Location:'https://'+q.headers.host+q.url});r.end()}).listen(80)"
 Restart=always
-
-AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 
 [Install]
 WantedBy=multi-user.target
