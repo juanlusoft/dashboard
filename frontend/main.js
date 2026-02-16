@@ -2550,7 +2550,7 @@ async function renderDashboard() {
     // Fetch fan mode
     let fanMode = 'balanced';
     try {
-        const fanModeRes = await fetch(`${API_BASE}/system/fan/mode`);
+        const fanModeRes = await authFetch(`${API_BASE}/system/fan/mode`);
         if (fanModeRes.ok) {
             const fanModeData = await fanModeRes.json();
             fanMode = fanModeData.mode || 'balanced';
@@ -4563,16 +4563,77 @@ if (resetBtn) {
 }
 
 
-// Logout handler
-const logoutBtn = document.getElementById("logout-btn");
-if (logoutBtn) {
-    logoutBtn.addEventListener("click", async () => {
+// Power menu handler (logout, reboot, shutdown)
+const powerBtn = document.getElementById("power-btn");
+const powerDropdown = document.getElementById("power-dropdown");
+if (powerBtn && powerDropdown) {
+    // Toggle dropdown
+    powerBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isOpen = powerDropdown.style.display !== 'none';
+        powerDropdown.style.display = isOpen ? 'none' : 'block';
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener("click", () => {
+        powerDropdown.style.display = 'none';
+    });
+    powerDropdown.addEventListener("click", (e) => e.stopPropagation());
+
+    // Hover effect for options
+    powerDropdown.querySelectorAll('.power-option').forEach(opt => {
+        opt.addEventListener('mouseover', () => { opt.style.background = 'var(--hover-bg, rgba(0,0,0,0.05))'; });
+        opt.addEventListener('mouseout', () => { opt.style.background = 'none'; });
+    });
+
+    // Logout
+    document.getElementById("power-logout").addEventListener("click", async () => {
+        powerDropdown.style.display = 'none';
         const confirmed = await showConfirmModal('Cerrar sesión', '¿Seguro que quieres cerrar sesión?');
         if (confirmed) {
             clearSession();
             state.isAuthenticated = false;
             state.user = null;
             window.location.reload();
+        }
+    });
+
+    // Reboot
+    document.getElementById("power-reboot").addEventListener("click", async () => {
+        powerDropdown.style.display = 'none';
+        const confirmed = await showConfirmModal('Reiniciar sistema', '¿Seguro que quieres reiniciar el sistema? Se perderán todas las conexiones activas.');
+        if (confirmed) {
+            try {
+                const res = await authFetch(`${API_BASE}/power/reboot`, { method: 'POST' });
+                if (res.ok) {
+                    showNotification('Sistema reiniciando... La página se recargará en 60 segundos.', 'success', 10000);
+                    setTimeout(() => window.location.reload(), 60000);
+                } else {
+                    const data = await res.json();
+                    showNotification(data.error || 'Error al reiniciar', 'error');
+                }
+            } catch (e) {
+                showNotification('Error al reiniciar: ' + e.message, 'error');
+            }
+        }
+    });
+
+    // Shutdown
+    document.getElementById("power-shutdown").addEventListener("click", async () => {
+        powerDropdown.style.display = 'none';
+        const confirmed = await showConfirmModal('Apagar sistema', '⚠️ ¿Seguro que quieres APAGAR el sistema? Necesitarás acceso físico para volver a encenderlo.');
+        if (confirmed) {
+            try {
+                const res = await authFetch(`${API_BASE}/power/shutdown`, { method: 'POST' });
+                if (res.ok) {
+                    showNotification('Sistema apagándose...', 'warning', 10000);
+                } else {
+                    const data = await res.json();
+                    showNotification(data.error || 'Error al apagar', 'error');
+                }
+            } catch (e) {
+                showNotification('Error al apagar: ' + e.message, 'error');
+            }
         }
     });
 }
