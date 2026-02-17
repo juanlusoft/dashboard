@@ -9757,15 +9757,15 @@ async function renderADContent() {
         if (!status.installed) {
             // Not installed - show install button
             container.innerHTML = `
-                <div class="card" style="text-align: center; padding: 40px;">
-                    <h3 style="color: var(--warning);">⚠️ Samba AD DC no instalado</h3>
-                    <p style="margin: 20px 0; color: var(--text-secondary);">
+                <div class="card ad-not-installed-card">
+                    <h3 class="ad-not-installed-title">⚠️ Samba AD DC no instalado</h3>
+                    <p class="ad-not-installed-description">
                         Active Directory Domain Controller permite que equipos Windows se unan a tu NAS como controlador de dominio.
                     </p>
                     <button class="btn btn-primary" id="ad-install-btn">
                         📦 Instalar Samba AD DC
                     </button>
-                    <p style="margin-top: 15px; font-size: 0.85rem; color: var(--text-muted);">
+                    <p class="ad-install-note">
                         Esto instalará ~500MB de paquetes y tardará unos minutos.
                     </p>
                 </div>
@@ -9800,164 +9800,6 @@ async function renderADContent() {
         if (!status.provisioned) {
             // Installed but not provisioned - show provision form
             container.innerHTML = `
-                <style>
-                    .ad-setup-container {
-                        display: grid;
-                        grid-template-columns: 1fr 1fr;
-                        gap: 24px;
-                        max-width: 1200px;
-                    }
-                    @media (max-width: 900px) {
-                        .ad-setup-container { grid-template-columns: 1fr; }
-                    }
-                    .ad-form-card {
-                        background: var(--card-bg, #fff);
-                        border-radius: 12px;
-                        padding: 28px;
-                        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-                        border: 1px solid var(--border-color, #e0e0e0);
-                    }
-                    .ad-form-header {
-                        display: flex;
-                        align-items: center;
-                        gap: 12px;
-                        margin-bottom: 8px;
-                    }
-                    .ad-form-header-icon {
-                        width: 48px;
-                        height: 48px;
-                        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-                        border-radius: 12px;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        font-size: 24px;
-                    }
-                    .ad-form-header h3 {
-                        margin: 0;
-                        font-size: 1.25rem;
-                        font-weight: 600;
-                    }
-                    .ad-form-header p {
-                        margin: 4px 0 0 0;
-                        color: var(--text-secondary, #666);
-                        font-size: 0.875rem;
-                    }
-                    .ad-form-field {
-                        margin-bottom: 20px;
-                    }
-                    .ad-form-field label {
-                        display: block;
-                        font-weight: 500;
-                        margin-bottom: 6px;
-                        color: var(--text-primary, #333);
-                        font-size: 0.9rem;
-                    }
-                    .ad-form-field input {
-                        width: 100%;
-                        padding: 12px 14px;
-                        border: 1px solid var(--border-color, #d1d5db);
-                        border-radius: 8px;
-                        font-size: 0.95rem;
-                        transition: border-color 0.2s, box-shadow 0.2s;
-                        background: var(--input-bg, #fff);
-                        color: var(--text-primary, #333);
-                        box-sizing: border-box;
-                    }
-                    .ad-form-field input:focus {
-                        outline: none;
-                        border-color: #3b82f6;
-                        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-                    }
-                    .ad-form-field input::placeholder {
-                        color: var(--text-tertiary, #9ca3af);
-                    }
-                    .ad-form-field small {
-                        display: block;
-                        margin-top: 6px;
-                        color: var(--text-secondary, #666);
-                        font-size: 0.8rem;
-                    }
-                    .ad-form-row {
-                        display: grid;
-                        grid-template-columns: 1fr 1fr;
-                        gap: 16px;
-                    }
-                    @media (max-width: 500px) {
-                        .ad-form-row { grid-template-columns: 1fr; }
-                    }
-                    .ad-submit-btn {
-                        width: 100%;
-                        padding: 14px 24px;
-                        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-                        color: white;
-                        border: none;
-                        border-radius: 8px;
-                        font-size: 1rem;
-                        font-weight: 600;
-                        cursor: pointer;
-                        transition: transform 0.15s, box-shadow 0.15s;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        gap: 8px;
-                    }
-                    .ad-submit-btn:hover {
-                        transform: translateY(-1px);
-                        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
-                    }
-                    .ad-submit-btn:disabled {
-                        opacity: 0.6;
-                        cursor: not-allowed;
-                        transform: none;
-                    }
-                    .ad-info-card {
-                        background: var(--card-bg, #fff);
-                        border-radius: 12px;
-                        padding: 28px;
-                        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-                        border: 1px solid var(--border-color, #e0e0e0);
-                    }
-                    .ad-info-card h4 {
-                        margin: 0 0 16px 0;
-                        font-size: 1rem;
-                        font-weight: 600;
-                        display: flex;
-                        align-items: center;
-                        gap: 8px;
-                    }
-                    .ad-info-item {
-                        display: flex;
-                        gap: 12px;
-                        padding: 14px 0;
-                        border-bottom: 1px solid var(--border-color, #e5e7eb);
-                    }
-                    .ad-info-item:last-child {
-                        border-bottom: none;
-                    }
-                    .ad-info-icon {
-                        width: 36px;
-                        height: 36px;
-                        background: var(--bg-tertiary, #f3f4f6);
-                        border-radius: 8px;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        font-size: 16px;
-                        flex-shrink: 0;
-                    }
-                    .ad-info-content strong {
-                        display: block;
-                        font-weight: 500;
-                        margin-bottom: 2px;
-                        color: var(--text-primary, #333);
-                    }
-                    .ad-info-content span {
-                        color: var(--text-secondary, #666);
-                        font-size: 0.85rem;
-                    }
-                </style>
-                
                 <div class="ad-setup-container">
                     <div class="ad-form-card">
                         <div class="ad-form-header">
@@ -9967,22 +9809,22 @@ async function renderADContent() {
                                 <p>Samba AD DC instalado — configura tu dominio</p>
                             </div>
                         </div>
-                        
-                        <form id="ad-provision-form" style="margin-top: 24px;">
+
+                        <form id="ad-provision-form" class="ad-form-container">
                             <div class="ad-form-field">
                                 <label>Nombre del dominio (NetBIOS)</label>
-                                <input type="text" id="ad-domain" placeholder="HOMELABS" 
+                                <input type="text" id="ad-domain" placeholder="HOMELABS"
                                        pattern="[A-Za-z][A-Za-z0-9]{0,14}" required
-                                       style="text-transform: uppercase;">
+                                       class="ad-form-field-uppercase">
                                 <small>Máx 15 caracteres, solo letras y números</small>
                             </div>
-                            
+
                             <div class="ad-form-field">
                                 <label>Realm (FQDN)</label>
                                 <input type="text" id="ad-realm" placeholder="homelabs.local" required>
                                 <small>Nombre completo del dominio para Kerberos</small>
                             </div>
-                            
+
                             <div class="ad-form-row">
                                 <div class="ad-form-field">
                                     <label>Contraseña Administrator</label>
@@ -9990,14 +9832,14 @@ async function renderADContent() {
                                            placeholder="••••••••">
                                     <small>Mínimo 8 caracteres</small>
                                 </div>
-                                
+
                                 <div class="ad-form-field">
                                     <label>Confirmar contraseña</label>
                                     <input type="password" id="ad-password-confirm" minlength="8" required
                                            placeholder="••••••••">
                                 </div>
                             </div>
-                            
+
                             <button type="submit" class="ad-submit-btn">
                                 <span>🚀</span> Crear Dominio
                             </button>
@@ -10101,175 +9943,6 @@ async function renderADContent() {
         const groups = Array.isArray(groupsData) ? groupsData : [];
         
         container.innerHTML = `
-            <style>
-                .ad-dashboard { max-width: 1400px; }
-                .ad-header-card {
-                    background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
-                    border-radius: 16px;
-                    padding: 24px 28px;
-                    color: white;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    flex-wrap: wrap;
-                    gap: 20px;
-                    box-shadow: 0 4px 20px rgba(30, 58, 95, 0.3);
-                }
-                .ad-header-info { display: flex; align-items: center; gap: 16px; }
-                .ad-header-icon {
-                    width: 56px; height: 56px;
-                    background: rgba(255,255,255,0.15);
-                    border-radius: 14px;
-                    display: flex; align-items: center; justify-content: center;
-                    font-size: 28px;
-                }
-                .ad-header-text h2 { margin: 0; font-size: 1.5rem; font-weight: 600; }
-                .ad-header-text p { margin: 4px 0 0; opacity: 0.85; font-size: 0.95rem; }
-                .ad-header-status {
-                    display: flex; align-items: center; gap: 8px;
-                    background: rgba(255,255,255,0.1); padding: 6px 14px;
-                    border-radius: 20px; font-size: 0.85rem;
-                }
-                .ad-header-status .dot {
-                    width: 10px; height: 10px; border-radius: 50%;
-                    background: ${status.running ? '#4ade80' : '#f87171'};
-                    box-shadow: 0 0 8px ${status.running ? '#4ade80' : '#f87171'};
-                }
-                .ad-header-actions { display: flex; gap: 10px; }
-                .ad-header-actions button {
-                    padding: 10px 18px; border-radius: 8px; border: none;
-                    font-weight: 500; cursor: pointer; transition: all 0.2s;
-                    display: flex; align-items: center; gap: 6px;
-                }
-                .ad-btn-stop { background: rgba(248,113,113,0.9); color: white; }
-                .ad-btn-stop:hover { background: #f87171; }
-                .ad-btn-start { background: rgba(74,222,128,0.9); color: #166534; }
-                .ad-btn-start:hover { background: #4ade80; }
-                .ad-btn-restart { background: rgba(255,255,255,0.15); color: white; }
-                .ad-btn-restart:hover { background: rgba(255,255,255,0.25); }
-                .ad-btn-restart:disabled { opacity: 0.4; cursor: not-allowed; }
-                
-                .ad-stats-grid {
-                    display: grid;
-                    grid-template-columns: repeat(3, 1fr);
-                    gap: 16px;
-                    margin-top: 20px;
-                }
-                @media (max-width: 700px) { .ad-stats-grid { grid-template-columns: 1fr; } }
-                .ad-stat-card {
-                    background: var(--card-bg, #fff);
-                    border-radius: 12px;
-                    padding: 20px 24px;
-                    display: flex;
-                    align-items: center;
-                    gap: 16px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-                    border: 1px solid var(--border-color, #e5e7eb);
-                }
-                .ad-stat-icon {
-                    width: 48px; height: 48px;
-                    border-radius: 12px;
-                    display: flex; align-items: center; justify-content: center;
-                    font-size: 22px;
-                }
-                .ad-stat-icon.users { background: #dbeafe; }
-                .ad-stat-icon.computers { background: #fce7f3; }
-                .ad-stat-icon.groups { background: #d1fae5; }
-                .ad-stat-value { font-size: 1.75rem; font-weight: 700; color: var(--text-primary, #1f2937); }
-                .ad-stat-label { font-size: 0.85rem; color: var(--text-secondary, #6b7280); margin-top: 2px; }
-                
-                .ad-tabs {
-                    display: flex;
-                    gap: 4px;
-                    margin-top: 24px;
-                    background: var(--bg-secondary, #f3f4f6);
-                    padding: 4px;
-                    border-radius: 12px;
-                    width: fit-content;
-                }
-                .ad-tab {
-                    padding: 10px 20px;
-                    border: none;
-                    background: transparent;
-                    border-radius: 8px;
-                    cursor: pointer;
-                    font-weight: 500;
-                    color: var(--text-secondary, #6b7280);
-                    transition: all 0.2s;
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                }
-                .ad-tab:hover { color: var(--text-primary, #1f2937); }
-                .ad-tab.active {
-                    background: var(--card-bg, #fff);
-                    color: #3b82f6;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                }
-                
-                .ad-content-card {
-                    background: var(--card-bg, #fff);
-                    border-radius: 12px;
-                    padding: 24px;
-                    margin-top: 16px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-                    border: 1px solid var(--border-color, #e5e7eb);
-                }
-                .ad-content-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 20px;
-                    flex-wrap: wrap;
-                    gap: 12px;
-                }
-                .ad-content-header h3 { margin: 0; font-size: 1.1rem; font-weight: 600; }
-                .ad-add-btn {
-                    padding: 8px 16px;
-                    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-                    color: white;
-                    border: none;
-                    border-radius: 8px;
-                    font-weight: 500;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                    transition: transform 0.15s, box-shadow 0.15s;
-                }
-                .ad-add-btn:hover {
-                    transform: translateY(-1px);
-                    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
-                }
-                
-                .ad-table {
-                    width: 100%;
-                    border-collapse: collapse;
-                }
-                .ad-table th {
-                    text-align: left;
-                    padding: 12px 16px;
-                    font-weight: 600;
-                    font-size: 0.8rem;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                    color: var(--text-secondary, #6b7280);
-                    border-bottom: 2px solid var(--border-color, #e5e7eb);
-                }
-                .ad-table td {
-                    padding: 14px 16px;
-                    border-bottom: 1px solid var(--border-color, #f3f4f6);
-                    color: var(--text-primary, #1f2937);
-                }
-                .ad-table tr:hover { background: var(--bg-secondary, #f9fafb); }
-                .ad-table-empty {
-                    text-align: center;
-                    padding: 40px;
-                    color: var(--text-secondary, #9ca3af);
-                }
-                .ad-table-empty-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
-            </style>
-            
             <div class="ad-dashboard">
                 <!-- Header -->
                 <div class="ad-header-card">
@@ -10280,7 +9953,7 @@ async function renderADContent() {
                             <p>${escapeHtml(status.realm || 'homelabs.local')}</p>
                         </div>
                         <div class="ad-header-status">
-                            <span class="dot"></span>
+                            <span class="dot ${status.running ? 'running' : 'stopped'}"></span>
                             ${status.running ? 'Activo' : 'Detenido'}
                         </div>
                     </div>
@@ -10370,8 +10043,8 @@ async function renderADContent() {
         
     } catch (error) {
         container.innerHTML = `
-            <div class="card" style="text-align: center; padding: 40px;">
-                <h3 style="color: var(--danger);">❌ Error</h3>
+            <div class="card ad-error-card">
+                <h3 class="ad-error-title">❌ Error</h3>
                 <p>${escapeHtml(error.message)}</p>
                 <button class="btn btn-primary" data-action="retry-ad">🔄 Reintentar</button>
             </div>
@@ -10397,7 +10070,7 @@ function renderADTab(tab, data) {
                     <div class="ad-table-empty">
                         <div class="ad-table-empty-icon">👤</div>
                         <p>No hay usuarios en el dominio</p>
-                        <p style="font-size: 0.85rem;">Haz clic en "Nuevo Usuario" para crear el primero</p>
+                        <p class="ad-table-empty-text">Haz clic en "Nuevo Usuario" para crear el primero</p>
                     </div>
                 ` : `
                     <table class="ad-table">
@@ -10406,7 +10079,7 @@ function renderADTab(tab, data) {
                                 <th>Usuario</th>
                                 <th>Nombre</th>
                                 <th>Estado</th>
-                                <th style="width: 120px;">Acciones</th>
+                                <th class="ad-actions-col">Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -10415,15 +10088,15 @@ function renderADTab(tab, data) {
                                     <td><strong>${escapeHtml(u.username)}</strong></td>
                                     <td>${escapeHtml(u.displayName || '-')}</td>
                                     <td>
-                                        <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 500; ${u.enabled !== false ? 'background: #dcfce7; color: #166534;' : 'background: #fee2e2; color: #991b1b;'}">
-                                            <span style="width: 6px; height: 6px; border-radius: 50%; background: currentColor;"></span>
+                                        <span class="ad-user-status-badge ${u.enabled !== false ? 'active' : 'disabled'}">
+                                            <span class="ad-user-status-dot"></span>
                                             ${u.enabled !== false ? 'Activo' : 'Deshabilitado'}
                                         </span>
                                     </td>
                                     <td>
-                                        <div style="display: flex; gap: 6px;">
-                                            <button class="ad-reset-pwd" data-user="${escapeHtml(u.username)}" title="Cambiar contraseña" style="padding: 6px 10px; border: 1px solid var(--border-color, #e5e7eb); background: var(--card-bg, #fff); border-radius: 6px; cursor: pointer;">🔑</button>
-                                            <button class="ad-delete-user" data-user="${escapeHtml(u.username)}" title="Eliminar usuario" style="padding: 6px 10px; border: 1px solid #fecaca; background: #fef2f2; border-radius: 6px; cursor: pointer; ${u.username.toLowerCase() === 'administrator' ? 'opacity: 0.4; cursor: not-allowed;' : ''}" ${u.username.toLowerCase() === 'administrator' ? 'disabled' : ''}>🗑️</button>
+                                        <div class="ad-action-buttons">
+                                            <button class="ad-action-btn ad-reset-pwd" data-user="${escapeHtml(u.username)}" title="Cambiar contraseña">🔑</button>
+                                            <button class="ad-action-btn delete ad-delete-user ${u.username.toLowerCase() === 'administrator' ? 'disabled' : ''}" data-user="${escapeHtml(u.username)}" title="Eliminar usuario" ${u.username.toLowerCase() === 'administrator' ? 'disabled' : ''}>🗑️</button>
                                         </div>
                                     </td>
                                 </tr>
@@ -10467,7 +10140,7 @@ function renderADTab(tab, data) {
                     <div class="ad-table-empty">
                         <div class="ad-table-empty-icon">💻</div>
                         <p>No hay equipos unidos al dominio</p>
-                        <p style="font-size: 0.85rem;">Ve a la pestaña "Unir Equipo" para ver las instrucciones</p>
+                        <p class="ad-table-empty-text">Ve a la pestaña "Unir Equipo" para ver las instrucciones</p>
                     </div>
                 ` : `
                     <table class="ad-table">
@@ -10481,12 +10154,12 @@ function renderADTab(tab, data) {
                         <tbody>
                             ${computers.map(c => `
                                 <tr>
-                                    <td style="display: flex; align-items: center; gap: 10px;">
-                                        <span style="width: 36px; height: 36px; background: #fce7f3; border-radius: 8px; display: flex; align-items: center; justify-content: center;">💻</span>
+                                    <td class="ad-item-with-icon">
+                                        <span class="ad-item-icon computer">💻</span>
                                         <strong>${escapeHtml(c.name)}</strong>
                                     </td>
                                     <td>${escapeHtml(c.os || 'Windows')}</td>
-                                    <td style="color: var(--text-secondary);">${escapeHtml(c.joined || '-')}</td>
+                                    <td class="ad-secondary-text">${escapeHtml(c.joined || '-')}</td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -10517,18 +10190,18 @@ function renderADTab(tab, data) {
                         <tbody>
                             ${groups.map(g => `
                                 <tr>
-                                    <td style="display: flex; align-items: center; gap: 10px;">
-                                        <span style="width: 36px; height: 36px; background: #d1fae5; border-radius: 8px; display: flex; align-items: center; justify-content: center;">👥</span>
+                                    <td class="ad-item-with-icon">
+                                        <span class="ad-item-icon group">👥</span>
                                         <strong>${escapeHtml(g.name)}</strong>
                                     </td>
-                                    <td style="color: var(--text-secondary);">${g.members || 0} miembros</td>
+                                    <td class="ad-secondary-text">${g.members || 0} miembros</td>
                                 </tr>
                             `).join('')}
                         </tbody>
                     </table>
                 `}
             `;
-            
+
             document.getElementById('ad-add-group-btn')?.addEventListener('click', () => showADGroupModal());
             break;
             
@@ -10537,150 +10210,150 @@ function renderADTab(tab, data) {
                 <div class="ad-content-header">
                     <h3>📋 Unir Equipo Windows al Dominio</h3>
                 </div>
-                
+
                 <!-- Domain Info Card -->
-                <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); border-radius: 12px; padding: 20px; color: white; margin-bottom: 24px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
-                    <div style="text-align: center;">
-                        <div style="font-size: 0.8rem; opacity: 0.85; margin-bottom: 4px;">DOMINIO</div>
-                        <div style="font-size: 1.25rem; font-weight: 600;">${escapeHtml(status.domain)}</div>
+                <div class="ad-domain-info-card">
+                    <div class="ad-domain-info-item">
+                        <div class="ad-domain-info-label">DOMINIO</div>
+                        <div class="ad-domain-info-value">${escapeHtml(status.domain)}</div>
                     </div>
-                    <div style="text-align: center; border-left: 1px solid rgba(255,255,255,0.2); border-right: 1px solid rgba(255,255,255,0.2);">
-                        <div style="font-size: 0.8rem; opacity: 0.85; margin-bottom: 4px;">REALM</div>
-                        <div style="font-size: 1.25rem; font-weight: 600;">${escapeHtml(status.realm)}</div>
+                    <div class="ad-domain-info-item ad-domain-info-divider">
+                        <div class="ad-domain-info-label">REALM</div>
+                        <div class="ad-domain-info-value">${escapeHtml(status.realm)}</div>
                     </div>
-                    <div style="text-align: center;">
-                        <div style="font-size: 0.8rem; opacity: 0.85; margin-bottom: 4px;">SERVIDOR DNS</div>
-                        <div style="font-size: 1.25rem; font-weight: 600;">${window.location.hostname}</div>
+                    <div class="ad-domain-info-item">
+                        <div class="ad-domain-info-label">SERVIDOR DNS</div>
+                        <div class="ad-domain-info-value">${window.location.hostname}</div>
                     </div>
                 </div>
                 
                 <!-- Steps -->
-                <div style="display: grid; gap: 16px;">
-                    <div style="display: flex; gap: 16px; padding: 20px; background: var(--bg-secondary, #f9fafb); border-radius: 12px; border: 1px solid var(--border-color, #e5e7eb);">
-                        <div style="width: 40px; height: 40px; background: #dbeafe; color: #1d4ed8; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">1</div>
-                        <div style="flex: 1;">
-                            <h4 style="margin: 0 0 12px 0; font-size: 1rem;">Configurar DNS del equipo (Windows 11)</h4>
-                            
-                            <div style="display: grid; gap: 12px;">
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
-                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">1.1</span>
-                                    <div>
+                <div class="ad-steps-container">
+                    <div class="ad-step-card">
+                        <div class="ad-step-number primary">1</div>
+                        <div class="ad-step-content">
+                            <h4 class="ad-step-title">Configurar DNS del equipo (Windows 11)</h4>
+
+                            <div class="ad-substeps">
+                                <div class="ad-substep primary">
+                                    <span class="ad-substep-number primary">1.1</span>
+                                    <div class="ad-substep-content">
                                         <strong>Abrir Configuración de Red</strong><br>
-                                        <span style="color: var(--text-secondary, #6b7280);">Clic derecho en el icono de WiFi/Red (abajo a la derecha) → <strong>"Configuración de red e Internet"</strong></span>
+                                        <span class="ad-substep-detail">Clic derecho en el icono de WiFi/Red (abajo a la derecha) → <strong>"Configuración de red e Internet"</strong></span>
                                     </div>
                                 </div>
-                                
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
-                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">1.2</span>
-                                    <div>
+
+                                <div class="ad-substep primary">
+                                    <span class="ad-substep-number primary">1.2</span>
+                                    <div class="ad-substep-content">
                                         <strong>Ir a "Configuración de red avanzada"</strong><br>
-                                        <span style="color: var(--text-secondary, #6b7280);">Baja hasta el final y pulsa <strong>"Configuración de red avanzada"</strong></span>
+                                        <span class="ad-substep-detail">Baja hasta el final y pulsa <strong>"Configuración de red avanzada"</strong></span>
                                     </div>
                                 </div>
-                                
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
-                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">1.3</span>
-                                    <div>
+
+                                <div class="ad-substep primary">
+                                    <span class="ad-substep-number primary">1.3</span>
+                                    <div class="ad-substep-content">
                                         <strong>Seleccionar tu conexión (Ethernet o Wi-Fi)</strong><br>
-                                        <span style="color: var(--text-secondary, #6b7280);">Haz clic en tu adaptador de red activo para expandirlo, luego pulsa <strong>"Ver propiedades adicionales"</strong></span>
+                                        <span class="ad-substep-detail">Haz clic en tu adaptador de red activo para expandirlo, luego pulsa <strong>"Ver propiedades adicionales"</strong></span>
                                     </div>
                                 </div>
-                                
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
-                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">1.4</span>
-                                    <div>
+
+                                <div class="ad-substep primary">
+                                    <span class="ad-substep-number primary">1.4</span>
+                                    <div class="ad-substep-content">
                                         <strong>Editar la configuración DNS</strong><br>
-                                        <span style="color: var(--text-secondary, #6b7280);">Junto a "Asignación de servidor DNS" pulsa <strong>"Editar"</strong></span>
+                                        <span class="ad-substep-detail">Junto a "Asignación de servidor DNS" pulsa <strong>"Editar"</strong></span>
                                     </div>
                                 </div>
-                                
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #10b981;">
-                                    <span style="background: #d1fae5; color: #166534; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">1.5</span>
-                                    <div>
+
+                                <div class="ad-substep success">
+                                    <span class="ad-substep-number success">1.5</span>
+                                    <div class="ad-substep-content">
                                         <strong>Cambiar a "Manual" y poner esta IP:</strong><br>
-                                        <code style="background: #fef3c7; padding: 4px 12px; border-radius: 4px; font-weight: 700; font-size: 1.1rem; display: inline-block; margin-top: 4px;">${window.location.hostname}</code>
-                                        <br><span style="color: var(--text-secondary, #6b7280); font-size: 0.85rem;">Activa IPv4, pon esta IP en "DNS preferido" y guarda</span>
+                                        <code class="ad-code-highlight">${window.location.hostname}</code>
+                                        <br><span class="ad-note-small">Activa IPv4, pon esta IP en "DNS preferido" y guarda</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                     
-                    <div style="display: flex; gap: 16px; padding: 20px; background: var(--bg-secondary, #f9fafb); border-radius: 12px; border: 1px solid var(--border-color, #e5e7eb);">
-                        <div style="width: 40px; height: 40px; background: #dbeafe; color: #1d4ed8; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">2</div>
-                        <div style="flex: 1;">
-                            <h4 style="margin: 0 0 12px 0; font-size: 1rem;">Unir el equipo al dominio (Windows 11)</h4>
-                            
-                            <div style="display: grid; gap: 12px;">
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
-                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">2.1</span>
-                                    <div>
+                    <div class="ad-step-card">
+                        <div class="ad-step-number primary">2</div>
+                        <div class="ad-step-content">
+                            <h4 class="ad-step-title">Unir el equipo al dominio (Windows 11)</h4>
+
+                            <div class="ad-substeps">
+                                <div class="ad-substep primary">
+                                    <span class="ad-substep-number primary">2.1</span>
+                                    <div class="ad-substep-content">
                                         <strong>Abrir Configuración</strong><br>
-                                        <span style="color: var(--text-secondary, #6b7280);">Pulsa <code style="background: #f3f4f6; padding: 2px 6px; border-radius: 3px;">⊞ Win + I</code> o busca "Configuración" en el menú inicio</span>
+                                        <span class="ad-substep-detail">Pulsa <code class="ad-code-inline">⊞ Win + I</code> o busca "Configuración" en el menú inicio</span>
                                     </div>
                                 </div>
-                                
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
-                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">2.2</span>
-                                    <div>
+
+                                <div class="ad-substep primary">
+                                    <span class="ad-substep-number primary">2.2</span>
+                                    <div class="ad-substep-content">
                                         <strong>Ir a Sistema → Información</strong><br>
-                                        <span style="color: var(--text-secondary, #6b7280);">En el menú lateral izquierdo selecciona <strong>Sistema</strong>, luego baja hasta <strong>Información</strong> (o "Acerca de")</span>
+                                        <span class="ad-substep-detail">En el menú lateral izquierdo selecciona <strong>Sistema</strong>, luego baja hasta <strong>Información</strong> (o "Acerca de")</span>
                                     </div>
                                 </div>
-                                
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
-                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">2.3</span>
-                                    <div>
+
+                                <div class="ad-substep primary">
+                                    <span class="ad-substep-number primary">2.3</span>
+                                    <div class="ad-substep-content">
                                         <strong>Clic en "Dominio o grupo de trabajo"</strong><br>
-                                        <span style="color: var(--text-secondary, #6b7280);">Busca el enlace <strong>"Dominio o grupo de trabajo"</strong> en la sección "Especificaciones del dispositivo"</span>
+                                        <span class="ad-substep-detail">Busca el enlace <strong>"Dominio o grupo de trabajo"</strong> en la sección "Especificaciones del dispositivo"</span>
                                     </div>
                                 </div>
-                                
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
-                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">2.4</span>
-                                    <div>
+
+                                <div class="ad-substep primary">
+                                    <span class="ad-substep-number primary">2.4</span>
+                                    <div class="ad-substep-content">
                                         <strong>Clic en "Cambiar..."</strong><br>
-                                        <span style="color: var(--text-secondary, #6b7280);">Se abre la ventana de Propiedades del sistema. Pulsa el botón <strong>"Cambiar..."</strong></span>
+                                        <span class="ad-substep-detail">Se abre la ventana de Propiedades del sistema. Pulsa el botón <strong>"Cambiar..."</strong></span>
                                     </div>
                                 </div>
-                                
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #10b981;">
-                                    <span style="background: #d1fae5; color: #166534; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">2.5</span>
-                                    <div>
+
+                                <div class="ad-substep success">
+                                    <span class="ad-substep-number success">2.5</span>
+                                    <div class="ad-substep-content">
                                         <strong>Seleccionar "Dominio" e introducir:</strong><br>
-                                        <code style="background: #fef3c7; padding: 4px 12px; border-radius: 4px; font-weight: 700; font-size: 1.1rem; display: inline-block; margin-top: 4px;">${escapeHtml(status.realm)}</code>
+                                        <code class="ad-code-highlight">${escapeHtml(status.realm)}</code>
                                     </div>
                                 </div>
-                                
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #10b981;">
-                                    <span style="background: #d1fae5; color: #166534; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">2.6</span>
-                                    <div>
+
+                                <div class="ad-substep success">
+                                    <span class="ad-substep-number success">2.6</span>
+                                    <div class="ad-substep-content">
                                         <strong>Introducir credenciales del dominio:</strong><br>
-                                        <span style="color: var(--text-secondary, #6b7280);">Usuario:</span> <code style="background: #fef3c7; padding: 2px 8px; border-radius: 4px; font-weight: 600;">Administrator</code><br>
-                                        <span style="color: var(--text-secondary, #6b7280);">Contraseña:</span> <span style="color: #dc2626;">la que pusiste al crear el dominio</span>
+                                        <span class="ad-substep-detail">Usuario:</span> <code class="ad-code-highlight">Administrator</code><br>
+                                        <span class="ad-substep-detail">Contraseña:</span> <span class="ad-note-warning">la que pusiste al crear el dominio</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                     
-                    <div style="display: flex; gap: 16px; padding: 20px; background: var(--bg-secondary, #f9fafb); border-radius: 12px; border: 1px solid var(--border-color, #e5e7eb);">
-                        <div style="width: 40px; height: 40px; background: #d1fae5; color: #166534; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">3</div>
-                        <div>
-                            <h4 style="margin: 0 0 8px 0; font-size: 1rem;">Reiniciar y listo ✓</h4>
-                            <p style="margin: 0; color: var(--text-secondary, #6b7280);">
+                    <div class="ad-step-card">
+                        <div class="ad-step-number success">3</div>
+                        <div class="ad-step-content">
+                            <h4 class="ad-step-title">Reiniciar y listo ✓</h4>
+                            <p class="ad-substep-detail">
                                 Tras reiniciar, podrás hacer login con cualquier usuario del dominio.<br>
-                                Formato: <code style="background: white; padding: 2px 8px; border-radius: 4px;">${escapeHtml(status.domain)}\\usuario</code> o <code style="background: white; padding: 2px 8px; border-radius: 4px;">usuario@${escapeHtml(status.realm)}</code>
+                                Formato: <code class="ad-code-white">${escapeHtml(status.domain)}\\usuario</code> o <code class="ad-code-white">usuario@${escapeHtml(status.realm)}</code>
                             </p>
                         </div>
                     </div>
-                    
+
                     <!-- Important note about DNS -->
-                    <div style="display: flex; gap: 16px; padding: 20px; margin-top: 16px; background: #fef3c7; border-radius: 12px; border: 1px solid #fcd34d;">
-                        <div style="width: 40px; height: 40px; background: #fbbf24; color: white; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">💡</div>
+                    <div class="ad-note-card warning">
+                        <div class="ad-note-icon warning">💡</div>
                         <div>
-                            <h4 style="margin: 0 0 8px 0; font-size: 1rem; color: #92400e;">¿Y si salgo de casa?</h4>
-                            <p style="margin: 0; color: #a16207; line-height: 1.6;">
+                            <h4 class="ad-note-title warning">¿Y si salgo de casa?</h4>
+                            <p class="ad-note-text warning">
                                 <strong>El DNS del NAS solo es necesario para unirse al dominio.</strong><br>
                                 Una vez unido, puedes volver a poner el DNS en <strong>automático (DHCP)</strong> y tendrás internet normal dentro y fuera de casa.<br>
                                 El equipo seguirá unido al dominio aunque cambies el DNS.
