@@ -4335,24 +4335,24 @@ function renderSystemView() {
     infoCard.appendChild(uptimeRow);
     infoCard.appendChild(hostnameRow);
 
-    // Update card
-    const updateCard = document.createElement('div');
-    updateCard.className = 'glass-card';
+    // Dashboard Update card
+    const dashUpdateCard = document.createElement('div');
+    dashUpdateCard.className = 'glass-card';
 
-    const updateTitle = document.createElement('h3');
-    updateTitle.textContent = t('system.softwareUpdates', 'Actualizaciones de Software');
+    const dashUpdateTitle = document.createElement('h3');
+    dashUpdateTitle.textContent = t('system.dashboardUpdate', 'Actualización HomePiNAS');
 
-    const updateDesc = document.createElement('p');
-    updateDesc.style.cssText = 'color: var(--text-dim); margin-top: 10px;';
-    updateDesc.textContent = t('system.checkUpdatesDesc', 'Buscar e instalar actualizaciones de HomePiNAS desde GitHub.');
+    const dashUpdateDesc = document.createElement('p');
+    dashUpdateDesc.style.cssText = 'color: var(--text-dim); margin-top: 10px;';
+    dashUpdateDesc.textContent = t('system.dashboardUpdateDesc', 'Buscar e instalar actualizaciones del dashboard desde GitHub.');
 
     const updateStatus = document.createElement('div');
     updateStatus.id = 'update-status';
     updateStatus.style.cssText = 'margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px;';
-    updateStatus.innerHTML = `<span style="color: var(--text-dim);">${t('system.clickToCheck', 'Haz clic en "Buscar Actualizaciones" para verificar...')}</span>`;
+    updateStatus.innerHTML = `<span style="color: var(--text-dim);">${t('system.clickToCheck', 'Haz clic en "Buscar" para verificar...')}</span>`;
 
-    const updateBtnContainer = document.createElement('div');
-    updateBtnContainer.style.cssText = 'display: flex; gap: 15px; margin-top: 20px;';
+    const dashBtnContainer = document.createElement('div');
+    dashBtnContainer.style.cssText = 'display: flex; gap: 15px; margin-top: 20px;';
 
     const checkUpdateBtn = document.createElement('button');
     checkUpdateBtn.className = 'btn-primary';
@@ -4367,17 +4367,58 @@ function renderSystemView() {
     applyUpdateBtn.textContent = t('system.installUpdate', 'Instalar Actualización');
     applyUpdateBtn.addEventListener('click', applyUpdate);
 
-    updateBtnContainer.appendChild(checkUpdateBtn);
-    updateBtnContainer.appendChild(applyUpdateBtn);
+    dashBtnContainer.appendChild(checkUpdateBtn);
+    dashBtnContainer.appendChild(applyUpdateBtn);
 
-    updateCard.appendChild(updateTitle);
-    updateCard.appendChild(updateDesc);
-    updateCard.appendChild(updateStatus);
-    updateCard.appendChild(updateBtnContainer);
+    dashUpdateCard.appendChild(dashUpdateTitle);
+    dashUpdateCard.appendChild(dashUpdateDesc);
+    dashUpdateCard.appendChild(updateStatus);
+    dashUpdateCard.appendChild(dashBtnContainer);
+
+    // OS Update card
+    const osUpdateCard = document.createElement('div');
+    osUpdateCard.className = 'glass-card';
+
+    const osUpdateTitle = document.createElement('h3');
+    osUpdateTitle.textContent = t('system.osUpdate', 'Actualización del Sistema');
+
+    const osUpdateDesc = document.createElement('p');
+    osUpdateDesc.style.cssText = 'color: var(--text-dim); margin-top: 10px;';
+    osUpdateDesc.textContent = t('system.osUpdateDesc', 'Buscar e instalar actualizaciones de paquetes del sistema operativo.');
+
+    const osStatus = document.createElement('div');
+    osStatus.id = 'os-update-status';
+    osStatus.style.cssText = 'margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px;';
+    osStatus.innerHTML = `<span style="color: var(--text-dim);">${t('system.clickToCheck', 'Haz clic en "Buscar" para verificar...')}</span>`;
+
+    const osBtnContainer = document.createElement('div');
+    osBtnContainer.style.cssText = 'display: flex; gap: 15px; margin-top: 20px;';
+
+    const checkOsBtn = document.createElement('button');
+    checkOsBtn.className = 'btn-primary';
+    checkOsBtn.style.cssText = 'background: #6366f1; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);';
+    checkOsBtn.textContent = t('system.checkOsUpdates', 'Buscar Actualizaciones');
+    checkOsBtn.addEventListener('click', checkOsUpdates);
+
+    const applyOsBtn = document.createElement('button');
+    applyOsBtn.className = 'btn-primary';
+    applyOsBtn.id = 'apply-os-update-btn';
+    applyOsBtn.style.cssText = 'background: #f59e0b; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4); display: none;';
+    applyOsBtn.textContent = t('system.installOsUpdate', 'Instalar Actualizaciones');
+    applyOsBtn.addEventListener('click', applyOsUpdate);
+
+    osBtnContainer.appendChild(checkOsBtn);
+    osBtnContainer.appendChild(applyOsBtn);
+
+    osUpdateCard.appendChild(osUpdateTitle);
+    osUpdateCard.appendChild(osUpdateDesc);
+    osUpdateCard.appendChild(osStatus);
+    osUpdateCard.appendChild(osBtnContainer);
 
     dashboardContent.appendChild(mgmtCard);
     dashboardContent.appendChild(infoCard);
-    dashboardContent.appendChild(updateCard);
+    dashboardContent.appendChild(dashUpdateCard);
+    dashboardContent.appendChild(osUpdateCard);
 }
 
 async function systemAction(action) {
@@ -4386,7 +4427,7 @@ async function systemAction(action) {
     if (!confirmed) return;
 
     try {
-        const res = await authFetch(`${API_BASE}/system/${action}`, { method: 'POST' });
+        const res = await authFetch(`${API_BASE}/power/${action}`, { method: 'POST' });
 
         if (!res.ok) {
             const data = await res.json();
@@ -4524,6 +4565,132 @@ async function applyUpdate() {
 
 window.checkForUpdates = checkForUpdates;
 window.applyUpdate = applyUpdate;
+
+// OS Update Functions
+async function checkOsUpdates() {
+    const statusEl = document.getElementById('os-update-status');
+    const applyBtn = document.getElementById('apply-os-update-btn');
+    if (!statusEl) return;
+
+    statusEl.innerHTML = `<span style="color: #f59e0b;">${t('system.checkingOsUpdates', 'Buscando actualizaciones del sistema... (puede tardar)')}</span>`;
+    if (applyBtn) applyBtn.style.display = 'none';
+
+    try {
+        const res = await authFetch(`${API_BASE}/update/check-os`);
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'Error');
+
+        if (data.updatesAvailable > 0) {
+            const secBadge = data.securityUpdates > 0
+                ? `<span style="color: #ef4444; font-weight: 600;"> (${data.securityUpdates} de seguridad)</span>` : '';
+            const pkgList = (data.packages || []).slice(0, 15).map(p =>
+                `${escapeHtml(p.name)} ${p.currentVersion ? escapeHtml(p.currentVersion) + ' → ' : ''}${escapeHtml(p.newVersion)}`
+            ).join('\n');
+            const moreCount = data.updatesAvailable > 15 ? `\n... y ${data.updatesAvailable - 15} más` : '';
+
+            statusEl.innerHTML = `
+                <div style="color: #f59e0b; font-weight: 600;">${data.updatesAvailable} ${t('system.osUpdatesAvailable', 'actualizaciones disponibles')}${secBadge}</div>
+                <code style="display: block; margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 4px; font-size: 0.8rem; white-space: pre-wrap; max-height: 200px; overflow-y: auto;">${escapeHtml(pkgList + moreCount)}</code>
+            `;
+            if (applyBtn) applyBtn.style.display = 'inline-block';
+        } else {
+            statusEl.innerHTML = `
+                <div style="color: #6366f1;">${t('system.osUpToDate', '¡Sistema operativo al día!')}</div>
+                <div style="margin-top: 4px; color: var(--text-dim);">${t('system.noOsUpdates', 'No hay paquetes pendientes de actualización.')}</div>
+            `;
+        }
+    } catch (e) {
+        statusEl.innerHTML = `<span style="color: #ef4444;">Error: ${escapeHtml(e.message)}</span>`;
+    }
+}
+
+async function applyOsUpdate() {
+    const confirmed = await showConfirmModal(
+        t('system.osUpdateConfirmTitle', 'Actualizar sistema operativo'),
+        t('system.osUpdateConfirmMsg', '¿Instalar todas las actualizaciones del sistema? Esto puede tardar varios minutos.')
+    );
+    if (!confirmed) return;
+
+    const statusEl = document.getElementById('os-update-status');
+    const applyBtn = document.getElementById('apply-os-update-btn');
+
+    if (statusEl) statusEl.innerHTML = `<span style="color: #f59e0b;">${t('system.installingOsUpdate', 'Instalando actualizaciones del SO... Esto puede tardar varios minutos.')}</span>`;
+    if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = t('system.installing', 'Instalando...'); }
+
+    try {
+        const res = await authFetch(`${API_BASE}/update/apply-os`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error');
+
+        if (statusEl) {
+            statusEl.innerHTML = `
+                <div style="color: #10b981; font-weight: 600;">${t('system.osUpdateStarted', '¡Actualización del SO iniciada!')}</div>
+                <div style="margin-top: 8px; color: var(--text-dim);">${t('system.osUpdateRunning', 'Las actualizaciones se están instalando en segundo plano. Puedes seguir usando el dashboard.')}</div>
+            `;
+        }
+        if (applyBtn) applyBtn.style.display = 'none';
+    } catch (e) {
+        if (statusEl) statusEl.innerHTML = `<span style="color: #ef4444;">Error: ${escapeHtml(e.message)}</span>`;
+        if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = t('system.retryUpdate', 'Reintentar'); }
+    }
+}
+
+// Auto-check for dashboard updates once per day and show banner
+(function initDashboardUpdateCheck() {
+    const CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+    const STORAGE_KEY = 'homepinas_last_update_check';
+
+    async function silentUpdateCheck() {
+        try {
+            const res = await authFetch(`${API_BASE}/update/check`);
+            if (!res.ok) return;
+            const data = await res.json();
+
+            localStorage.setItem(STORAGE_KEY, Date.now().toString());
+
+            if (data.updateAvailable) {
+                showUpdateBanner(data.currentVersion, data.latestVersion);
+            } else {
+                // Remove banner if no update
+                const existing = document.getElementById('update-banner');
+                if (existing) existing.remove();
+            }
+        } catch (e) {
+            // Silent fail - don't bother user
+        }
+    }
+
+    function showUpdateBanner(currentVersion, latestVersion) {
+        // Don't show duplicate banner
+        if (document.getElementById('update-banner')) return;
+
+        const banner = document.createElement('div');
+        banner.id = 'update-banner';
+        banner.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 9998; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 16px 20px; border-radius: 12px; box-shadow: 0 8px 24px rgba(99,102,241,0.4); display: flex; align-items: center; gap: 12px; max-width: 400px; animation: slideInRight 0.4s ease;';
+        banner.innerHTML = `
+            <div style="font-size: 24px;">🆕</div>
+            <div style="flex: 1;">
+                <div style="font-weight: 600; font-size: 14px;">${t('system.updateAvailableBanner', '¡Actualización disponible!')}</div>
+                <div style="font-size: 12px; opacity: 0.9; margin-top: 2px;">v${escapeHtml(currentVersion)} → v${escapeHtml(latestVersion)}</div>
+            </div>
+            <button onclick="document.getElementById('update-banner').remove(); document.querySelector('[data-view=system]')?.click();" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; white-space: nowrap;">${t('system.viewUpdate', 'Ver')}</button>
+            <button onclick="document.getElementById('update-banner').remove();" style="background: none; border: none; color: rgba(255,255,255,0.7); cursor: pointer; font-size: 18px; padding: 0 4px;">&times;</button>
+        `;
+        document.body.appendChild(banner);
+    }
+
+    // Check on page load (after small delay) if enough time has passed
+    setTimeout(() => {
+        const lastCheck = parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10);
+        if (Date.now() - lastCheck > CHECK_INTERVAL) {
+            silentUpdateCheck();
+        }
+    }, 10000); // Wait 10s after page load
+
+    // Also set interval for long sessions
+    setInterval(silentUpdateCheck, CHECK_INTERVAL);
+})();
 
 // Helper Colors
 function getRoleColor(role) {

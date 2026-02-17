@@ -245,4 +245,78 @@ router.get('/status', requireAuth, (req, res) => {
     }
 });
 
+// =============================================================================
+// OS (Debian/Ubuntu) Updates
+// =============================================================================
+
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+const execFileAsync = promisify(execFile);
+
+// Check for OS updates (apt)
+router.get('/check-os', requireAuth, async (req, res) => {
+    try {
+        // Update package lists
+        await execFileAsync('sudo', ['apt-get', 'update', '-qq'], {
+            timeout: 60000
+        });
+
+        // Get list of upgradable packages
+        const { stdout } = await execFileAsync('apt', ['list', '--upgradable'], {
+            timeout: 15000,
+            encoding: 'utf8'
+        });
+
+        const lines = stdout.trim().split('\n').filter(l => l && !l.startsWith('Listing'));
+        const packages = lines.map(line => {
+            const match = line.match(/^([^/]+)\/.+\s+(\S+)\s+\S+\s+\[upgradable from: (\S+)\]/);
+            if (match) return { name: match[1], newVersion: match[2], currentVersion: match[3] };
+            return { name: line.split('/')[0], newVersion: '', currentVersion: '' };
+        });
+
+        // Count security updates
+        let securityCount = 0;
+        for (const line of lines) {
+            if (line.includes('-security')) securityCount++;
+        }
+
+        res.json({
+            success: true,
+            updatesAvailable: packages.length,
+            securityUpdates: securityCount,
+            packages: packages.slice(0, 50)
+        });
+    } catch (e) {
+        console.error('OS update check error:', e.message);
+        res.status(500).json({ success: false, error: 'Failed to check OS updates: ' + e.message });
+    }
+});
+
+// Apply OS updates (apt upgrade)
+router.post('/apply-os', requireAuth, criticalLimiter, async (req, res) => {
+    logSecurityEvent('OS_UPDATE_STARTED', { user: req.user.username }, req.ip);
+
+    // Send response immediately
+    res.json({
+        success: true,
+        message: 'OS update started. This may take several minutes.'
+    });
+
+    // Run upgrade in background
+    setTimeout(async () => {
+        try {
+            console.log('[OS-UPDATE] Starting apt upgrade...');
+            await execFileAsync('sudo', ['apt-get', 'upgrade', '-y', '-qq'], {
+                timeout: 600000,  // 10 min timeout
+                encoding: 'utf8'
+            });
+            console.log('[OS-UPDATE] Upgrade completed successfully');
+            logSecurityEvent('OS_UPDATE_COMPLETED', {}, '');
+        } catch (e) {
+            console.error('[OS-UPDATE] Upgrade failed:', e.message);
+            logSecurityEvent('OS_UPDATE_FAILED', { error: e.message }, '');
+        }
+    }, 500);
+});
+
 module.exports = router;
