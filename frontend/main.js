@@ -4415,10 +4415,15 @@ function renderSystemView() {
     osUpdateCard.appendChild(osStatus);
     osUpdateCard.appendChild(osBtnContainer);
 
+    // Update grid (2 columns)
+    const updateGrid = document.createElement('div');
+    updateGrid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 20px;';
+    updateGrid.appendChild(dashUpdateCard);
+    updateGrid.appendChild(osUpdateCard);
+
     dashboardContent.appendChild(mgmtCard);
     dashboardContent.appendChild(infoCard);
-    dashboardContent.appendChild(dashUpdateCard);
-    dashboardContent.appendChild(osUpdateCard);
+    dashboardContent.appendChild(updateGrid);
 }
 
 async function systemAction(action) {
