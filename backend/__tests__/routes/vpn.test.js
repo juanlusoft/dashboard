@@ -845,8 +845,8 @@ describe('POST /api/vpn/uninstall', () => {
         expect(sudoExec).toHaveBeenCalledWith('systemctl', ['disable', 'wg-quick@wg0']);
         expect(sudoExec).toHaveBeenCalledWith(
             'apt-get',
-            ['remove', '-y', 'wireguard', 'wireguard-tools'],
-            expect.anything()
+            ['remove', '-y', '-o', 'Dpkg::Options::=--force-confold', 'wireguard', 'wireguard-tools'],
+            expect.objectContaining({ timeout: 120000 })
         );
         expect(saveData).toHaveBeenCalled();
         expect(logSecurityEvent).toHaveBeenCalledWith('vpn_uninstalled', expect.anything());

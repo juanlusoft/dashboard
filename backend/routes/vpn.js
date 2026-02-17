@@ -570,11 +570,14 @@ async function runInstallBackground(user) {
         installState.progress = 5;
         await releaseDpkgLocks();
 
+        // Opciones para evitar prompts interactivos de dpkg/apt
+        const nonInteractiveEnv = { env: { ...process.env, DEBIAN_FRONTEND: 'noninteractive' } };
+
         // Paso 2: Reparar dpkg si necesario
         installState.step = 'Verificando estado de paquetes...';
         installState.progress = 10;
         try {
-            await sudoExec('dpkg', ['--configure', '-a'], { timeout: 120000 });
+            await sudoExec('dpkg', ['--configure', '-a'], { timeout: 120000, ...nonInteractiveEnv });
         } catch (e) {
             console.warn('[VPN] dpkg --configure -a falló (puede no ser necesario):', e.message);
         }
@@ -582,12 +585,12 @@ async function runInstallBackground(user) {
         // Paso 3: apt-get update
         installState.step = 'Actualizando repositorios...';
         installState.progress = 20;
-        await sudoExec('apt-get', ['update'], { timeout: 120000 });
+        await sudoExec('apt-get', ['update'], { timeout: 120000, ...nonInteractiveEnv });
 
         // Paso 4: Instalar paquetes (el más lento)
         installState.step = 'Instalando WireGuard y herramientas...';
         installState.progress = 35;
-        await sudoExec('apt-get', ['install', '-y', 'wireguard', 'wireguard-tools', 'qrencode'], { timeout: 300000 });
+        await sudoExec('apt-get', ['install', '-y', '-o', 'Dpkg::Options::=--force-confold', 'wireguard', 'wireguard-tools', 'qrencode'], { timeout: 300000, ...nonInteractiveEnv });
 
         // Paso 5: IP forwarding
         installState.step = 'Configurando IP forwarding...';
@@ -971,15 +974,16 @@ router.post('/uninstall', async (req, res) => {
         }
 
         // Liberar locks de dpkg y reparar si necesario
+        const nonInteractiveEnv = { env: { ...process.env, DEBIAN_FRONTEND: 'noninteractive' } };
         await releaseDpkgLocks();
         try {
-            await sudoExec('dpkg', ['--configure', '-a'], { timeout: 120000 });
+            await sudoExec('dpkg', ['--configure', '-a'], { timeout: 120000, ...nonInteractiveEnv });
         } catch (e) {
             console.warn('[VPN] dpkg --configure -a falló:', e.message);
         }
 
         // Desinstalar paquetes
-        await sudoExec('apt-get', ['remove', '-y', 'wireguard', 'wireguard-tools'], { timeout: 120000 });
+        await sudoExec('apt-get', ['remove', '-y', '-o', 'Dpkg::Options::=--force-confold', 'wireguard', 'wireguard-tools'], { timeout: 120000, ...nonInteractiveEnv });
 
         // Limpiar configuración local
         const vpnConfig = getVpnConfig();
