@@ -360,6 +360,14 @@ body:has(#login-view.active) .sidebar {
     width: auto;
 }
 
+.header-version {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    opacity: 0.7;
+    letter-spacing: 0.02em;
+}
+
 .header-search {
     position: relative;
     width: 300px;

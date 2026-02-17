@@ -419,6 +419,12 @@ async function initAuth() {
         state.storageConfig = status.storageConfig;
         state.network = status.network;
 
+        // Show version in header
+        if (status.version) {
+            const versionEl = document.getElementById('header-version');
+            if (versionEl) versionEl.textContent = 'v' + status.version;
+        }
+
         // If we have a session, try to validate it
         if (state.sessionId && state.user && state.storageConfig.length > 0) {
             state.isAuthenticated = true;
