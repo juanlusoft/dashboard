@@ -8292,13 +8292,47 @@ async function renderVPNView() {
     if (installBtn) {
         installBtn.addEventListener('click', async () => {
             installBtn.disabled = true;
-            installBtn.textContent = '⏳ Instalando...';
+            installBtn.textContent = '⏳ Iniciando instalación...';
             try {
                 const r = await authFetch(`${API_BASE}/vpn/install`, { method: 'POST' });
                 const d = await r.json();
                 if (!r.ok) throw new Error(d.error || 'Error');
-                showNotification('WireGuard instalado correctamente', 'success');
-                await renderVPNView();
+
+                // Polling de progreso
+                const pollProgress = async () => {
+                    try {
+                        const pr = await authFetch(`${API_BASE}/vpn/install/progress`);
+                        const pd = await pr.json();
+
+                        if (pd.error) {
+                            showNotification(`Error instalando: ${pd.error}`, 'error');
+                            installBtn.disabled = false;
+                            installBtn.textContent = '📦 Instalar WireGuard';
+                            return;
+                        }
+
+                        installBtn.textContent = `⏳ ${pd.step || 'Instalando...'} (${pd.progress || 0}%)`;
+
+                        if (pd.completed) {
+                            showNotification('WireGuard instalado correctamente', 'success');
+                            await renderVPNView();
+                            return;
+                        }
+
+                        if (pd.running) {
+                            setTimeout(pollProgress, 2000);
+                        }
+                    } catch {
+                        setTimeout(pollProgress, 3000);
+                    }
+                };
+
+                if (d.installing) {
+                    setTimeout(pollProgress, 1500);
+                } else {
+                    showNotification('WireGuard instalado correctamente', 'success');
+                    await renderVPNView();
+                }
             } catch (e) {
                 showNotification(`Error: ${e.message}`, 'error');
                 installBtn.disabled = false;

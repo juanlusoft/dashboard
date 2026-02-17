@@ -56,6 +56,15 @@ const WG_DIR = '/etc/wireguard';
 const WG_CONF = path.join(WG_DIR, 'wg0.conf');
 const WG_CLIENTS_DIR = path.join(WG_DIR, 'clients');
 
+// Estado de instalación en memoria (para proceso async)
+let installState = {
+    running: false,
+    step: '',
+    progress: 0,     // 0-100
+    error: null,
+    completed: false
+};
+
 // Todas las rutas requieren autenticación + admin
 router.use(requireAuth);
 router.use(requireAdmin);
@@ -511,7 +520,18 @@ router.get('/status', async (req, res) => {
 });
 
 /**
- * POST /install - Instalar WireGuard
+ * GET /install/progress - Obtener progreso de la instalación en curso
+ */
+router.get('/install/progress', (req, res) => {
+    res.json({
+        success: true,
+        ...installState
+    });
+});
+
+/**
+ * POST /install - Instalar WireGuard (async - responde inmediatamente)
+ * El progreso se consulta via GET /install/progress
  */
 router.post('/install', async (req, res) => {
     try {
@@ -520,21 +540,59 @@ router.post('/install', async (req, res) => {
             return res.json({ success: true, message: 'WireGuard ya está instalado' });
         }
 
-        // Esperar a que se libere el lock de dpkg (unattended-upgrades, etc.)
+        if (installState.running) {
+            return res.json({ success: true, message: 'Instalación en progreso', installing: true });
+        }
+
+        // Iniciar instalación en background
+        installState = { running: true, step: 'Iniciando...', progress: 0, error: null, completed: false };
+        res.json({ success: true, message: 'Instalación iniciada', installing: true });
+
+        // Ejecutar instalación async (no bloquea la respuesta HTTP)
+        runInstallBackground(req.user).catch(err => {
+            console.error('[VPN] Error en instalación background:', err);
+            installState.running = false;
+            installState.error = err.message;
+        });
+
+    } catch (err) {
+        console.error('[VPN] Error instalando:', err);
+        res.status(500).json({ success: false, error: `Error instalando WireGuard: ${err.message}` });
+    }
+});
+
+/**
+ * Proceso de instalación en background
+ */
+async function runInstallBackground(user) {
+    try {
+        // Paso 1: Esperar lock de dpkg
+        installState.step = 'Esperando lock del sistema...';
+        installState.progress = 5;
         await waitForDpkgLock();
 
-        // Reparar dpkg si quedó interrumpido (e.g. por reinicio durante install)
+        // Paso 2: Reparar dpkg si necesario
+        installState.step = 'Verificando estado de paquetes...';
+        installState.progress = 10;
         try {
             await sudoExec('dpkg', ['--configure', '-a'], { timeout: 120000 });
         } catch (e) {
             console.warn('[VPN] dpkg --configure -a falló (puede no ser necesario):', e.message);
         }
 
-        // Instalar WireGuard y qrencode
+        // Paso 3: apt-get update
+        installState.step = 'Actualizando repositorios...';
+        installState.progress = 20;
         await sudoExec('apt-get', ['update'], { timeout: 120000 });
-        await sudoExec('apt-get', ['install', '-y', 'wireguard', 'wireguard-tools', 'qrencode'], { timeout: 180000 });
 
-        // Habilitar IP forwarding
+        // Paso 4: Instalar paquetes (el más lento)
+        installState.step = 'Instalando WireGuard y herramientas...';
+        installState.progress = 35;
+        await sudoExec('apt-get', ['install', '-y', 'wireguard', 'wireguard-tools', 'qrencode'], { timeout: 300000 });
+
+        // Paso 5: IP forwarding
+        installState.step = 'Configurando IP forwarding...';
+        installState.progress = 70;
         const sysctlContent = 'net.ipv4.ip_forward=1\nnet.ipv6.conf.all.forwarding=1\n';
         const tmpSysctl = '/tmp/99-wireguard.conf';
         fs.writeFileSync(tmpSysctl, sysctlContent);
@@ -542,20 +600,24 @@ router.post('/install', async (req, res) => {
         fs.unlinkSync(tmpSysctl);
         await sudoExec('sysctl', ['--system'], { timeout: 10000 });
 
-        // Crear directorio de clientes
+        // Paso 6: Crear directorio
+        installState.step = 'Creando directorios...';
+        installState.progress = 80;
         await sudoExec('mkdir', ['-p', WG_CLIENTS_DIR]);
         await sudoExec('chmod', ['700', WG_DIR]);
 
-        // Generar claves del servidor
+        // Paso 7: Generar claves
+        installState.step = 'Generando claves del servidor...';
+        installState.progress = 85;
         const serverKeys = await generateKeyPair();
 
-        // Configurar
+        // Paso 8: Configurar
+        installState.step = 'Guardando configuración...';
+        installState.progress = 90;
         const vpnConfig = getVpnConfig();
         vpnConfig.installed = true;
-        // Solo guardamos la clave pública en data.json
         vpnConfig.serverPublicKey = serverKeys.publicKey;
 
-        // Obtener endpoint (IP pública o DDNS configurado)
         if (!vpnConfig.endpoint) {
             const data = getData();
             const ddnsServices = (data.network && data.network.ddns) || [];
@@ -568,21 +630,25 @@ router.post('/install', async (req, res) => {
             }
         }
 
-        // Escribir configuración del servidor (clave privada solo va al archivo)
         await writeServerConfig(vpnConfig, serverKeys.privateKey);
         saveVpnConfig(vpnConfig);
 
-        logSecurityEvent('vpn_installed', {
-            user: req.user,
-            port: vpnConfig.port
-        });
+        // Completado
+        installState.step = '¡Instalación completada!';
+        installState.progress = 100;
+        installState.completed = true;
+        installState.running = false;
 
-        res.json({ success: true, message: 'WireGuard instalado correctamente' });
+        logSecurityEvent('vpn_installed', { user, port: vpnConfig.port });
+        console.log('[VPN] Instalación completada exitosamente');
+
     } catch (err) {
-        console.error('[VPN] Error instalando:', err);
-        res.status(500).json({ success: false, error: `Error instalando WireGuard: ${err.message}` });
+        console.error('[VPN] Error en instalación:', err);
+        installState.step = `Error: ${err.message}`;
+        installState.error = err.message;
+        installState.running = false;
     }
-});
+}
 
 /**
  * POST /start - Activar servicio VPN
