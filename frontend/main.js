@@ -10890,9 +10890,9 @@ async function renderCloudSyncView() {
     }
     
     dashboardContent.innerHTML = `
-        <div class="card" style="margin-bottom: 20px;">
+        <div class="card cloudsync-card">
             <div id="cloud-sync-status">
-                <h3 style="color: var(--primary);">☁️ Cloud Sync</h3>
+                <h3 class="cloudsync-title">☁️ Cloud Sync</h3>
                 <p>Cargando...</p>
             </div>
         </div>
@@ -10925,13 +10925,13 @@ async function loadCloudSyncStatus() {
         if (!status.installed) {
             // Syncthing not installed
             statusDiv.innerHTML = `
-                <h3 style="color: var(--primary);">☁️ Cloud Sync</h3>
-                <p style="margin: 15px 0;">Syncthing no está instalado. Instálalo para sincronizar archivos entre tu NAS y otros dispositivos.</p>
-                <button id="install-syncthing-btn" class="btn" style="background: var(--primary); color: #000; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                <h3 class="cloudsync-title">☁️ Cloud Sync</h3>
+                <p class="cloudsync-subtitle">Syncthing no está instalado. Instálalo para sincronizar archivos entre tu NAS y otros dispositivos.</p>
+                <button id="install-syncthing-btn" class="btn cloudsync-install-btn">
                     📦 Instalar Syncthing
                 </button>
             `;
-            
+
             document.getElementById('install-syncthing-btn')?.addEventListener('click', installSyncthing);
             contentDiv.innerHTML = '';
             return;
@@ -10940,15 +10940,15 @@ async function loadCloudSyncStatus() {
         if (!status.running) {
             // Syncthing installed but not running
             statusDiv.innerHTML = `
-                <h3 style="color: var(--primary);">☁️ Cloud Sync</h3>
-                <div style="display: flex; align-items: center; gap: 15px; margin: 15px 0;">
-                    <span style="color: #f59e0b;">⚠️ Syncthing está detenido</span>
-                    <button id="start-syncthing-btn" class="btn" style="background: #10b981; color: #fff; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer;">
+                <h3 class="cloudsync-title">☁️ Cloud Sync</h3>
+                <div class="cloudsync-status-row">
+                    <span class="cloudsync-status-warning">⚠️ Syncthing está detenido</span>
+                    <button id="start-syncthing-btn" class="btn cloudsync-start-btn">
                         ▶️ Iniciar
                     </button>
                 </div>
             `;
-            
+
             document.getElementById('start-syncthing-btn')?.addEventListener('click', startSyncthing);
             contentDiv.innerHTML = '';
             return;
@@ -10956,13 +10956,13 @@ async function loadCloudSyncStatus() {
         
         // Syncthing is running
         statusDiv.innerHTML = `
-            <h3 style="color: var(--primary);">☁️ Cloud Sync</h3>
-            <div style="display: flex; align-items: center; gap: 20px; margin: 15px 0; flex-wrap: wrap;">
-                <span style="color: #10b981;">● Activo</span>
-                <span style="color: var(--text-dim);">${escapeHtml(status.version ? (status.version.startsWith('v') ? status.version : 'v' + status.version) : t('common.unknown', 'Desconocido'))}</span>
-                <span style="color: var(--text-dim);">📁 ${status.folders.length} carpetas</span>
-                <span style="color: var(--text-dim);">📱 ${status.connections} dispositivos conectados</span>
-                <button id="stop-syncthing-btn" class="btn" style="background: #ef4444; color: #fff; padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
+            <h3 class="cloudsync-title">☁️ Cloud Sync</h3>
+            <div class="cloudsync-status-row--wide">
+                <span class="cloudsync-status-active">● Activo</span>
+                <span class="cloudsync-status-info">${escapeHtml(status.version ? (status.version.startsWith('v') ? status.version : 'v' + status.version) : t('common.unknown', 'Desconocido'))}</span>
+                <span class="cloudsync-status-info">📁 ${status.folders.length} carpetas</span>
+                <span class="cloudsync-status-info">📱 ${status.connections} dispositivos conectados</span>
+                <button id="stop-syncthing-btn" class="btn cloudsync-stop-btn">
                     ⏹️ Detener
                 </button>
             </div>
@@ -10975,8 +10975,8 @@ async function loadCloudSyncStatus() {
         
     } catch (e) {
         statusDiv.innerHTML = `
-            <h3 style="color: var(--primary);">☁️ Cloud Sync</h3>
-            <p style="color: #ef4444;">Error: ${escapeHtml(e.message)}</p>
+            <h3 class="cloudsync-title">☁️ Cloud Sync</h3>
+            <p class="cloudsync-error-text">Error: ${escapeHtml(e.message)}</p>
         `;
     }
 }
@@ -10989,50 +10989,49 @@ async function renderCloudSyncContent(status) {
     
     contentDiv.innerHTML = `
         <!-- Device ID / QR Section -->
-        <div class="card" style="margin-bottom: 20px;">
-            <h3 style="color: var(--secondary); margin-bottom: 15px;">🔗 Vincular Dispositivo</h3>
-            <p style="color: var(--text-dim); margin-bottom: 10px;">Escanea el QR o copia el ID para añadir este NAS en Syncthing de tu PC/móvil:</p>
-            <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
-                <div id="qr-code" style="background: #fff; padding: 10px; border-radius: 8px; width: 150px; height: 150px; display: flex; align-items: center; justify-content: center;">
-                    <span style="color: #666; font-size: 0.8rem;">Generando QR...</span>
+        <div class="card cloudsync-card">
+            <h3 class="cloudsync-link-title">🔗 Vincular Dispositivo</h3>
+            <p class="cloudsync-link-desc">Escanea el QR o copia el ID para añadir este NAS en Syncthing de tu PC/móvil:</p>
+            <div class="cloudsync-link-row">
+                <div id="qr-code" class="cloudsync-qr-box">
+                    <span class="cloudsync-qr-placeholder">Generando QR...</span>
                 </div>
-                <div style="flex: 1; min-width: 200px;">
-                    <label style="color: var(--text-dim); font-size: 0.85rem;">ID del Dispositivo:</label>
-                    <div style="display: flex; gap: 10px; margin-top: 5px;">
-                        <input type="text" id="device-id-input" value="${escapeHtml(deviceId)}" readonly 
-                            style="flex: 1; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: var(--text); font-family: monospace; font-size: 0.75rem;">
-                        <button id="copy-device-id-btn"
-                            style="padding: 10px 15px; background: var(--primary); color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                <div class="cloudsync-id-field">
+                    <label class="cloudsync-id-label">ID del Dispositivo:</label>
+                    <div class="cloudsync-id-row">
+                        <input type="text" id="device-id-input" value="${escapeHtml(deviceId)}" readonly
+                            class="cloudsync-id-input">
+                        <button id="copy-device-id-btn" class="cloudsync-copy-btn">
                             📋 Copiar
                         </button>
                     </div>
                 </div>
             </div>
         </div>
-        
+
         <!-- Folders Section -->
-        <div class="card" style="margin-bottom: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h3 style="color: var(--secondary);">📁 Carpetas Sincronizadas</h3>
-                <button id="add-folder-btn" style="padding: 8px 16px; background: #a78bfa; color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+        <div class="card cloudsync-card">
+            <div class="cloudsync-section-header">
+                <h3 class="cloudsync-section-title">📁 Carpetas Sincronizadas</h3>
+                <button id="add-folder-btn" class="cloudsync-add-folder-btn">
                     + Añadir Carpeta
                 </button>
             </div>
             <div id="folders-list">
-                ${status.folders.length === 0 ? '<p style="color: var(--text-dim);">No hay carpetas sincronizadas</p>' : ''}
+                ${status.folders.length === 0 ? '<p class="cloudsync-empty-text">No hay carpetas sincronizadas</p>' : ''}
             </div>
         </div>
-        
+
         <!-- Devices Section -->
-        <div class="card" style="margin-bottom: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h3 style="color: var(--secondary);">📱 Dispositivos</h3>
-                <button id="add-device-btn" style="padding: 8px 16px; background: #22d3ee; color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+        <div class="card cloudsync-card">
+            <div class="cloudsync-section-header">
+                <h3 class="cloudsync-section-title">📱 Dispositivos</h3>
+                <button id="add-device-btn" class="cloudsync-add-device-btn">
                     + Añadir Dispositivo
                 </button>
             </div>
             <div id="devices-list">
-                <p style="color: var(--text-dim);">Cargando dispositivos...</p>
+                <p class="cloudsync-empty-text">Cargando dispositivos...</p>
             </div>
         </div>
     `;
@@ -11067,12 +11066,12 @@ async function renderCloudSyncContent(status) {
 function generateQRCode(deviceId) {
     const qrDiv = document.getElementById('qr-code');
     if (!qrDiv || !deviceId) return;
-    
+
     // Show device ID as copyable text (external QR APIs may be blocked by CSP)
     qrDiv.innerHTML = `
-        <div style="background: var(--bg-card); border: 2px dashed var(--border); border-radius: 10px; padding: 15px; text-align: center;">
-            <span style="font-size: 2rem;">📋</span>
-            <p style="font-size: 0.75rem; color: var(--text-dim); margin-top: 5px;">Copia el ID del dispositivo</p>
+        <div class="cloudsync-qr-fallback">
+            <span class="cloudsync-qr-fallback-icon">📋</span>
+            <p class="cloudsync-qr-fallback-text">Copia el ID del dispositivo</p>
         </div>`;
 }
 
@@ -11081,55 +11080,51 @@ function renderFoldersList(folders) {
     if (!listDiv) return;
     
     if (folders.length === 0) {
-        listDiv.innerHTML = '<p style="color: var(--text-dim);">No hay carpetas sincronizadas. Añade una carpeta para empezar.</p>';
+        listDiv.innerHTML = '<p class="cloudsync-empty-text">No hay carpetas sincronizadas. Añade una carpeta para empezar.</p>';
         return;
     }
     
     listDiv.innerHTML = folders.map(f => `
-        <div class="sync-folder-card" data-folder-id="${escapeHtml(f.id)}" style="padding: 15px; background: rgba(255,255,255,0.03); border-radius: 10px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.05);">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
-                <div style="flex: 1;">
-                    <div style="font-weight: 600; color: var(--text); font-size: 1rem;">📁 ${escapeHtml(f.label)}</div>
-                    <div style="font-size: 0.8rem; color: var(--text-dim); margin-top: 3px; font-family: monospace;">${escapeHtml(f.path)}</div>
+        <div class="sync-folder-card cloudsync-folder-card" data-folder-id="${escapeHtml(f.id)}">
+            <div class="cloudsync-folder-header">
+                <div class="cloudsync-folder-info">
+                    <div class="cloudsync-folder-name">📁 ${escapeHtml(f.label)}</div>
+                    <div class="cloudsync-folder-path">${escapeHtml(f.path)}</div>
                 </div>
-                <div style="display: flex; gap: 6px;">
-                    <button class="pause-folder-btn" data-folder-id="${escapeHtml(f.id)}" data-paused="${f.paused}" 
-                        style="padding: 6px 10px; background: ${f.paused ? '#10b981' : '#f59e0b'}; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;" 
+                <div class="cloudsync-folder-actions">
+                    <button class="pause-folder-btn cloudsync-action-btn ${f.paused ? 'cloudsync-action-btn--resume' : 'cloudsync-action-btn--pause'}" data-folder-id="${escapeHtml(f.id)}" data-paused="${f.paused}"
                         title="${f.paused ? 'Reanudar' : 'Pausar'}">
                         ${f.paused ? '▶️' : '⏸️'}
                     </button>
-                    <button class="browse-folder-btn" data-folder-path="${escapeHtml(f.path)}" 
-                        style="padding: 6px 10px; background: #8b5cf6; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;" 
+                    <button class="browse-folder-btn cloudsync-action-btn cloudsync-action-btn--browse" data-folder-path="${escapeHtml(f.path)}"
                         title="Ver archivos">
                         📂
                     </button>
-                    <button class="share-folder-btn" data-folder-id="${escapeHtml(f.id)}" data-folder-label="${escapeHtml(f.label)}" 
-                        style="padding: 6px 10px; background: #3b82f6; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;" 
+                    <button class="share-folder-btn cloudsync-action-btn cloudsync-action-btn--share" data-folder-id="${escapeHtml(f.id)}" data-folder-label="${escapeHtml(f.label)}"
                         title="Compartir">
                         📤
                     </button>
-                    <button class="delete-folder-btn" data-folder-id="${escapeHtml(f.id)}" 
-                        style="padding: 6px 10px; background: #ef4444; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;" 
+                    <button class="delete-folder-btn cloudsync-action-btn cloudsync-action-btn--delete" data-folder-id="${escapeHtml(f.id)}"
                         title="Eliminar">
                         🗑️
                     </button>
                 </div>
             </div>
-            <div class="folder-sync-status" data-folder-id="${escapeHtml(f.id)}" style="margin-top: 10px;">
-                <div style="display: flex; align-items: center; gap: 10px; font-size: 0.85rem;">
-                    ${f.paused 
-                        ? '<span style="color: #f59e0b;">⏸️ Pausada</span>' 
-                        : '<span class="sync-state" style="color: #10b981;">● Cargando...</span>'}
-                    <span style="color: var(--text-dim);">· ${f.devices} dispositivo(s)</span>
+            <div class="folder-sync-status cloudsync-sync-status" data-folder-id="${escapeHtml(f.id)}">
+                <div class="cloudsync-sync-status-row">
+                    ${f.paused
+                        ? '<span class="cloudsync-sync-paused">⏸️ Pausada</span>'
+                        : '<span class="sync-state cloudsync-sync-active">● Cargando...</span>'}
+                    <span class="cloudsync-sync-devices">· ${f.devices} dispositivo(s)</span>
                 </div>
                 ${!f.paused ? `
-                <div class="sync-progress-container" style="margin-top: 8px; display: none;">
-                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-dim); margin-bottom: 4px;">
+                <div class="sync-progress-container cloudsync-progress-container">
+                    <div class="cloudsync-progress-header">
                         <span class="sync-files">-- archivos</span>
                         <span class="sync-percent">--%</span>
                     </div>
-                    <div style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
-                        <div class="sync-progress-bar" style="height: 100%; background: var(--primary); width: 0%; transition: width 0.3s;"></div>
+                    <div class="cloudsync-progress-track">
+                        <div class="sync-progress-bar cloudsync-progress-bar"></div>
                     </div>
                 </div>
                 ` : ''}
@@ -11266,35 +11261,33 @@ async function loadDevicesList() {
         const devices = await res.json();
         
         if (devices.length === 0) {
-            listDiv.innerHTML = '<p style="color: #9ca3af;">No hay dispositivos vinculados. Añade el ID del Dispositivo de tu PC o móvil.</p>';
+            listDiv.innerHTML = '<p class="cloudsync-empty-text">No hay dispositivos vinculados. Añade el ID del Dispositivo de tu PC o móvil.</p>';
             return;
         }
         
         listDiv.innerHTML = devices.map(d => `
-            <div class="sync-device-card" style="padding: 15px; background: rgba(255,255,255,0.03); border-radius: 10px; margin-bottom: 12px; border: 1px solid ${d.connected ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.05)'};">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <div style="flex: 1;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span style="font-size: 1.2rem;">${d.connected ? '🟢' : '⚪'}</span>
-                            <span style="font-weight: 600; color: var(--text); font-size: 1rem;">${escapeHtml(d.name)}</span>
+            <div class="sync-device-card cloudsync-device-card ${d.connected ? 'cloudsync-device-card--connected' : 'cloudsync-device-card--disconnected'}">
+                <div class="cloudsync-device-header">
+                    <div class="cloudsync-device-info">
+                        <div class="cloudsync-device-name-row">
+                            <span class="cloudsync-device-icon">${d.connected ? '🟢' : '⚪'}</span>
+                            <span class="cloudsync-device-name">${escapeHtml(d.name)}</span>
                         </div>
-                        <div style="font-size: 0.75rem; color: var(--text-dim); font-family: monospace; margin-top: 6px; word-break: break-all;">
+                        <div class="cloudsync-device-id">
                             ${escapeHtml(d.id.substring(0, 30))}...
                         </div>
-                        <div style="display: flex; gap: 15px; margin-top: 8px; font-size: 0.8rem;">
-                            ${d.connected 
-                                ? `<span style="color: #10b981;">● Conectado</span><span style="color: var(--text-dim);">📍 ${escapeHtml(d.address || 'LAN')}</span>` 
-                                : '<span style="color: #6b7280;">○ Desconectado</span>'}
+                        <div class="cloudsync-device-status-row">
+                            ${d.connected
+                                ? `<span class="cloudsync-device-connected">● Conectado</span><span class="cloudsync-device-address">📍 ${escapeHtml(d.address || 'LAN')}</span>`
+                                : '<span class="cloudsync-device-disconnected">○ Desconectado</span>'}
                         </div>
                     </div>
-                    <div style="display: flex; gap: 6px;">
-                        <button class="rename-device-btn" data-device-id="${escapeHtml(d.id)}" data-device-name="${escapeHtml(d.name)}"
-                            style="padding: 6px 10px; background: #6b7280; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;" 
+                    <div class="cloudsync-device-actions">
+                        <button class="rename-device-btn cloudsync-action-btn cloudsync-action-btn--rename" data-device-id="${escapeHtml(d.id)}" data-device-name="${escapeHtml(d.name)}"
                             title="Renombrar">
                             ✏️
                         </button>
-                        <button class="delete-device-btn" data-device-id="${escapeHtml(d.id)}" 
-                            style="padding: 6px 10px; background: #ef4444; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;"
+                        <button class="delete-device-btn cloudsync-action-btn cloudsync-action-btn--delete" data-device-id="${escapeHtml(d.id)}"
                             title="Eliminar">
                             🗑️
                         </button>
@@ -11311,7 +11304,7 @@ async function loadDevicesList() {
             btn.addEventListener('click', () => deleteDevice(btn.dataset.deviceId));
         });
     } catch (e) {
-        listDiv.innerHTML = `<p style="color: #ef4444;">Error: ${escapeHtml(e.message)}</p>`;
+        listDiv.innerHTML = `<p class="cloudsync-error-text">Error: ${escapeHtml(e.message)}</p>`;
     }
 }
 
@@ -11319,22 +11312,20 @@ async function loadDevicesList() {
 function showRenameDeviceModal(deviceId, currentName) {
     const modal = document.createElement('div');
     modal.id = 'rename-device-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 99999;';
+    modal.className = 'cloudsync-modal-overlay';
     modal.innerHTML = `
-        <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 400px;">
-            <h3 style="color: #22d3ee; margin-bottom: 20px;">✏️ Renombrar Dispositivo</h3>
-            <div style="margin-bottom: 20px;">
-                <label style="color: #9ca3af; font-size: 0.9rem;">Nombre:</label>
+        <div class="cloudsync-modal-content cloudsync-modal-content--sm">
+            <h3 class="cloudsync-modal-title cloudsync-modal-title--blue">✏️ Renombrar Dispositivo</h3>
+            <div class="cloudsync-modal-field--last">
+                <label class="cloudsync-modal-label">Nombre:</label>
                 <input type="text" id="device-new-name" value="${escapeHtml(currentName)}"
-                    style="width: 100%; padding: 12px; margin-top: 5px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff;">
+                    class="cloudsync-modal-input">
             </div>
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button id="rename-cancel-btn"
-                    style="padding: 10px 20px; background: #4b5563; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
+            <div class="cloudsync-modal-actions">
+                <button id="rename-cancel-btn" class="cloudsync-btn-cancel">
                     Cancelar
                 </button>
-                <button id="rename-save-btn"
-                    style="padding: 10px 20px; background: #a78bfa; color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                <button id="rename-save-btn" class="cloudsync-btn-save">
                     Guardar
                 </button>
             </div>
@@ -11442,27 +11433,25 @@ async function stopSyncthing() {
 function showAddFolderModal() {
     const modal = document.createElement('div');
     modal.id = 'add-folder-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 99999;';
+    modal.className = 'cloudsync-modal-overlay';
     modal.innerHTML = `
-        <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 500px;">
-            <h3 style="color: #a78bfa; margin-bottom: 20px;">📁 Añadir Carpeta Sincronizada</h3>
-            <div style="margin-bottom: 15px;">
-                <label style="color: #9ca3af; font-size: 0.9rem;">Ruta (relativa a /mnt/storage):</label>
-                <input type="text" id="folder-path" placeholder="ej: Documents, Photos, Backup" 
-                    style="width: 100%; padding: 12px; margin-top: 5px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff;">
+        <div class="cloudsync-modal-content cloudsync-modal-content--lg">
+            <h3 class="cloudsync-modal-title cloudsync-modal-title--purple">📁 Añadir Carpeta Sincronizada</h3>
+            <div class="cloudsync-modal-field">
+                <label class="cloudsync-modal-label">Ruta (relativa a /mnt/storage):</label>
+                <input type="text" id="folder-path" placeholder="ej: Documents, Photos, Backup"
+                    class="cloudsync-modal-input">
             </div>
-            <div style="margin-bottom: 20px;">
-                <label style="color: #9ca3af; font-size: 0.9rem;">Nombre (opcional):</label>
+            <div class="cloudsync-modal-field--last">
+                <label class="cloudsync-modal-label">Nombre (opcional):</label>
                 <input type="text" id="folder-label" placeholder="Nombre para mostrar"
-                    style="width: 100%; padding: 12px; margin-top: 5px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff;">
+                    class="cloudsync-modal-input">
             </div>
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button id="cancel-folder-btn"
-                    style="padding: 10px 20px; background: #4b5563; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
+            <div class="cloudsync-modal-actions">
+                <button id="cancel-folder-btn" class="cloudsync-btn-cancel">
                     Cancelar
                 </button>
-                <button id="add-folder-confirm-btn"
-                    style="padding: 10px 20px; background: #a78bfa; color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                <button id="add-folder-confirm-btn" class="cloudsync-btn-save">
                     Añadir
                 </button>
             </div>
@@ -11566,31 +11555,30 @@ async function showShareFolderModal(folderId, folderLabel) {
     
     const modal = document.createElement('div');
     modal.id = 'share-folder-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 99999;';
+    modal.className = 'cloudsync-modal-overlay';
     modal.innerHTML = `
-        <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 450px;">
-            <h3 style="color: #22d3ee; margin-bottom: 20px;">📤 Compartir "${escapeHtml(folderLabel)}"</h3>
-            <p style="color: #9ca3af; margin-bottom: 15px; font-size: 0.9rem;">
+        <div class="cloudsync-modal-content cloudsync-modal-content--md">
+            <h3 class="cloudsync-modal-title cloudsync-modal-title--blue">📤 Compartir "${escapeHtml(folderLabel)}"</h3>
+            <p class="cloudsync-modal-desc">
                 Selecciona los dispositivos con los que quieres sincronizar esta carpeta:
             </p>
-            <div id="share-devices-list" style="max-height: 300px; overflow-y: auto;">
+            <div id="share-devices-list" class="cloudsync-share-list">
                 ${devices.map(d => `
-                    <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; margin-bottom: 8px; cursor: pointer;">
-                        <input type="checkbox" class="share-device-checkbox" data-device-id="${escapeHtml(d.id)}" 
-                            ${folderDevices.includes(d.id) ? 'checked' : ''}
-                            style="width: 18px; height: 18px; cursor: pointer;">
+                    <label class="cloudsync-share-item">
+                        <input type="checkbox" class="share-device-checkbox cloudsync-share-checkbox" data-device-id="${escapeHtml(d.id)}"
+                            ${folderDevices.includes(d.id) ? 'checked' : ''}>
                         <div>
-                            <div style="color: #e5e7eb; font-weight: 500;">${d.connected ? '🟢' : '⚪'} ${escapeHtml(d.name)}</div>
-                            <div style="color: #9ca3af; font-size: 0.8rem;">${escapeHtml(d.id.substring(0, 15))}...</div>
+                            <div class="cloudsync-share-name">${d.connected ? '🟢' : '⚪'} ${escapeHtml(d.name)}</div>
+                            <div class="cloudsync-share-id">${escapeHtml(d.id.substring(0, 15))}...</div>
                         </div>
                     </label>
                 `).join('')}
             </div>
-            <div style="display: flex; gap: 12px; margin-top: 20px;">
-                <button id="share-cancel-btn" style="flex: 1; padding: 12px; background: #4b5563; color: #fff; border: none; border-radius: 8px; cursor: pointer;">
+            <div class="cloudsync-modal-actions--full">
+                <button id="share-cancel-btn" class="cloudsync-btn-cancel--full">
                     Cancelar
                 </button>
-                <button id="share-save-btn" style="flex: 1; padding: 12px; background: #22c55e; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                <button id="share-save-btn" class="cloudsync-btn-save--full cloudsync-btn-save--green">
                     💾 Guardar
                 </button>
             </div>
@@ -11642,30 +11630,28 @@ async function showShareFolderModal(folderId, folderLabel) {
 function showAddDeviceModal() {
     const modal = document.createElement('div');
     modal.id = 'add-device-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 99999;';
+    modal.className = 'cloudsync-modal-overlay';
     modal.innerHTML = `
-        <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 500px;">
-            <h3 style="color: #22d3ee; margin-bottom: 20px;">📱 Añadir Dispositivo</h3>
-            <p style="color: #9ca3af; margin-bottom: 15px; font-size: 0.9rem;">
+        <div class="cloudsync-modal-content cloudsync-modal-content--lg">
+            <h3 class="cloudsync-modal-title cloudsync-modal-title--blue">📱 Añadir Dispositivo</h3>
+            <p class="cloudsync-modal-desc">
                 Copia el ID del Dispositivo de Syncthing desde tu PC o móvil (Ajustes → Mostrar ID).
             </p>
-            <div style="margin-bottom: 15px;">
-                <label style="color: #9ca3af; font-size: 0.9rem;">ID del Dispositivo:</label>
+            <div class="cloudsync-modal-field">
+                <label class="cloudsync-modal-label">ID del Dispositivo:</label>
                 <input type="text" id="device-id" placeholder="XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX"
-                    style="width: 100%; padding: 12px; margin-top: 5px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff; font-family: monospace; font-size: 0.8rem;">
+                    class="cloudsync-modal-input cloudsync-modal-input--mono">
             </div>
-            <div style="margin-bottom: 20px;">
-                <label style="color: #9ca3af; font-size: 0.9rem;">Nombre:</label>
+            <div class="cloudsync-modal-field--last">
+                <label class="cloudsync-modal-label">Nombre:</label>
                 <input type="text" id="device-name" placeholder="Mi PC, iPhone, etc."
-                    style="width: 100%; padding: 12px; margin-top: 5px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff;">
+                    class="cloudsync-modal-input">
             </div>
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button id="cancel-device-btn"
-                    style="padding: 10px 20px; background: #4b5563; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
+            <div class="cloudsync-modal-actions">
+                <button id="cancel-device-btn" class="cloudsync-btn-cancel">
                     Cancelar
                 </button>
-                <button id="add-device-confirm-btn"
-                    style="padding: 10px 20px; background: #22d3ee; color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                <button id="add-device-confirm-btn" class="cloudsync-btn-add-device">
                     Añadir
                 </button>
             </div>
