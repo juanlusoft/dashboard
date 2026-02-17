@@ -419,10 +419,9 @@ async function initAuth() {
         state.storageConfig = status.storageConfig;
         state.network = status.network;
 
-        // Show version in header
+        // Store version for header display
         if (status.version) {
-            const versionEl = document.getElementById('header-version');
-            if (versionEl) versionEl.textContent = 'v' + status.version;
+            state.appVersion = status.version;
         }
 
         // If we have a session, try to validate it
@@ -1238,6 +1237,11 @@ function switchView(viewName, skipRender = false) {
         }
         
         if (viewName === 'dashboard' && !skipRender) renderContent('dashboard');
+        // Show version in header when dashboard is visible
+        if (viewName === 'dashboard' && state.appVersion) {
+            const versionEl = document.getElementById('header-version');
+            if (versionEl) versionEl.textContent = 'v' + state.appVersion;
+        }
         // Update username display and avatar
         if (state.user) {
             state.username = state.user.username || "Admin";
