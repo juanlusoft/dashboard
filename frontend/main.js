@@ -158,15 +158,10 @@ function showConfirmModal(title, message, confirmText = 'Confirmar', cancelText 
         `;
         
         modal.innerHTML = `
-            <div class="glass-card scale-in" style="
-                max-width: 400px;
-                width: 90%;
-                padding: 24px;
-                text-align: center;
-            ">
-                <h3 style="margin-bottom: 16px; color: var(--text-primary);">${escapeHtml(title)}</h3>
-                <p style="margin-bottom: 24px; color: var(--text-secondary); white-space: pre-wrap;">${escapeHtml(message)}</p>
-                <div style="display: flex; gap: 12px; justify-content: center;">
+            <div class="glass-card scale-in dash-confirm-card">
+                <h3 class="dash-confirm-title">${escapeHtml(title)}</h3>
+                <p class="dash-confirm-message">${escapeHtml(message)}</p>
+                <div class="dash-confirm-actions">
                     <button id="confirm-cancel" class="wizard-btn wizard-btn-back">${escapeHtml(cancelText)}</button>
                     <button id="confirm-ok" class="wizard-btn wizard-btn-next">${escapeHtml(confirmText)}</button>
                 </div>
@@ -567,19 +562,7 @@ function showDiskNotification(disks) {
     
     const notification = document.createElement('div');
     notification.id = 'disk-notification';
-    notification.style.cssText = `
-        position: fixed;
-        top: 70px;
-        right: 20px;
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-        border: 1px solid #4ecdc4;
-        border-radius: 12px;
-        padding: 16px 20px;
-        z-index: 99999;
-        box-shadow: 0 8px 32px rgba(78, 205, 196, 0.3);
-        max-width: 400px;
-        animation: slideIn 0.3s ease-out;
-    `;
+    notification.className = 'dash-disk-notif';
     
     notification.innerHTML = `
         <style>
@@ -630,19 +613,19 @@ function showDiskNotification(disks) {
             .disk-notif-btn:hover { transform: scale(1.05); }
         </style>
         <button class="disk-notif-close">×</button>
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
-            <span style="font-size: 24px;">🆕</span>
+        <div class="dash-notif-header">
+            <span class="dash-notif-icon">🆕</span>
             <div>
-                <div style="color: #4ecdc4; font-weight: 600;">Nuevo disco detectado</div>
-                <div style="color: #888; font-size: 12px;">${disks.length} disco(s) disponible(s)</div>
+                <div class="dash-notif-title">Nuevo disco detectado</div>
+                <div class="dash-notif-subtitle">${disks.length} disco(s) disponible(s)</div>
             </div>
         </div>
         <div id="disk-notif-list">
             ${disks.map(d => `
                 <div class="disk-notif-item">
                     <div>
-                        <div style="color: #fff; font-weight: 500;">${d.model || d.id}</div>
-                        <div style="color: #888; font-size: 11px;">${d.sizeFormatted} • ${d.id}</div>
+                        <div class="dash-notif-disk-name">${d.model || d.id}</div>
+                        <div class="dash-notif-disk-info">${d.sizeFormatted} • ${d.id}</div>
                     </div>
                 </div>
             `).join('')}
@@ -704,126 +687,73 @@ function showDiskActionModal() {
     `;
     
     modal.innerHTML = `
-        <div style="
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            border: 1px solid rgba(78, 205, 196, 0.3);
-            border-radius: 16px;
-            padding: 24px;
-            width: 90%;
-            max-width: 500px;
-            max-height: 80vh;
-            overflow-y: auto;
-        ">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="color: #4ecdc4; margin: 0;">🆕 Configurar Nuevo Disco</h3>
-                <div style="display: flex; gap: 8px;">
-                    <button id="disk-modal-minimize" style="background: none; border: none; color: #888; font-size: 18px; cursor: pointer; display: none;" title="Minimizar">─</button>
-                    <button id="disk-modal-close" style="background: none; border: none; color: #888; font-size: 24px; cursor: pointer;">×</button>
+        <div class="dash-disk-modal">
+            <div class="dash-disk-modal-header">
+                <h3 class="dash-disk-modal-title">🆕 Configurar Nuevo Disco</h3>
+                <div class="dash-disk-modal-btns">
+                    <button id="disk-modal-minimize" class="dash-disk-modal-icon-btn" style="display: none;" title="Minimizar">─</button>
+                    <button id="disk-modal-close" class="dash-disk-modal-icon-btn dash-disk-modal-icon-btn--close">×</button>
                 </div>
             </div>
-            
+
             <div id="disk-action-list">
                 ${detectedNewDisks.map((d, i) => `
-                    <div class="disk-config-card" style="
-                        background: rgba(255,255,255,0.05);
-                        border-radius: 12px;
-                        padding: 16px;
-                        margin-bottom: 16px;
-                    ">
-                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                    <div class="disk-config-card dash-disk-config-card">
+                        <div class="dash-disk-config-header">
                             <div>
-                                <div style="color: #fff; font-weight: 600; font-size: 16px;">${d.model || 'Disco'}</div>
-                                <div style="color: #888; font-size: 12px;">${d.sizeFormatted} • /dev/${d.id}</div>
-                                ${d.hasData ? '<div style="color: #f39c12; font-size: 11px; margin-top: 4px;">⚠️ Contiene datos</div>' : ''}
+                                <div class="dash-disk-config-name">${d.model || 'Disco'}</div>
+                                <div class="dash-disk-config-info">${d.sizeFormatted} • /dev/${d.id}</div>
+                                ${d.hasData ? '<div class="dash-disk-config-warning">⚠️ Contiene datos</div>' : ''}
                             </div>
-                            <div style="background: rgba(78,205,196,0.2); padding: 4px 8px; border-radius: 4px; font-size: 11px; color: #4ecdc4;">
+                            <div class="dash-disk-config-transport">
                                 ${d.transport?.toUpperCase() || 'N/A'}
                             </div>
                         </div>
-                        
-                        <div style="margin-bottom: 12px;">
-                            <label style="color: #888; font-size: 12px; display: block; margin-bottom: 6px;">¿Qué hacer con este disco?</label>
-                            <select id="disk-action-${d.id}" style="
-                                width: 100%;
-                                padding: 10px;
-                                border-radius: 8px;
-                                background: rgba(0,0,0,0.3);
-                                border: 1px solid rgba(255,255,255,0.1);
-                                color: #fff;
-                                font-size: 14px;
-                            ">
+
+                        <div class="dash-disk-config-field">
+                            <label class="dash-disk-config-label">¿Qué hacer con este disco?</label>
+                            <select id="disk-action-${d.id}" class="dash-disk-config-select">
                                 <option value="pool-data">📦 Añadir al pool (datos)</option>
                                 <option value="pool-cache">⚡ Añadir al pool (caché)</option>
                                 <option value="standalone">💾 Volumen independiente</option>
                                 <option value="ignore">🔕 Ignorar</option>
                             </select>
                         </div>
-                        
+
                         <div id="disk-options-${d.id}">
-                            <div style="margin-bottom: 8px;">
-                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                    <input type="checkbox" id="disk-format-${d.id}" ${d.hasData ? '' : 'checked'} style="accent-color: #4ecdc4;">
-                                    <span style="color: #ccc; font-size: 13px;">Formatear disco (ext4)</span>
+                            <div class="dash-disk-checkbox-row">
+                                <label class="dash-disk-checkbox-label">
+                                    <input type="checkbox" id="disk-format-${d.id}" ${d.hasData ? '' : 'checked'} class="dash-disk-checkbox">
+                                    <span class="dash-disk-checkbox-text">Formatear disco (ext4)</span>
                                 </label>
-                                ${d.hasData ? '<div style="color: #e74c3c; font-size: 11px; margin-left: 24px;">⚠️ Esto borrará todos los datos</div>' : ''}
+                                ${d.hasData ? '<div class="dash-disk-data-warning">⚠️ Esto borrará todos los datos</div>' : ''}
                             </div>
-                            
-                            <div id="standalone-name-${d.id}" style="display: none; margin-top: 8px;">
-                                <label style="color: #888; font-size: 12px; display: block; margin-bottom: 4px;">Nombre del volumen:</label>
-                                <input type="text" id="disk-name-${d.id}" placeholder="ej: backups" value="${d.id}" style="
-                                    width: 100%;
-                                    padding: 8px;
-                                    border-radius: 6px;
-                                    background: rgba(0,0,0,0.3);
-                                    border: 1px solid rgba(255,255,255,0.1);
-                                    color: #fff;
-                                ">
+
+                            <div id="standalone-name-${d.id}" class="dash-disk-standalone-name">
+                                <label class="dash-disk-name-label">Nombre del volumen:</label>
+                                <input type="text" id="disk-name-${d.id}" placeholder="ej: backups" value="${d.id}" class="dash-disk-name-input">
                             </div>
                         </div>
                     </div>
                 `).join('')}
             </div>
-            
+
             <!-- Progress Section (hidden initially) -->
-            <div id="disk-progress-section" style="display: none;">
-                <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px; margin-top: 16px;">
-                    <h4 style="color: #4ecdc4; margin: 0 0 12px 0; font-size: 14px;">📊 Progreso</h4>
+            <div id="disk-progress-section" class="dash-disk-progress-section">
+                <div class="dash-disk-progress-inner">
+                    <h4 class="dash-disk-progress-title">📊 Progreso</h4>
                     <div id="disk-progress-steps"></div>
                 </div>
             </div>
-            
-            <div id="disk-modal-buttons" style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
-                <button id="disk-modal-cancel" style="
-                    padding: 10px 20px;
-                    border-radius: 8px;
-                    background: rgba(255,255,255,0.1);
-                    border: none;
-                    color: #fff;
-                    cursor: pointer;
-                ">Cancelar</button>
-                <button id="disk-modal-apply" style="
-                    padding: 10px 20px;
-                    border-radius: 8px;
-                    background: #4ecdc4;
-                    border: none;
-                    color: #1a1a2e;
-                    font-weight: 600;
-                    cursor: pointer;
-                ">Aplicar</button>
+
+            <div id="disk-modal-buttons" class="dash-disk-modal-footer">
+                <button id="disk-modal-cancel" class="dash-disk-btn-cancel">Cancelar</button>
+                <button id="disk-modal-apply" class="dash-disk-btn-apply">Aplicar</button>
             </div>
-            
+
             <!-- Close button after completion (hidden initially) -->
-            <div id="disk-modal-done" style="display: none; margin-top: 20px; text-align: center;">
-                <button id="disk-modal-close-done" style="
-                    padding: 12px 32px;
-                    border-radius: 8px;
-                    background: #10b981;
-                    border: none;
-                    color: #fff;
-                    font-weight: 600;
-                    cursor: pointer;
-                    font-size: 14px;
-                ">✓ Cerrar</button>
+            <div id="disk-modal-done" class="dash-disk-done-section">
+                <button id="disk-modal-close-done" class="dash-disk-btn-done">✓ Cerrar</button>
             </div>
         </div>
     `;
@@ -905,33 +835,13 @@ function minimizeDiskModal() {
     if (!widget) {
         widget = document.createElement('div');
         widget.id = 'disk-progress-widget';
-        widget.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            border: 1px solid rgba(78, 205, 196, 0.3);
-            border-radius: 12px;
-            padding: 12px 16px;
-            min-width: 250px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-            z-index: 99998;
-            cursor: pointer;
-            transition: transform 0.2s;
-        `;
+        widget.className = 'dash-disk-widget';
         widget.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <div class="disk-widget-spinner" style="
-                    width: 20px;
-                    height: 20px;
-                    border: 2px solid rgba(78,205,196,0.3);
-                    border-top-color: #4ecdc4;
-                    border-radius: 50%;
-                    animation: spin 1s linear infinite;
-                "></div>
+            <div class="dash-disk-widget-inner">
+                <div class="disk-widget-spinner dash-disk-widget-spinner"></div>
                 <div>
-                    <div style="color: #fff; font-weight: 600; font-size: 13px;">Configurando disco...</div>
-                    <div id="disk-widget-status" style="color: #888; font-size: 11px;">En progreso</div>
+                    <div class="dash-disk-widget-title">Configurando disco...</div>
+                    <div id="disk-widget-status" class="dash-disk-widget-status">En progreso</div>
                 </div>
             </div>
         `;
@@ -948,13 +858,6 @@ function minimizeDiskModal() {
             widget.style.display = 'none';
             const modal = document.getElementById('disk-action-modal');
             if (modal) modal.style.display = 'flex';
-        });
-        
-        widget.addEventListener('mouseenter', () => {
-            widget.style.transform = 'scale(1.02)';
-        });
-        widget.addEventListener('mouseleave', () => {
-            widget.style.transform = 'scale(1)';
         });
         
         document.body.appendChild(widget);
@@ -999,7 +902,7 @@ function updateDiskProgressStep(diskId, step, status, message) {
     const colors = { pending: '#888', running: '#f59e0b', done: '#10b981', error: '#ef4444' };
     
     stepEl.innerHTML = `
-        <span style="margin-right: 8px;">${icons[status]}</span>
+        <span class="dash-progress-step-icon">${icons[status]}</span>
         <span style="color: ${colors[status]};">${message}</span>
     `;
 }
@@ -1042,22 +945,22 @@ async function applyDiskActions() {
         
         // Create progress steps for this disk
         const diskProgress = document.createElement('div');
-        diskProgress.style.cssText = 'background: rgba(0,0,0,0.2); border-radius: 8px; padding: 12px; margin-bottom: 12px;';
+        diskProgress.className = 'dash-progress-card';
         diskProgress.innerHTML = `
-            <div style="color: #fff; font-weight: 600; margin-bottom: 8px;">💾 ${disk.model || disk.id} (${disk.sizeFormatted})</div>
-            <div id="progress-${disk.id}-format" style="font-size: 13px; margin: 4px 0; display: ${format ? 'block' : 'none'};">
-                <span style="margin-right: 8px;">⏳</span>
-                <span style="color: #888;">Formatear disco...</span>
+            <div class="dash-progress-disk-title">💾 ${disk.model || disk.id} (${disk.sizeFormatted})</div>
+            <div id="progress-${disk.id}-format" class="dash-progress-step" style="display: ${format ? 'block' : 'none'};">
+                <span class="dash-progress-step-icon">⏳</span>
+                <span class="dash-progress-step-text">Formatear disco...</span>
             </div>
-            <div id="progress-${disk.id}-mount" style="font-size: 13px; margin: 4px 0;">
-                <span style="margin-right: 8px;">⏳</span>
-                <span style="color: #888;">Montar disco...</span>
+            <div id="progress-${disk.id}-mount" class="dash-progress-step">
+                <span class="dash-progress-step-icon">⏳</span>
+                <span class="dash-progress-step-text">Montar disco...</span>
             </div>
-            <div id="progress-${disk.id}-pool" style="font-size: 13px; margin: 4px 0; display: ${action.startsWith('pool') ? 'block' : 'none'};">
-                <span style="margin-right: 8px;">⏳</span>
-                <span style="color: #888;">Añadir al pool...</span>
+            <div id="progress-${disk.id}-pool" class="dash-progress-step" style="display: ${action.startsWith('pool') ? 'block' : 'none'};">
+                <span class="dash-progress-step-icon">⏳</span>
+                <span class="dash-progress-step-text">Añadir al pool...</span>
             </div>
-            <div id="progress-${disk.id}-result" style="font-size: 13px; margin: 8px 0 0 0; display: none;"></div>
+            <div id="progress-${disk.id}-result" class="dash-progress-step" style="display: none;"></div>
         `;
         progressSteps.appendChild(diskProgress);
     }
@@ -2621,7 +2524,7 @@ async function renderDashboard() {
                 if (roleDisks.length > 0) {
                     disksHtml += `
                         <div class="disk-role-section">
-                            <div class="disk-role-header" style="border-left: 3px solid ${roleColors[role]}">
+                            <div class="disk-role-header dash-role-border--${role}">
                                 <span>${roleLabels[role]}</span>
                                 <span class="disk-count">${roleDisks.length} ${t('wizard.disksDetected', 'disco(s)')}</span>
                             </div>
@@ -2649,7 +2552,7 @@ async function renderDashboard() {
     }
 
     dashboardContent.innerHTML = `
-        <div class="glass-card overview-card" style="grid-column: 1 / -1;">
+        <div class="glass-card overview-card dash-overview-full">
             <div class="overview-header">
                 <h3>${t('dashboard.systemOverview', 'Resumen del Sistema')}</h3>
                 <div class="system-info-badge">
@@ -2722,7 +2625,7 @@ async function renderDashboard() {
             </div>
         </div>
 
-        <div class="glass-card storage-overview" style="grid-column: 1 / -1;">
+        <div class="glass-card storage-overview dash-storage-full">
             <h3>💿 ${t('storage.connectedDisks', 'Discos Conectados')}</h3>
             <div class="disks-by-role">
                 ${disksHtml || `<div class="no-disks">${t('storage.noDisksDetected', 'No se detectaron discos')}</div>`}
@@ -2840,8 +2743,7 @@ async function renderStorageDashboard() {
 
         // Storage Array Header (Cockpit style)
         const arrayCard = document.createElement('div');
-        arrayCard.className = 'glass-card storage-array-view';
-        arrayCard.style.gridColumn = '1 / -1';
+        arrayCard.className = 'glass-card storage-array-view dash-overview-full';
 
         const arrayHeader = document.createElement('div');
         arrayHeader.className = 'storage-array-header';
@@ -2858,7 +2760,7 @@ async function renderStorageDashboard() {
                 </div>
                 <div class="storage-total-stat">
                     <span class="label">${t('storage.available', 'Disponible')}</span>
-                    <span class="value" style="color: #10b981;">${escapeHtml(poolStatus.poolFree || 'N/A')}</span>
+                    <span class="value dash-pool-free-value">${escapeHtml(poolStatus.poolFree || 'N/A')}</span>
                 </div>
             </div>
         `;
@@ -2945,8 +2847,7 @@ async function renderStorageDashboard() {
 
         // Disk cards grid (detailed view)
         const grid = document.createElement('div');
-        grid.className = 'telemetry-grid';
-        grid.style.marginTop = '20px';
+        grid.className = 'telemetry-grid dash-telemetry-grid';
 
         state.disks.forEach(disk => {
             const config = state.storageConfig.find(s => s.id === disk.id);
@@ -2966,10 +2867,10 @@ async function renderStorageDashboard() {
             const h4 = document.createElement('h4');
             h4.textContent = disk.model || t('common.unknown', 'Desconocido');
             const infoSpan = document.createElement('span');
-            infoSpan.style.cssText = 'font-size: 0.8rem; color: var(--text-dim); display: block;';
+            infoSpan.className = 'dash-disk-info-detail';
             infoSpan.textContent = `${disk.id || 'N/A'} • ${disk.type || t('common.unknown', 'Desconocido')} • ${disk.size || 'N/A'}`;
             const serialSpan2 = document.createElement('span');
-            serialSpan2.style.cssText = 'font-size: 0.75rem; color: var(--primary); display: block; margin-top: 4px; font-family: monospace;';
+            serialSpan2.className = 'dash-disk-serial';
             serialSpan2.textContent = `SN: ${disk.serial || 'N/A'}`;
             headerInfo.appendChild(h4);
             headerInfo.appendChild(infoSpan);
@@ -2987,7 +2888,7 @@ async function renderStorageDashboard() {
             const progressContainer = document.createElement('div');
             progressContainer.className = 'disk-progress-container';
             progressContainer.innerHTML = `
-                <div class="telemetry-stats-row"><span>${t('storage.healthStatus', 'Estado de Salud')}</span><span style="color:#10b981">${t('storage.optimal', 'Óptimo')}</span></div>
+                <div class="telemetry-stats-row"><span>${t('storage.healthStatus', 'Estado de Salud')}</span><span class="dash-health-ok">${t('storage.optimal', 'Óptimo')}</span></div>
                 <div class="disk-usage-bar"><div class="disk-usage-fill" style="width: ${usage}%; background: ${getRoleColor(role)}"></div></div>
             `;
 
@@ -3004,27 +2905,8 @@ async function renderStorageDashboard() {
             // Add configure button for unconfigured disks
             if (role === 'none') {
                 const configBtn = document.createElement('button');
-                configBtn.style.cssText = `
-                    margin-left: auto;
-                    padding: 6px 12px;
-                    background: transparent;
-                    border: 1px solid var(--primary, #0078d4);
-                    color: var(--primary, #0078d4);
-                    border-radius: 6px;
-                    font-size: 12px;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                    white-space: nowrap;
-                `;
+                configBtn.className = 'dash-disk-configure-btn';
                 configBtn.textContent = '⚙️ Configurar';
-                configBtn.addEventListener('mouseenter', () => {
-                    configBtn.style.background = 'var(--primary, #0078d4)';
-                    configBtn.style.color = '#fff';
-                });
-                configBtn.addEventListener('mouseleave', () => {
-                    configBtn.style.background = 'transparent';
-                    configBtn.style.color = 'var(--primary, #0078d4)';
-                });
                 configBtn.addEventListener('click', () => {
                     // Normalize disk object for showDiskActionModal (same format as /disks/detect)
                     detectedNewDisks = [{
@@ -3045,27 +2927,8 @@ async function renderStorageDashboard() {
             // Add "Remove from pool" button for disks in pool
             if (role !== 'none') {
                 const removeBtn = document.createElement('button');
-                removeBtn.style.cssText = `
-                    margin-left: auto;
-                    padding: 6px 12px;
-                    background: transparent;
-                    border: 1px solid var(--danger, #dc3545);
-                    color: var(--danger, #dc3545);
-                    border-radius: 6px;
-                    font-size: 12px;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                    white-space: nowrap;
-                `;
+                removeBtn.className = 'dash-disk-remove-btn';
                 removeBtn.textContent = '🗑️ Quitar del pool';
-                removeBtn.addEventListener('mouseenter', () => {
-                    removeBtn.style.background = 'var(--danger, #dc3545)';
-                    removeBtn.style.color = '#fff';
-                });
-                removeBtn.addEventListener('mouseleave', () => {
-                    removeBtn.style.background = 'transparent';
-                    removeBtn.style.color = 'var(--danger, #dc3545)';
-                });
                 removeBtn.addEventListener('click', async () => {
                     if (!confirm(`¿Seguro que quieres quitar ${disk.model || disk.id} del pool?\n\nEl disco seguirá montado pero no formará parte del almacenamiento compartido.`)) {
                         return;
