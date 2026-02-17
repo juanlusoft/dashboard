@@ -4572,28 +4572,21 @@ if (resetBtn) {
 const powerBtn = document.getElementById("power-btn");
 const powerDropdown = document.getElementById("power-dropdown");
 if (powerBtn && powerDropdown) {
-    // Toggle dropdown
+    // Toggle dropdown via CSS class
     powerBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        const isOpen = powerDropdown.style.display !== 'none';
-        powerDropdown.style.display = isOpen ? 'none' : 'block';
+        powerDropdown.classList.toggle('open');
     });
 
     // Close dropdown when clicking outside
     document.addEventListener("click", () => {
-        powerDropdown.style.display = 'none';
+        powerDropdown.classList.remove('open');
     });
     powerDropdown.addEventListener("click", (e) => e.stopPropagation());
 
-    // Hover effect for options
-    powerDropdown.querySelectorAll('.power-option').forEach(opt => {
-        opt.addEventListener('mouseover', () => { opt.style.background = 'var(--hover-bg, rgba(0,0,0,0.05))'; });
-        opt.addEventListener('mouseout', () => { opt.style.background = 'none'; });
-    });
-
     // Logout
     document.getElementById("power-logout").addEventListener("click", async () => {
-        powerDropdown.style.display = 'none';
+        powerDropdown.classList.remove('open');
         const confirmed = await showConfirmModal('Cerrar sesión', '¿Seguro que quieres cerrar sesión?');
         if (confirmed) {
             clearSession();
@@ -4605,7 +4598,7 @@ if (powerBtn && powerDropdown) {
 
     // Reboot
     document.getElementById("power-reboot").addEventListener("click", async () => {
-        powerDropdown.style.display = 'none';
+        powerDropdown.classList.remove('open');
         const confirmed = await showConfirmModal('Reiniciar sistema', '¿Seguro que quieres reiniciar el sistema? Se perderán todas las conexiones activas.');
         if (confirmed) {
             try {
@@ -4625,7 +4618,7 @@ if (powerBtn && powerDropdown) {
 
     // Shutdown
     document.getElementById("power-shutdown").addEventListener("click", async () => {
-        powerDropdown.style.display = 'none';
+        powerDropdown.classList.remove('open');
         const confirmed = await showConfirmModal('Apagar sistema', '⚠️ ¿Seguro que quieres APAGAR el sistema? Necesitarás acceso físico para volver a encenderlo.');
         if (confirmed) {
             try {

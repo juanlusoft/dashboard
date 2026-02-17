@@ -1,6 +1,6 @@
 /**
  * HomePiNAS - Premium NAS Dashboard for Raspberry Pi CM5
- * v2.8.0 - Extended Features
+ * v2.8.1 - Extended Features
  *
  * Homelabs.club Edition with:
  * - Bcrypt password hashing
@@ -70,7 +70,7 @@ try {
 }
 
 // Configuration
-const VERSION = '2.8.0';
+const VERSION = '2.8.1';
 const HTTPS_PORT = process.env.HTTPS_PORT || 443;
 const HTTP_PORT = process.env.HTTP_PORT || 80;
 const SSL_CERT_PATH = path.join(__dirname, 'certs', 'server.crt');
@@ -289,7 +289,7 @@ app.use('/api', authRoutes);
 app.use('/api/network', networkRoutes);
 
 // Power routes (reset, reboot, shutdown)
-app.use('/api/system', powerRoutes);
+app.use('/api/power', powerRoutes);
 
 // Update routes (check, apply)
 app.use('/api/update', updateRoutes);
