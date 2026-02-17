@@ -1394,7 +1394,7 @@ async function detectDisksForWizard() {
     `;
     
     try {
-        const res = await fetch(`${API_BASE}/system/disks`);
+        const res = await authFetch(`${API_BASE}/system/disks`);
         if (!res.ok) throw new Error('Failed to fetch disks');
         
         wizardState.disks = await res.json();
@@ -2093,7 +2093,7 @@ async function pollSyncProgress() {
         const pollInterval = setInterval(async () => {
             pollCount++;
             try {
-                const res = await fetch(`${API_BASE}/storage/snapraid/sync/progress`);
+                const res = await authFetch(`${API_BASE}/storage/snapraid/sync/progress`);
                 const data = await res.json();
 
                 // Always update the progress display
@@ -2506,7 +2506,7 @@ async function renderDashboard() {
     // Fetch real LAN IP if not already loaded
     if (!state.network.interfaces || state.network.interfaces.length === 0 || state.network.interfaces[0]?.ip === '192.168.1.100') {
         try {
-            const res = await fetch(`${API_BASE}/network/interfaces`);
+            const res = await authFetch(`${API_BASE}/network/interfaces`);
             if (res.ok) {
                 state.network.interfaces = await res.json();
             }
@@ -2585,7 +2585,7 @@ async function renderDashboard() {
     // Fetch disks for storage section
     let disksHtml = '';
     try {
-        const disksRes = await fetch(`${API_BASE}/system/disks`);
+        const disksRes = await authFetch(`${API_BASE}/system/disks`);
         if (disksRes.ok) {
             const disks = await disksRes.json();
 
@@ -3914,7 +3914,7 @@ window.handleDockerAction = handleDockerAction;
 // Network Manager (Refined)
 async function renderNetworkManager() {
     try {
-        const res = await fetch(`${API_BASE}/network/interfaces`);
+        const res = await authFetch(`${API_BASE}/network/interfaces`);
         if (!res.ok) throw new Error('Failed to fetch interfaces');
         state.network.interfaces = await res.json();
     } catch (e) {
