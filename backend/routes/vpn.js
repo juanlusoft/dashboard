@@ -364,43 +364,42 @@ async function reloadWireguard() {
 }
 
 /**
- * Esperar a que se libere el lock de dpkg.
- * Otros procesos como unattended-upgrades pueden tener el lock.
- * Reintenta cada 3 segundos hasta un máximo de 60 segundos.
+ * Liberar locks de dpkg/apt matando procesos zombie y eliminando lock files.
+ * Esto es necesario cuando una instalación previa fue interrumpida y dejó
+ * locks huérfanos que bloquean cualquier operación apt/dpkg.
  */
-async function waitForDpkgLock() {
+async function releaseDpkgLocks() {
     const lockFiles = [
         '/var/lib/dpkg/lock-frontend',
         '/var/lib/dpkg/lock',
-        '/var/lib/apt/lists/lock'
+        '/var/lib/apt/lists/lock',
+        '/var/cache/apt/archives/lock'
     ];
-    const maxWait = 60000; // 60 segundos máximo
-    const interval = 3000; // cada 3 segundos
-    const start = Date.now();
 
-    while (Date.now() - start < maxWait) {
-        let locked = false;
-        for (const lockFile of lockFiles) {
-            try {
-                const { stdout } = await sudoExec('fuser', [lockFile], { timeout: 5000 });
-                if (stdout.trim()) {
-                    locked = true;
-                    console.log(`[VPN] Esperando lock de dpkg (${lockFile} usado por PID: ${stdout.trim()})...`);
-                    break;
-                }
-            } catch {
-                // fuser retorna error si no hay proceso usando el archivo → no locked
-            }
+    // 1. Matar procesos apt/dpkg que puedan tener el lock
+    const processNames = ['apt-get', 'apt', 'dpkg'];
+    for (const procName of processNames) {
+        try {
+            await sudoExec('killall', ['-9', procName], { timeout: 5000 });
+            console.log(`[VPN] Proceso ${procName} terminado`);
+        } catch {
+            // No hay proceso corriendo → ok
         }
-
-        if (!locked) {
-            return; // Lock libre
-        }
-
-        await new Promise(resolve => setTimeout(resolve, interval));
     }
 
-    console.warn('[VPN] Timeout esperando lock de dpkg, intentando continuar...');
+    // Esperar un momento para que se liberen los locks
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // 2. Eliminar lock files huérfanos
+    for (const lockFile of lockFiles) {
+        try {
+            await sudoExec('rm', ['-f', lockFile], { timeout: 5000 });
+        } catch {
+            // Puede que no exista → ok
+        }
+    }
+
+    console.log('[VPN] Locks de dpkg liberados');
 }
 
 /**
@@ -566,10 +565,10 @@ router.post('/install', async (req, res) => {
  */
 async function runInstallBackground(user) {
     try {
-        // Paso 1: Esperar lock de dpkg
-        installState.step = 'Esperando lock del sistema...';
+        // Paso 1: Liberar locks de dpkg (matar procesos zombie, eliminar locks huérfanos)
+        installState.step = 'Liberando locks del sistema...';
         installState.progress = 5;
-        await waitForDpkgLock();
+        await releaseDpkgLocks();
 
         // Paso 2: Reparar dpkg si necesario
         installState.step = 'Verificando estado de paquetes...';
@@ -971,8 +970,8 @@ router.post('/uninstall', async (req, res) => {
             // Puede que ya esté parado
         }
 
-        // Esperar lock de dpkg y reparar si necesario
-        await waitForDpkgLock();
+        // Liberar locks de dpkg y reparar si necesario
+        await releaseDpkgLocks();
         try {
             await sudoExec('dpkg', ['--configure', '-a'], { timeout: 120000 });
         } catch (e) {
