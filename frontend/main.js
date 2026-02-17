@@ -4417,7 +4417,9 @@ function renderSystemView() {
 
     // Update grid (2 columns)
     const updateGrid = document.createElement('div');
-    updateGrid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 20px;';
+    updateGrid.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 20px;';
+    dashUpdateCard.style.width = 'auto';
+    osUpdateCard.style.width = 'auto';
     updateGrid.appendChild(dashUpdateCard);
     updateGrid.appendChild(osUpdateCard);
 
