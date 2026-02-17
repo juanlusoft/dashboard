@@ -355,6 +355,46 @@ async function reloadWireguard() {
 }
 
 /**
+ * Esperar a que se libere el lock de dpkg.
+ * Otros procesos como unattended-upgrades pueden tener el lock.
+ * Reintenta cada 3 segundos hasta un máximo de 60 segundos.
+ */
+async function waitForDpkgLock() {
+    const lockFiles = [
+        '/var/lib/dpkg/lock-frontend',
+        '/var/lib/dpkg/lock',
+        '/var/lib/apt/lists/lock'
+    ];
+    const maxWait = 60000; // 60 segundos máximo
+    const interval = 3000; // cada 3 segundos
+    const start = Date.now();
+
+    while (Date.now() - start < maxWait) {
+        let locked = false;
+        for (const lockFile of lockFiles) {
+            try {
+                const { stdout } = await sudoExec('fuser', [lockFile], { timeout: 5000 });
+                if (stdout.trim()) {
+                    locked = true;
+                    console.log(`[VPN] Esperando lock de dpkg (${lockFile} usado por PID: ${stdout.trim()})...`);
+                    break;
+                }
+            } catch {
+                // fuser retorna error si no hay proceso usando el archivo → no locked
+            }
+        }
+
+        if (!locked) {
+            return; // Lock libre
+        }
+
+        await new Promise(resolve => setTimeout(resolve, interval));
+    }
+
+    console.warn('[VPN] Timeout esperando lock de dpkg, intentando continuar...');
+}
+
+/**
  * Obtener siguiente IP disponible en la subred
  */
 function getNextClientIP(vpnConfig) {
@@ -480,6 +520,9 @@ router.post('/install', async (req, res) => {
             return res.json({ success: true, message: 'WireGuard ya está instalado' });
         }
 
+        // Esperar a que se libere el lock de dpkg (unattended-upgrades, etc.)
+        await waitForDpkgLock();
+
         // Reparar dpkg si quedó interrumpido (e.g. por reinicio durante install)
         try {
             await sudoExec('dpkg', ['--configure', '-a'], { timeout: 120000 });
@@ -489,7 +532,7 @@ router.post('/install', async (req, res) => {
 
         // Instalar WireGuard y qrencode
         await sudoExec('apt-get', ['update'], { timeout: 120000 });
-        await sudoExec('apt-get', ['install', '-y', 'wireguard', 'wireguard-tools', 'qrencode'], { timeout: 120000 });
+        await sudoExec('apt-get', ['install', '-y', 'wireguard', 'wireguard-tools', 'qrencode'], { timeout: 180000 });
 
         // Habilitar IP forwarding
         const sysctlContent = 'net.ipv4.ip_forward=1\nnet.ipv6.conf.all.forwarding=1\n';
@@ -862,7 +905,8 @@ router.post('/uninstall', async (req, res) => {
             // Puede que ya esté parado
         }
 
-        // Reparar dpkg si quedó interrumpido
+        // Esperar lock de dpkg y reparar si necesario
+        await waitForDpkgLock();
         try {
             await sudoExec('dpkg', ['--configure', '-a'], { timeout: 120000 });
         } catch (e) {
@@ -870,7 +914,7 @@ router.post('/uninstall', async (req, res) => {
         }
 
         // Desinstalar paquetes
-        await sudoExec('apt-get', ['remove', '-y', 'wireguard', 'wireguard-tools'], { timeout: 60000 });
+        await sudoExec('apt-get', ['remove', '-y', 'wireguard', 'wireguard-tools'], { timeout: 120000 });
 
         // Limpiar configuración local
         const vpnConfig = getVpnConfig();
