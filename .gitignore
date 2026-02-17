@@ -9,6 +9,9 @@ backend/config/sessions.db-wal
 backend/config/sessions.db-shm
 backend/config/docker-updates.json
 backend/config/compose/
+backend/config/data.json.bak
+backend/config/homestore-installed.json
+apps/
 backend/certs/
 *.key
 *.pem
