@@ -75,7 +75,7 @@ async function sudoExec(subCommand, args = [], options = {}) {
         'systemctl', 'smbpasswd', 'useradd', 'usermod', 'userdel',
         'mount', 'umount', 'mkfs.ext4', 'mkfs.xfs', 'parted', 'partprobe',
         'samba-tool', 'net', 'testparm',
-        'apt-get', 'sysctl', 'wg'
+        'apt-get', 'dpkg', 'sysctl', 'wg'
     ];
 
     const baseCommand = path.basename(subCommand);

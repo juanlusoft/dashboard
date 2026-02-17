@@ -480,6 +480,13 @@ router.post('/install', async (req, res) => {
             return res.json({ success: true, message: 'WireGuard ya está instalado' });
         }
 
+        // Reparar dpkg si quedó interrumpido (e.g. por reinicio durante install)
+        try {
+            await sudoExec('dpkg', ['--configure', '-a'], { timeout: 120000 });
+        } catch (e) {
+            console.warn('[VPN] dpkg --configure -a falló (puede no ser necesario):', e.message);
+        }
+
         // Instalar WireGuard y qrencode
         await sudoExec('apt-get', ['update'], { timeout: 120000 });
         await sudoExec('apt-get', ['install', '-y', 'wireguard', 'wireguard-tools', 'qrencode'], { timeout: 120000 });
@@ -853,6 +860,13 @@ router.post('/uninstall', async (req, res) => {
             await sudoExec('systemctl', ['disable', 'wg-quick@wg0']);
         } catch (e) {
             // Puede que ya esté parado
+        }
+
+        // Reparar dpkg si quedó interrumpido
+        try {
+            await sudoExec('dpkg', ['--configure', '-a'], { timeout: 120000 });
+        } catch (e) {
+            console.warn('[VPN] dpkg --configure -a falló:', e.message);
         }
 
         // Desinstalar paquetes
