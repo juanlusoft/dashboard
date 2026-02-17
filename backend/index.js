@@ -1,6 +1,6 @@
 /**
  * HomePiNAS - Premium NAS Dashboard for Raspberry Pi CM5
- * v2.8.1 - Extended Features
+ * v2.8.2 - Extended Features
  *
  * Homelabs.club Edition with:
  * - Bcrypt password hashing
@@ -28,6 +28,7 @@ const helmet = require('helmet');
 
 // Import utilities
 const { initSessionDb, startSessionCleanup } = require('./utils/session');
+const { startErrorMonitor } = require('./utils/error-monitor');
 
 // Import middleware
 const { generalLimiter } = require('./middleware/rateLimit');
@@ -70,7 +71,7 @@ try {
 }
 
 // Configuration
-const VERSION = '2.8.1';
+const VERSION = '2.8.2';
 const HTTPS_PORT = process.env.HTTPS_PORT || 443;
 const HTTP_PORT = process.env.HTTP_PORT || 80;
 const SSL_CERT_PATH = path.join(__dirname, 'certs', 'server.crt');
@@ -434,6 +435,9 @@ httpServer.listen(HTTP_PORT, '0.0.0.0', () => {
             console.warn('[WARN]  Terminal WebSocket setup failed:', e.message);
         }
     }
+
+    // Start error monitoring (if enabled in config)
+    startErrorMonitor();
 });
 
 // Setup Terminal WebSocket on HTTPS server if available

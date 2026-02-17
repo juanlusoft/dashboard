@@ -7619,13 +7619,95 @@ async function renderNotificationsSection(container) {
     content.appendChild(emailSection);
     content.appendChild(telegramSection);
     card.appendChild(content);
+
+    // Error Reporting section (full width)
+    const errorReportSection = document.createElement('div');
+    errorReportSection.style.cssText = 'margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--card-border);';
+    errorReportSection.innerHTML = `
+        <h4 style="margin-bottom: 8px;">🚨 ${t('notifications.errorReporting', 'Reporte de Errores')}</h4>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 15px;">
+            ${t('notifications.errorReportingDesc', 'Monitorear automáticamente los logs del sistema en busca de errores y recibir notificaciones.')}
+        </p>
+        <form id="error-report-form" style="display: flex; flex-direction: column; gap: 12px; max-width: 500px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="er-enabled">
+                <span>${t('notifications.errorReportingEnabled', 'Activar Reporte de Errores')}</span>
+            </label>
+
+            <div id="er-options" style="display: none; flex-direction: column; gap: 12px;">
+                <div>
+                    <label style="display: block; margin-bottom: 4px; font-size: 0.85rem; color: var(--text-secondary);">
+                        ${t('notifications.frequency', 'Frecuencia de Revisión')}
+                    </label>
+                    <select id="er-frequency" style="padding: 10px; border-radius: 8px; border: 1px solid var(--card-border); background: var(--input-bg); color: var(--text-primary); width: 100%;">
+                        <option value="immediate">${t('notifications.freqImmediate', 'Inmediato (cada 5 min)')}</option>
+                        <option value="hourly">${t('notifications.freqHourly', 'Resumen cada hora')}</option>
+                        <option value="daily">${t('notifications.freqDaily', 'Resumen diario')}</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label style="display: block; margin-bottom: 4px; font-size: 0.85rem; color: var(--text-secondary);">
+                        ${t('notifications.channels', 'Canales de Notificación')}
+                    </label>
+                    <div style="display: flex; gap: 15px;">
+                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                            <input type="checkbox" id="er-ch-email" checked> Email
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                            <input type="checkbox" id="er-ch-telegram"> Telegram
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <label style="display: block; margin-bottom: 4px; font-size: 0.85rem; color: var(--text-secondary);">
+                        ${t('notifications.logSources', 'Fuentes de Logs a Monitorear')}
+                    </label>
+                    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                            <input type="checkbox" id="er-src-system" checked> ${t('logs.system', 'Sistema')}
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                            <input type="checkbox" id="er-src-app" checked> ${t('logs.application', 'Aplicación')}
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                            <input type="checkbox" id="er-src-auth"> ${t('logs.auth', 'Auth')}
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                            <input type="checkbox" id="er-src-docker" checked> Docker
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <label style="display: block; margin-bottom: 4px; font-size: 0.85rem; color: var(--text-secondary);">
+                        ${t('notifications.cooldown', 'Enfriamiento (min entre alertas duplicadas)')}
+                    </label>
+                    <input type="number" id="er-cooldown" value="30" min="5" max="1440"
+                        style="padding: 10px; border-radius: 8px; border: 1px solid var(--card-border); background: var(--input-bg); color: var(--text-primary); width: 100px;">
+                </div>
+
+                <div id="er-last-check" style="font-size: 0.8rem; color: var(--text-secondary);"></div>
+            </div>
+
+            <div style="display: flex; gap: 8px;">
+                <button type="submit" class="btn-primary btn-sm">${t('common.save', 'Guardar')}</button>
+                <button type="button" class="btn-primary btn-sm" id="test-error-report-btn" style="background: #6366f1;">
+                    ${t('notifications.testErrorReport', 'Probar Escaneo')}
+                </button>
+            </div>
+        </form>
+    `;
+    card.appendChild(errorReportSection);
+
     container.appendChild(card);
 
     // Load existing config
     try {
         const res = await authFetch(`${API_BASE}/notifications/config`);
         if (res.ok) {
-            const config = await res.json();
+            const { config } = await res.json();
             if (config.email) {
                 if (config.email.host) document.getElementById('ne-host').value = config.email.host;
                 if (config.email.port) document.getElementById('ne-port').value = config.email.port;
@@ -7638,6 +7720,22 @@ async function renderNotificationsSection(container) {
                 if (config.telegram.botToken) document.getElementById('nt-token').value = config.telegram.botToken;
                 if (config.telegram.chatId) document.getElementById('nt-chatid').value = config.telegram.chatId;
                 document.getElementById('nt-enabled').checked = config.telegram.enabled || false;
+            }
+            if (config.errorReporting) {
+                document.getElementById('er-enabled').checked = config.errorReporting.enabled || false;
+                document.getElementById('er-options').style.display = config.errorReporting.enabled ? 'flex' : 'none';
+                document.getElementById('er-frequency').value = config.errorReporting.frequency || 'immediate';
+                document.getElementById('er-ch-email').checked = (config.errorReporting.channels || []).includes('email');
+                document.getElementById('er-ch-telegram').checked = (config.errorReporting.channels || []).includes('telegram');
+                document.getElementById('er-src-system').checked = (config.errorReporting.logSources || []).includes('system');
+                document.getElementById('er-src-app').checked = (config.errorReporting.logSources || []).includes('app');
+                document.getElementById('er-src-auth').checked = (config.errorReporting.logSources || []).includes('auth');
+                document.getElementById('er-src-docker').checked = (config.errorReporting.logSources || []).includes('docker');
+                document.getElementById('er-cooldown').value = config.errorReporting.cooldownMinutes || 30;
+                if (config.errorReporting.lastCheck) {
+                    document.getElementById('er-last-check').textContent =
+                        `${t('notifications.lastScan', 'Último escaneo')}: ${new Date(config.errorReporting.lastCheck).toLocaleString()}`;
+                }
             }
         }
     } catch (e) {}
@@ -7689,6 +7787,65 @@ async function renderNotificationsSection(container) {
             const res = await authFetch(`${API_BASE}/notifications/test/telegram`, { method: 'POST' });
             alert(res.ok ? '¡Mensaje de prueba enviado!' : 'Error al enviar');
         } catch (e) { alert('Error'); }
+    });
+
+    // Error Reporting - toggle options visibility
+    document.getElementById('er-enabled').addEventListener('change', (e) => {
+        document.getElementById('er-options').style.display = e.target.checked ? 'flex' : 'none';
+    });
+
+    // Error Reporting - save config
+    document.getElementById('error-report-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const channels = [];
+        if (document.getElementById('er-ch-email').checked) channels.push('email');
+        if (document.getElementById('er-ch-telegram').checked) channels.push('telegram');
+        const logSources = [];
+        if (document.getElementById('er-src-system').checked) logSources.push('system');
+        if (document.getElementById('er-src-app').checked) logSources.push('app');
+        if (document.getElementById('er-src-auth').checked) logSources.push('auth');
+        if (document.getElementById('er-src-docker').checked) logSources.push('docker');
+
+        if (channels.length === 0) { showNotification(t('notifications.channelRequired', 'Selecciona al menos un canal'), 'error'); return; }
+        if (logSources.length === 0) { showNotification(t('notifications.sourceRequired', 'Selecciona al menos una fuente'), 'error'); return; }
+
+        try {
+            const res = await authFetch(`${API_BASE}/notifications/config/error-reporting`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    enabled: document.getElementById('er-enabled').checked,
+                    frequency: document.getElementById('er-frequency').value,
+                    channels,
+                    logSources,
+                    cooldownMinutes: parseInt(document.getElementById('er-cooldown').value) || 30
+                })
+            });
+            if (res.ok) {
+                showNotification(t('notifications.errorReportingSaved', 'Configuración de reporte de errores guardada'), 'success');
+            } else {
+                const data = await res.json();
+                showNotification(data.error || 'Error', 'error');
+            }
+        } catch (err) { showNotification('Error: ' + err.message, 'error'); }
+    });
+
+    // Error Reporting - test scan
+    document.getElementById('test-error-report-btn').addEventListener('click', async () => {
+        try {
+            showNotification(t('notifications.scanning', 'Escaneando logs...'), 'info', 3000);
+            const res = await authFetch(`${API_BASE}/notifications/test/error-reporting`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                showNotification(
+                    data.errorsFound > 0
+                        ? t('notifications.errorsFound', `${data.errorsFound} error(es) encontrados y reporte enviado`)
+                        : t('notifications.noErrorsFound', 'No se encontraron errores. Notificación de prueba enviada.'),
+                    data.errorsFound > 0 ? 'warning' : 'success'
+                );
+            } else {
+                showNotification(data.error || 'Error', 'error');
+            }
+        } catch (err) { showNotification('Error: ' + err.message, 'error'); }
     });
 }
 
