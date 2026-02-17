@@ -1322,7 +1322,7 @@ async function detectDisksForWizard() {
                 <div class="wizard-no-disks">
                     <div class="wizard-no-disks-icon">💿</div>
                     <p>${t('wizard.noDisks', 'No se detectaron discos disponibles')}</p>
-                    <button class="wizard-btn wizard-btn-next" data-action="retry-detect" style="margin-top: 16px;">
+                    <button class="wizard-btn wizard-btn-next storage-retry-btn" data-action="retry-detect">
                         🔄 ${t('wizard.retry', 'Reintentar')}
                     </button>
                 </div>
@@ -1333,15 +1333,15 @@ async function detectDisksForWizard() {
         
         // Show detected disks summary
         detectionContainer.innerHTML = `
-            <div style="text-align: center; padding: 20px 0;">
-                <div style="font-size: 3rem; margin-bottom: 16px;">✅</div>
-                <p style="font-size: 1.1rem; color: var(--text-primary); margin-bottom: 8px;">
+            <div class="storage-detection-success">
+                <div class="storage-success-icon">✅</div>
+                <p class="storage-detection-summary">
                     <strong>${wizardState.disks.length}</strong> ${t('wizard.disksDetected', 'disco(s) detectado(s)')}
                 </p>
-                <div style="display: flex; justify-content: center; gap: 16px; margin-top: 16px; flex-wrap: wrap;">
+                <div class="storage-detected-disks">
                     ${wizardState.disks.map(d => `
-                        <div style="background: var(--hover-bg); padding: 8px 16px; border-radius: 8px; font-size: 0.9rem;">
-                            ${getDiskIcon(d.type)} ${escapeHtml(d.model || d.id)} <span style="color: var(--primary); font-weight: 600;">${escapeHtml(d.size)}</span>
+                        <div class="storage-disk-badge">
+                            ${getDiskIcon(d.type)} ${escapeHtml(d.model || d.id)} <span class="storage-disk-size-highlight">${escapeHtml(d.size)}</span>
                         </div>
                     `).join('')}
                 </div>
@@ -1366,7 +1366,7 @@ async function detectDisksForWizard() {
             <div class="wizard-no-disks">
                 <div class="wizard-no-disks-icon">❌</div>
                 <p>${t('wizard.detectionError', 'Error al detectar discos')}</p>
-                <button class="wizard-btn wizard-btn-next" data-action="retry-detect" style="margin-top: 16px;">
+                <button class="wizard-btn wizard-btn-next storage-retry-btn" data-action="retry-detect">
                     🔄 ${t('wizard.retry', 'Reintentar')}
                 </button>
             </div>

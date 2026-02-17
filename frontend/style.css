@@ -6236,3 +6236,54 @@ body.fm-dragging .fm-tree-item {
 .homestore-logs-modal-title { margin: 0; color: var(--text); }
 .homestore-logs-modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); }
 .homestore-logs-content { margin: 0; padding: 20px; overflow: auto; flex: 1; font-size: 0.8rem; color: #10b981; background: #0a0a0a; white-space: pre-wrap; }
+
+/* =============================================================================
+   STORAGE WIZARD STYLES
+   ============================================================================= */
+
+/* Retry button spacing */
+.storage-retry-btn {
+    margin-top: 16px;
+}
+
+/* Detection success container */
+.storage-detection-success {
+    text-align: center;
+    padding: 20px 0;
+}
+
+/* Large success icon */
+.storage-success-icon {
+    font-size: 3rem;
+    margin-bottom: 16px;
+}
+
+/* Detection summary text */
+.storage-detection-summary {
+    font-size: 1.1rem;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+/* Detected disks container */
+.storage-detected-disks {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+}
+
+/* Individual detected disk badge */
+.storage-disk-badge {
+    background: var(--hover-bg);
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+
+/* Disk size highlight */
+.storage-disk-size-highlight {
+    color: var(--primary);
+    font-weight: 600;
+}
