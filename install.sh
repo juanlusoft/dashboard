@@ -5,7 +5,7 @@
 # Version: 2.0.0 (Homelabs.club Edition)
 
 # Version - CHANGE THIS FOR EACH RELEASE
-VERSION="2.8.3"
+VERSION="2.8.4"
 
 # Parse command line arguments
 CLEAN_INSTALL=false
