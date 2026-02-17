@@ -3430,7 +3430,7 @@ services:
     ports:
       - '8080:80'"></textarea>
             </div>
-            <div style="display: flex; gap: 10px;">
+            <div class="cloudbackup-sync-input-group">
                 <button id="save-compose-btn" class="btn-primary" style="flex: 1; padding: 12px;">${t('docker.saveCompose', 'Guardar Compose')}</button>
                 <button id="save-run-compose-btn" class="btn-primary" style="flex: 1; padding: 12px; background: #10b981;">${t('docker.saveAndRun', 'Guardar y Ejecutar')}</button>
             </div>
@@ -5004,7 +5004,7 @@ function openAddShortcutModal() {
                     <input type="text" id="shortcut-description" placeholder=" ">
                     <label>${t('shortcuts.description', 'Descripción')}</label>
                 </div>
-                <div style="margin-bottom: 20px;">
+                <div class="cloudbackup-sync-field">
                     <label style="display: block; margin-bottom: 10px; color: var(--text-dim);">${t('shortcuts.icon', 'Icono')}</label>
                     <div id="icon-picker" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
                 </div>
@@ -8675,15 +8675,14 @@ let abBrowsePath = '/';
 
 async function renderActiveBackupView() {
     const container = document.createElement('div');
-    container.style.cssText = 'display: contents;';
+    container.className = 'abk-container';
 
     // Header card
     const headerCard = document.createElement('div');
-    headerCard.className = 'glass-card';
-    headerCard.style.cssText = 'grid-column: 1 / -1;';
+    headerCard.className = 'glass-card abk-header-card';
 
     const header = document.createElement('div');
-    header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;';
+    header.className = 'abk-header';
 
     const title = document.createElement('h3');
     title.textContent = '🖥️ Active Backup';
@@ -8700,36 +8699,34 @@ async function renderActiveBackupView() {
     // Pending agents section
     const pendingDiv = document.createElement('div');
     pendingDiv.id = 'ab-pending-agents';
-    pendingDiv.style.cssText = 'margin-bottom: 20px;';
+    pendingDiv.className = 'abk-pending-section';
     headerCard.appendChild(pendingDiv);
 
     // Devices grid
     const grid = document.createElement('div');
     grid.id = 'ab-devices-grid';
-    grid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px;';
+    grid.className = 'abk-devices-grid';
     grid.innerHTML = '<div style="padding: 20px; color: var(--text-dim);">Cargando dispositivos...</div>';
     headerCard.appendChild(grid);
     container.appendChild(headerCard);
 
     // Detail panel (shown when a device is selected)
     const detailCard = document.createElement('div');
-    detailCard.className = 'glass-card';
-    detailCard.style.cssText = 'grid-column: 1 / -1; display: none;';
+    detailCard.className = 'glass-card abk-detail-panel';
     detailCard.id = 'ab-detail-panel';
     container.appendChild(detailCard);
 
     // Recovery USB section
     const recoveryCard = document.createElement('div');
-    recoveryCard.className = 'glass-card';
-    recoveryCard.style.cssText = 'grid-column: 1 / -1;';
+    recoveryCard.className = 'glass-card abk-recovery-card';
     recoveryCard.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <div class="abk-recovery-header">
             <div>
-                <h3 style="margin-bottom: 4px;">🔧 USB de Recuperación</h3>
-                <p style="font-size: 0.85rem; color: var(--text-dim);">Crea un USB bootable para restaurar backups sin necesitar sistema operativo</p>
+                <h3 class="abk-recovery-title">🔧 USB de Recuperación</h3>
+                <p class="abk-recovery-subtitle">Crea un USB bootable para restaurar backups sin necesitar sistema operativo</p>
             </div>
         </div>
-        <div id="ab-recovery-status" style="padding: 15px; background: var(--bg-hover); border-radius: 8px; border: 1px solid var(--border);">
+        <div id="ab-recovery-status" class="abk-recovery-status">
             <p style="color: var(--text-dim);">Cargando...</p>
         </div>
     `;
@@ -8759,12 +8756,12 @@ async function loadABPendingAgents() {
 
         container.style.display = 'block';
         container.innerHTML = `
-            <div style="padding: 16px; background: linear-gradient(135deg, rgba(255,193,7,0.1), rgba(255,152,0,0.05)); border: 1px solid rgba(255,193,7,0.3); border-radius: 12px;">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-                    <span style="font-size: 1.3rem;">🔔</span>
-                    <h4 style="margin: 0; color: #ffc107;">Dispositivos pendientes de aprobación</h4>
+            <div class="abk-pending-banner">
+                <div class="abk-pending-header">
+                    <span class="abk-pending-icon">🔔</span>
+                    <h4 class="abk-pending-title">Dispositivos pendientes de aprobación</h4>
                 </div>
-                <div id="ab-pending-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+                <div id="ab-pending-list" class="abk-pending-list"></div>
             </div>`;
 
         const list = document.getElementById('ab-pending-list');
@@ -8774,15 +8771,15 @@ async function loadABPendingAgents() {
             const timeAgo = new Date(agent.registeredAt).toLocaleString('es-ES');
 
             const row = document.createElement('div');
-            row.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--bg-hover); border-radius: 8px; border: 1px solid var(--border);';
+            row.className = 'abk-pending-row';
             row.innerHTML = `
-                <div style="flex: 1;">
-                    <div style="font-weight: 600; font-size: 1rem;">${osIcon} ${agent.hostname}</div>
-                    <div style="font-size: 0.82rem; color: var(--text-dim); margin-top: 2px;">${agent.ip} · ${osName} · Registrado: ${timeAgo}</div>
+                <div class="abk-pending-device">
+                    <div class="abk-pending-name">${osIcon} ${agent.hostname}</div>
+                    <div class="abk-pending-info">${agent.ip} · ${osName} · Registrado: ${timeAgo}</div>
                 </div>
-                <div style="display: flex; gap: 8px;" id="ab-pending-actions-${agent.id}">
-                    <button class="btn-primary btn-sm" style="padding: 6px 14px;" id="ab-approve-${agent.id}">✓ Aprobar</button>
-                    <button class="btn-sm" style="padding: 6px 14px; background: var(--bg-hover); color: var(--text-dim); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;" id="ab-reject-${agent.id}">✗ Rechazar</button>
+                <div class="abk-pending-actions" id="ab-pending-actions-${agent.id}">
+                    <button class="btn-primary btn-sm abk-approve-btn" id="ab-approve-${agent.id}">✓ Aprobar</button>
+                    <button class="btn-sm abk-reject-btn" id="ab-reject-${agent.id}">✗ Rechazar</button>
                 </div>`;
             list.appendChild(row);
 
@@ -8800,7 +8797,7 @@ function showApproveDialog(agent) {
 
     // Create modal
     const overlay = document.createElement('div');
-    overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);';
+    overlay.className = 'abk-approve-overlay';
     overlay.id = 'ab-approve-overlay';
 
     // Auto-detect platform from agent OS
@@ -8809,14 +8806,14 @@ function showApproveDialog(agent) {
     else if (agent.os === 'darwin') defaultPlatform = 'mac';
 
     overlay.innerHTML = `
-        <div style="background: var(--bg-card, #1a1a2e); border-radius: 16px; padding: 32px; max-width: 480px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.5); border: 1px solid var(--border); color: #f5f5f5;">
-            <h3 style="margin: 0 0 4px 0; color: #f5f5f5;">${osIcon} Aprobar: ${agent.hostname}</h3>
-            <p style="color: #a3a3a3; font-size: 0.85rem; margin-bottom: 24px;">${agent.ip}</p>
-            
-            <div style="display: flex; flex-direction: column; gap: 16px;">
+        <div class="abk-approve-modal">
+            <h3 class="abk-approve-title">${osIcon} Aprobar: ${agent.hostname}</h3>
+            <p class="abk-approve-subtitle">${agent.ip}</p>
+
+            <div class="abk-approve-fields">
                 <div>
-                    <label style="font-size: 0.85rem; font-weight: 500; display: block; margin-bottom: 6px; color: #f5f5f5;">Plataforma</label>
-                    <select id="ab-approve-platform" style="width: 100%; padding: 10px 12px; background: #2a2a3e; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #f5f5f5; font-size: 0.95rem;">
+                    <label class="abk-approve-label">Plataforma</label>
+                    <select id="ab-approve-platform" class="abk-approve-select">
                         <option value="windows" ${defaultPlatform === 'windows' ? 'selected' : ''}>🪟 Windows</option>
                         <option value="linux" ${defaultPlatform === 'linux' ? 'selected' : ''}>🐧 Linux</option>
                         <option value="mac" ${defaultPlatform === 'mac' ? 'selected' : ''}>🍎 Mac</option>
@@ -8824,15 +8821,15 @@ function showApproveDialog(agent) {
                     </select>
                 </div>
                 <div>
-                    <label style="font-size: 0.85rem; font-weight: 500; display: block; margin-bottom: 6px; color: #f5f5f5;">Tipo de backup</label>
-                    <select id="ab-approve-type" style="width: 100%; padding: 10px 12px; background: #2a2a3e; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #f5f5f5; font-size: 0.95rem;">
+                    <label class="abk-approve-label">Tipo de backup</label>
+                    <select id="ab-approve-type" class="abk-approve-select">
                         <option value="image">💽 Imagen completa</option>
                         <option value="files">📁 Solo archivos</option>
                     </select>
                 </div>
                 <div>
-                    <label style="font-size: 0.85rem; font-weight: 500; display: block; margin-bottom: 6px; color: #f5f5f5;">Programación</label>
-                    <select id="ab-approve-schedule" style="width: 100%; padding: 10px 12px; background: #2a2a3e; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #f5f5f5; font-size: 0.95rem;">
+                    <label class="abk-approve-label">Programación</label>
+                    <select id="ab-approve-schedule" class="abk-approve-select">
                         <option value="0 3 * * *">Diario a las 3:00 AM</option>
                         <option value="0 2 * * *">Diario a las 2:00 AM</option>
                         <option value="0 12 * * *">Diario a las 12:00</option>
@@ -8842,8 +8839,8 @@ function showApproveDialog(agent) {
                     </select>
                 </div>
                 <div>
-                    <label style="font-size: 0.85rem; font-weight: 500; display: block; margin-bottom: 6px; color: #f5f5f5;">Copias a conservar</label>
-                    <select id="ab-approve-retention" style="width: 100%; padding: 10px 12px; background: #2a2a3e; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #f5f5f5; font-size: 0.95rem;">
+                    <label class="abk-approve-label">Copias a conservar</label>
+                    <select id="ab-approve-retention" class="abk-approve-select">
                         <option value="2">2 copias</option>
                         <option value="3" selected>3 copias</option>
                         <option value="5">5 copias</option>
@@ -8853,9 +8850,9 @@ function showApproveDialog(agent) {
                 </div>
             </div>
 
-            <div style="display: flex; gap: 10px; margin-top: 28px; justify-content: flex-end;">
-                <button id="ab-approve-cancel" class="btn-sm" style="padding: 8px 20px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #f5f5f5; cursor: pointer;">Cancelar</button>
-                <button id="ab-approve-confirm" class="btn-primary btn-sm" style="padding: 8px 20px; background: #6366f1; color: #fff;">✓ Aprobar</button>
+            <div class="abk-approve-actions">
+                <button id="ab-approve-cancel" class="btn-sm abk-approve-cancel">Cancelar</button>
+                <button id="ab-approve-confirm" class="btn-primary btn-sm abk-approve-confirm">✓ Aprobar</button>
             </div>
         </div>`;
 
@@ -8926,9 +8923,9 @@ async function loadABDevices() {
 
         if (abDevices.length === 0) {
             grid.innerHTML = `
-                <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-dim);">
-                    <div style="font-size: 3rem; margin-bottom: 15px;">🖥️</div>
-                    <p style="font-size: 1.1rem; margin-bottom: 8px;">No hay dispositivos registrados</p>
+                <div class="abk-empty-state">
+                    <div class="abk-empty-icon">🖥️</div>
+                    <p class="abk-empty-title">No hay dispositivos registrados</p>
                     <p>Añade un PC o servidor para hacer backup automático al NAS</p>
                 </div>`;
             return;
@@ -8937,7 +8934,7 @@ async function loadABDevices() {
         grid.innerHTML = '';
         abDevices.forEach(device => {
             const card = document.createElement('div');
-            card.style.cssText = 'background: var(--bg-hover); border-radius: 12px; padding: 20px; border: 1px solid var(--border); cursor: pointer; transition: all 0.2s;';
+            card.className = 'abk-device-card';
             card.addEventListener('mouseenter', () => card.style.borderColor = 'var(--accent)');
             card.addEventListener('mouseleave', () => card.style.borderColor = 'var(--border)');
 
@@ -8961,17 +8958,17 @@ async function loadABDevices() {
             const countLabel = isImage ? 'imágenes' : 'versiones';
 
             card.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                <div class="abk-device-header">
                     <div>
-                        <div style="font-weight: 600; font-size: 1.05rem;">${typeIcon} ${escapeHtml(device.name)}</div>
-                        <div style="color: var(--text-dim); font-size: 0.85rem; margin-top: 2px;">${subtitle}</div>
+                        <div class="abk-device-name">${typeIcon} ${escapeHtml(device.name)}</div>
+                        <div class="abk-device-subtitle">${subtitle}</div>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 6px;">
-                        <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${statusColor};"></span>
-                        <span style="font-size: 0.8rem; color: ${statusColor}; font-weight: 500;">${statusText}</span>
+                    <div class="abk-device-status">
+                        <span class="abk-device-status-dot" style="background: ${statusColor};"></span>
+                        <span class="abk-device-status-text" style="color: ${statusColor};">${statusText}</span>
                     </div>
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85rem; color: var(--text-dim);">
+                <div class="abk-device-info">
                     <div>📅 ${lastBackup}</div>
                     <div>📦 ${device.backupCount || 0} ${countLabel}</div>
                     <div>💾 ${sizeStr}</div>
@@ -8981,13 +8978,12 @@ async function loadABDevices() {
 
             // Action buttons
             const actions = document.createElement('div');
-            actions.style.cssText = 'display: flex; gap: 8px; margin-top: 15px; border-top: 1px solid var(--border); padding-top: 12px;';
+            actions.className = 'abk-device-actions';
 
             if (device.agentToken) {
                 // Agent-managed device: trigger backup via agent
                 const triggerBtn = document.createElement('button');
-                triggerBtn.className = 'btn-primary btn-sm';
-                triggerBtn.style.cssText = 'flex: 1; padding: 8px;';
+                triggerBtn.className = 'btn-primary btn-sm abk-action-btn';
                 triggerBtn.textContent = '▶ Backup';
                 triggerBtn.addEventListener('click', async (e) => {
                     e.stopPropagation();
@@ -9013,43 +9009,37 @@ async function loadABDevices() {
                 actions.appendChild(triggerBtn);
             } else if (!isImage) {
                 const backupBtn = document.createElement('button');
-                backupBtn.className = 'btn-primary btn-sm';
-                backupBtn.style.cssText = 'flex: 1; padding: 8px;';
+                backupBtn.className = 'btn-primary btn-sm abk-action-btn';
                 backupBtn.textContent = '▶ Backup';
                 backupBtn.addEventListener('click', (e) => { e.stopPropagation(); triggerABBackup(device.id, backupBtn); });
                 actions.appendChild(backupBtn);
             } else {
                 const instrBtn = document.createElement('button');
-                instrBtn.className = 'btn-primary btn-sm';
-                instrBtn.style.cssText = 'flex: 1; padding: 8px;';
+                instrBtn.className = 'btn-primary btn-sm abk-action-btn';
                 instrBtn.textContent = '📋 Instrucciones';
                 instrBtn.addEventListener('click', (e) => { e.stopPropagation(); showABInstructions(device); });
                 actions.appendChild(instrBtn);
             }
 
             const browseBtn = document.createElement('button');
-            browseBtn.className = 'btn-primary btn-sm';
-            browseBtn.style.cssText = 'flex: 1; padding: 8px; background: #6366f1;';
+            browseBtn.className = 'btn-primary btn-sm abk-browse-btn';
             browseBtn.textContent = '📂 Explorar';
             browseBtn.addEventListener('click', (e) => { e.stopPropagation(); isImage ? openABImageBrowse(device) : openABBrowse(device); });
 
             const renameBtn = document.createElement('button');
-            renameBtn.className = 'btn-primary btn-sm';
-            renameBtn.style.cssText = 'padding: 8px; background: #64748b;';
+            renameBtn.className = 'btn-primary btn-sm abk-rename-btn';
             renameBtn.textContent = '✏️';
             renameBtn.title = 'Renombrar';
             renameBtn.addEventListener('click', (e) => { e.stopPropagation(); showRenameDialog(device); });
 
             const editBtn = document.createElement('button');
-            editBtn.className = 'btn-primary btn-sm';
-            editBtn.style.cssText = 'padding: 8px; background: #64748b;';
+            editBtn.className = 'btn-primary btn-sm abk-edit-btn';
             editBtn.textContent = '⚙️';
             editBtn.title = 'Configurar';
             editBtn.addEventListener('click', (e) => { e.stopPropagation(); showEditDeviceForm(device); });
 
             const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'btn-primary btn-sm';
-            deleteBtn.style.cssText = 'padding: 8px; background: #ef4444;';
+            deleteBtn.className = 'btn-primary btn-sm abk-delete-btn';
             deleteBtn.textContent = '🗑️';
             deleteBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteABDevice(device); });
 
@@ -9095,7 +9085,7 @@ function showAddDeviceForm(editDevice = null) {
             </header>
             <form id="ab-device-form" style="display: flex; flex-direction: column; gap: 12px; margin-top: 15px;">
                 ${!isEdit ? `
-                <div style="display: flex; gap: 10px;">
+                <div class="cloudbackup-sync-input-group">
                     <button type="button" class="btn-primary ab-type-btn ${curType === 'files' ? '' : 'ab-type-inactive'}" data-type="files" style="flex: 1; padding: 14px; text-align: center; ${curType === 'files' ? '' : 'background: var(--bg-hover); color: var(--text-dim);'}">
                         <div style="font-size: 1.5rem;">📁</div>
                         <div style="font-weight: 600; margin-top: 4px;">Archivos</div>
@@ -12578,17 +12568,17 @@ async function renderCloudBackupView() {
     if (!dashboardContent) return;
     
     dashboardContent.innerHTML = `
-        <div class="glass-card" style="margin-bottom: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="glass-card cloudbackup-card-margin">
+            <div class="cloudbackup-header-container">
                 <div>
-                    <h3 style="color: var(--primary); margin: 0;">☁️ Cloud Backup</h3>
-                    <p style="color: var(--text-dim); margin: 5px 0 0;">Sincroniza con Google Drive, Dropbox, OneDrive y más</p>
+                    <h3 class="cloudbackup-header-title">☁️ Cloud Backup</h3>
+                    <p class="cloudbackup-header-subtitle">Sincroniza con Google Drive, Dropbox, OneDrive y más</p>
                 </div>
                 <div id="cloud-backup-status-badge"></div>
             </div>
         </div>
         <div id="cloud-backup-content">
-            <div style="text-align: center; padding: 40px; color: var(--text-dim);">
+            <div class="cloudbackup-loading">
                 Cargando...
             </div>
         </div>
@@ -12608,14 +12598,14 @@ async function loadCloudBackupStatus() {
         
         if (!status.installed) {
             // rclone not installed
-            badgeDiv.innerHTML = '<span style="color: #f59e0b;">⚠️ rclone no instalado</span>';
+            badgeDiv.innerHTML = '<span class="cloudbackup-warning-badge">⚠️ rclone no instalado</span>';
             contentDiv.innerHTML = `
-                <div class="glass-card" style="text-align: center; padding: 40px;">
-                    <h3 style="margin-bottom: 15px;">📦 Instalar rclone</h3>
-                    <p style="color: var(--text-dim); margin-bottom: 20px;">
+                <div class="glass-card cloudbackup-install-card">
+                    <h3 class="cloudbackup-install-title">📦 Instalar rclone</h3>
+                    <p class="cloudbackup-install-description">
                         rclone es necesario para conectar con servicios de nube como Google Drive, Dropbox, OneDrive, etc.
                     </p>
-                    <button id="btn-install-rclone" class="btn-primary" style="padding: 12px 24px;">
+                    <button id="btn-install-rclone" class="btn-primary cloudbackup-install-btn">
                         Instalar rclone
                     </button>
                 </div>
@@ -12623,8 +12613,8 @@ async function loadCloudBackupStatus() {
             document.getElementById('btn-install-rclone').addEventListener('click', installRclone);
             return;
         }
-        
-        badgeDiv.innerHTML = `<span style="color: #10b981;">✓ rclone v${status.version}</span>`;
+
+        badgeDiv.innerHTML = `<span class="cloudbackup-version-badge">✓ rclone v${status.version}</span>`;
         
         // Load configured remotes
         const remotesRes = await authFetch(`${API_BASE}/cloud-backup/remotes`);
@@ -12633,31 +12623,31 @@ async function loadCloudBackupStatus() {
         let remotesHtml = '';
         if (remotesData.remotes && remotesData.remotes.length > 0) {
             remotesHtml = `
-                <div class="glass-card" style="margin-bottom: 20px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h4 style="margin: 0;">🌐 Nubes Configuradas</h4>
-                        <button data-action="add-cloud" class="btn-primary" style="padding: 8px 16px;">
+                <div class="glass-card cloudbackup-card-margin">
+                    <div class="cloudbackup-remotes-header">
+                        <h4 class="cloudbackup-remotes-header-title">🌐 Nubes Configuradas</h4>
+                        <button data-action="add-cloud" class="btn-primary cloudbackup-remotes-add-btn">
                             + Añadir Nube
                         </button>
                     </div>
                     <div id="cloud-remotes-list">
                         ${remotesData.remotes.map(r => `
-                            <div class="remote-card" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background: rgba(255,255,255,0.03); border-radius: 10px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.05);">
-                                <div style="display: flex; align-items: center; gap: 12px;">
-                                    <span style="font-size: 1.8rem;">${r.icon}</span>
+                            <div class="cloudbackup-remote-card">
+                                <div class="cloudbackup-remote-info">
+                                    <span class="cloudbackup-remote-icon">${r.icon}</span>
                                     <div>
-                                        <div style="font-weight: 600;">${escapeHtml(r.name)}</div>
-                                        <div style="font-size: 0.85rem; color: var(--text-dim);">${r.displayName}</div>
+                                        <div class="cloudbackup-remote-name">${escapeHtml(r.name)}</div>
+                                        <div class="cloudbackup-remote-type">${r.displayName}</div>
                                     </div>
                                 </div>
-                                <div style="display: flex; gap: 8px;">
-                                    <button data-action="browse-remote" data-remote="${escapeHtml(r.name)}" class="btn-sm" style="background: #6366f1;" title="Explorar">
+                                <div class="cloudbackup-remote-actions">
+                                    <button data-action="browse-remote" data-remote="${escapeHtml(r.name)}" class="btn-sm cloudbackup-btn-browse" title="Explorar">
                                         📂
                                     </button>
-                                    <button data-action="sync-remote" data-remote="${escapeHtml(r.name)}" class="btn-sm" style="background: #10b981;" title="Sincronizar">
+                                    <button data-action="sync-remote" data-remote="${escapeHtml(r.name)}" class="btn-sm cloudbackup-btn-sync" title="Sincronizar">
                                         🔄
                                     </button>
-                                    <button data-action="delete-remote" data-remote="${escapeHtml(r.name)}" class="btn-sm" style="background: #ef4444;" title="Eliminar">
+                                    <button data-action="delete-remote" data-remote="${escapeHtml(r.name)}" class="btn-sm cloudbackup-btn-delete" title="Eliminar">
                                         🗑️
                                     </button>
                                 </div>
@@ -12668,12 +12658,12 @@ async function loadCloudBackupStatus() {
             `;
         } else {
             remotesHtml = `
-                <div class="glass-card" style="text-align: center; padding: 40px;">
-                    <h3 style="margin-bottom: 15px;">🌐 No hay nubes configuradas</h3>
-                    <p style="color: var(--text-dim); margin-bottom: 20px;">
+                <div class="glass-card cloudbackup-empty-state">
+                    <h3 class="cloudbackup-empty-title">🌐 No hay nubes configuradas</h3>
+                    <p class="cloudbackup-empty-description">
                         Añade tu primera nube para empezar a sincronizar archivos
                     </p>
-                    <button data-action="add-cloud" class="btn-primary" style="padding: 12px 24px;">
+                    <button data-action="add-cloud" class="btn-primary cloudbackup-empty-add-btn">
                         + Añadir Nube
                     </button>
                 </div>
@@ -12696,23 +12686,23 @@ async function loadCloudBackupStatus() {
         let activeHtml = '';
         if (activeJobsData.jobs && activeJobsData.jobs.length > 0) {
             activeHtml = `
-                <div class="glass-card" style="margin-bottom: 20px; border: 2px solid rgba(16,185,129,0.3);">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h4 style="margin: 0; color: #10b981;">🔄 Sincronizaciones Activas</h4>
-                        <span style="font-size: 0.8rem; color: #a0a0b0;">Auto-actualiza cada 5s</span>
+                <div class="glass-card cloudbackup-active-syncs-card">
+                    <div class="cloudbackup-active-syncs-header">
+                        <h4 class="cloudbackup-active-syncs-title">🔄 Sincronizaciones Activas</h4>
+                        <span class="cloudbackup-active-syncs-refresh-label">Auto-actualiza cada 5s</span>
                     </div>
                     <div id="active-syncs-list">
                         ${activeJobsData.jobs.map(job => `
-                            <div style="padding: 15px; background: rgba(16,185,129,0.05); border-radius: 8px; margin-bottom: 10px; border: 1px solid rgba(16,185,129,0.2);">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                                    <div style="overflow: hidden;">
-                                        <div style="font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(job.source)}</div>
-                                        <div style="font-size: 0.8rem; color: #a0a0b0;">→ ${escapeHtml(job.dest)}</div>
+                            <div class="cloudbackup-active-sync-item">
+                                <div class="cloudbackup-active-sync-header">
+                                    <div class="cloudbackup-active-sync-paths">
+                                        <div class="cloudbackup-active-sync-source">${escapeHtml(job.source)}</div>
+                                        <div class="cloudbackup-active-sync-dest">→ ${escapeHtml(job.dest)}</div>
                                     </div>
-                                    <span style="color: #10b981; font-weight: 600; font-size: 1.1rem;">${job.percent}%</span>
+                                    <span class="cloudbackup-active-sync-percent">${job.percent}%</span>
                                 </div>
-                                <div style="height: 6px; background: #2d2d44; border-radius: 3px; overflow: hidden;">
-                                    <div style="height: 100%; background: linear-gradient(90deg, #10b981, #6366f1); width: ${job.percent}%; transition: width 0.5s ease;"></div>
+                                <div class="cloudbackup-active-sync-progress-bg">
+                                    <div class="cloudbackup-active-sync-progress-bar" style="width: ${job.percent}%;"></div>
                                 </div>
                             </div>
                         `).join('')}
@@ -12730,71 +12720,71 @@ async function loadCloudBackupStatus() {
         
         // Build scheduled syncs section
         let schedulesHtml = `
-            <div class="glass-card" style="margin-bottom: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h4 style="margin: 0;">⏰ Sincronizaciones Programadas</h4>
+            <div class="glass-card cloudbackup-card-margin">
+                <div class="cloudbackup-schedules-header">
+                    <h4 class="cloudbackup-schedules-title">⏰ Sincronizaciones Programadas</h4>
                 </div>
                 <div id="scheduled-syncs-list">
         `;
-        
+
         if (schedulesData.schedules && schedulesData.schedules.length > 0) {
             schedulesHtml += schedulesData.schedules.map(s => `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 8px; border: 1px solid ${s.enabled ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.05)'};">
-                    <div style="flex: 1; overflow: hidden;">
-                        <div style="font-weight: 500;">${escapeHtml(s.name)}</div>
-                        <div style="font-size: 0.8rem; color: #a0a0b0;">
+                <div class="cloudbackup-schedule-item ${s.enabled ? 'cloudbackup-schedule-item-enabled' : ''}">
+                    <div class="cloudbackup-schedule-info">
+                        <div class="cloudbackup-schedule-name">${escapeHtml(s.name)}</div>
+                        <div class="cloudbackup-schedule-paths">
                             ${escapeHtml(s.source)} → ${escapeHtml(s.dest)}
                         </div>
-                        <div style="font-size: 0.75rem; color: #6366f1; margin-top: 4px;">
+                        <div class="cloudbackup-schedule-config">
                             ${getScheduleLabel(s.schedule)} • ${s.mode}
                         </div>
                     </div>
-                    <div style="display: flex; gap: 8px;">
-                        <button data-action="toggle-schedule" data-id="${s.id}" class="btn-sm" style="background: ${s.enabled ? '#10b981' : '#4a4a6a'};" title="${s.enabled ? 'Pausar' : 'Activar'}">
+                    <div class="cloudbackup-schedule-actions">
+                        <button data-action="toggle-schedule" data-id="${s.id}" class="btn-sm ${s.enabled ? 'cloudbackup-schedule-btn-enabled' : 'cloudbackup-schedule-btn-disabled'}" title="${s.enabled ? 'Pausar' : 'Activar'}">
                             ${s.enabled ? '⏸️' : '▶️'}
                         </button>
-                        <button data-action="delete-schedule" data-id="${s.id}" class="btn-sm" style="background: #ef4444;" title="Eliminar">
+                        <button data-action="delete-schedule" data-id="${s.id}" class="btn-sm cloudbackup-btn-delete" title="Eliminar">
                             🗑️
                         </button>
                     </div>
                 </div>
             `).join('');
         } else {
-            schedulesHtml += `<div style="text-align: center; padding: 20px; color: #a0a0b0;">No hay sincronizaciones programadas</div>`;
+            schedulesHtml += `<div class="cloudbackup-schedules-empty">No hay sincronizaciones programadas</div>`;
         }
         schedulesHtml += '</div></div>';
         
         // Build history section
         let historyHtml = `
             <div class="glass-card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h4 style="margin: 0;">📜 Historial de Transferencias</h4>
+                <div class="cloudbackup-history-header">
+                    <h4 class="cloudbackup-history-title">📜 Historial de Transferencias</h4>
                     ${historyData.history && historyData.history.length > 0 ? `
-                        <button data-action="clear-history" class="btn-sm" style="background: #4a4a6a;">Limpiar</button>
+                        <button data-action="clear-history" class="btn-sm cloudbackup-history-clear-btn">Limpiar</button>
                     ` : ''}
                 </div>
-                <div id="transfer-history-list" style="max-height: 300px; overflow-y: auto;">
+                <div id="transfer-history-list" class="cloudbackup-history-list">
         `;
-        
+
         if (historyData.history && historyData.history.length > 0) {
             historyHtml += historyData.history.slice(0, 20).map(t => {
                 const statusIcon = t.status === 'completed' ? '✅' : t.status === 'running' ? '🔄' : '❌';
                 const statusColor = t.status === 'completed' ? '#10b981' : t.status === 'running' ? '#f59e0b' : '#ef4444';
                 return `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: rgba(255,255,255,0.02); border-radius: 6px; margin-bottom: 6px; border-left: 3px solid ${statusColor};">
-                    <div style="flex: 1; overflow: hidden;">
-                        <div style="font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                <div class="cloudbackup-history-item" style="border-left: 3px solid ${statusColor};">
+                    <div class="cloudbackup-history-item-info">
+                        <div class="cloudbackup-history-item-path">
                             ${escapeHtml(t.source)} → ${escapeHtml(t.dest)}
                         </div>
-                        <div style="font-size: 0.75rem; color: #a0a0b0;">
+                        <div class="cloudbackup-history-item-meta">
                             ${new Date(t.timestamp).toLocaleString()} • ${t.mode}
                         </div>
                     </div>
-                    <span style="font-size: 1.2rem;" title="${t.status}">${statusIcon}</span>
+                    <span class="cloudbackup-history-item-icon" title="${t.status}">${statusIcon}</span>
                 </div>
             `}).join('');
         } else {
-            historyHtml += `<div style="text-align: center; padding: 20px; color: #a0a0b0;">Sin transferencias recientes</div>`;
+            historyHtml += `<div class="cloudbackup-history-empty">Sin transferencias recientes</div>`;
         }
         historyHtml += '</div></div>';
         
@@ -12804,7 +12794,7 @@ async function loadCloudBackupStatus() {
         bindCloudBackupEventListeners();
         
     } catch (e) {
-        contentDiv.innerHTML = `<div class="glass-card" style="color: #ef4444; padding: 20px;">Error: ${e.message}</div>`;
+        contentDiv.innerHTML = `<div class="glass-card cloudbackup-error">Error: ${e.message}</div>`;
     }
 }
 
@@ -12925,21 +12915,21 @@ async function installRclone() {
     
     const updateProgress = (step, percent, text) => {
         contentDiv.innerHTML = `
-            <div class="glass-card" style="text-align: center; padding: 40px;">
-                <h3 style="margin-bottom: 20px; color: var(--primary);">📦 Instalando rclone</h3>
-                <div style="margin-bottom: 15px;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                        <span style="color: #a0a0b0;">${text}</span>
-                        <span style="color: #10b981; font-weight: 600;">${percent}%</span>
+            <div class="glass-card cloudbackup-install-progress-card">
+                <h3 class="cloudbackup-install-progress-title">📦 Instalando rclone</h3>
+                <div class="cloudbackup-form-group">
+                    <div class="cloudbackup-install-progress-info">
+                        <span class="cloudbackup-install-progress-text">${text}</span>
+                        <span class="cloudbackup-install-progress-percent">${percent}%</span>
                     </div>
-                    <div style="height: 8px; background: #2d2d44; border-radius: 4px; overflow: hidden;">
-                        <div style="height: 100%; background: linear-gradient(90deg, #10b981, #6366f1); width: ${percent}%; transition: width 0.5s ease;"></div>
+                    <div class="cloudbackup-install-progress-bg">
+                        <div class="cloudbackup-install-progress-bar" style="width: ${percent}%;"></div>
                     </div>
                 </div>
-                <div style="display: flex; justify-content: center; gap: 20px; margin-top: 20px;">
-                    <span style="color: ${step >= 1 ? '#10b981' : '#4a4a6a'};">${step >= 1 ? '✅' : '⏳'} Descargando</span>
-                    <span style="color: ${step >= 2 ? '#10b981' : '#4a4a6a'};">${step >= 2 ? '✅' : '⏳'} Extrayendo</span>
-                    <span style="color: ${step >= 3 ? '#10b981' : '#4a4a6a'};">${step >= 3 ? '✅' : '⏳'} Instalando</span>
+                <div class="cloudbackup-install-steps">
+                    <span class="${step >= 1 ? 'cloudbackup-install-step-active' : 'cloudbackup-install-step-inactive'}">${step >= 1 ? '✅' : '⏳'} Descargando</span>
+                    <span class="${step >= 2 ? 'cloudbackup-install-step-active' : 'cloudbackup-install-step-inactive'}">${step >= 2 ? '✅' : '⏳'} Extrayendo</span>
+                    <span class="${step >= 3 ? 'cloudbackup-install-step-active' : 'cloudbackup-install-step-inactive'}">${step >= 3 ? '✅' : '⏳'} Instalando</span>
                 </div>
             </div>
         `;
@@ -12995,29 +12985,21 @@ async function showAddCloudModal() {
     
         const modal = document.createElement('div');
         modal.id = 'add-cloud-modal';
-        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100000;';
-        
+        modal.className = 'cloudbackup-modal-overlay';
+
         modal.innerHTML = `
-            <div style="background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 16px; width: 95%; max-width: 600px; max-height: 80vh; overflow: hidden;">
-                <div style="padding: 20px; border-bottom: 1px solid #3d3d5c; display: flex; justify-content: space-between; align-items: center;">
-                    <h3 style="margin: 0; color: #10b981;">☁️ Añadir Nube</h3>
-                    <button data-action="close-modal" style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer;">×</button>
+            <div class="cloudbackup-modal-container">
+                <div class="cloudbackup-modal-header">
+                    <h3 class="cloudbackup-modal-title">☁️ Añadir Nube</h3>
+                    <button data-action="close-modal" class="cloudbackup-modal-close-btn">×</button>
                 </div>
-                <div style="padding: 20px; overflow-y: auto; max-height: 60vh;">
-                    <p style="color: #a0a0b0; margin-bottom: 20px;">Selecciona el servicio de nube que quieres configurar:</p>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px;">
+                <div class="cloudbackup-modal-content">
+                    <p class="cloudbackup-modal-description">Selecciona el servicio de nube que quieres configurar:</p>
+                    <div class="cloudbackup-providers-grid">
                         ${data.providers.map(p => `
-                            <button data-action="select-provider" data-provider="${p.id}" data-color="${p.color}" class="cloud-provider-btn" style="
-                                background: rgba(255,255,255,0.05);
-                                border: 2px solid rgba(255,255,255,0.1);
-                                border-radius: 12px;
-                                padding: 20px 15px;
-                                cursor: pointer;
-                                text-align: center;
-                                transition: all 0.2s;
-                            ">
-                                <div style="font-size: 2rem; margin-bottom: 8px;">${p.icon}</div>
-                                <div style="color: #fff; font-size: 0.9rem;">${p.name}</div>
+                            <button data-action="select-provider" data-provider="${p.id}" data-color="${p.color}" class="cloudbackup-provider-btn">
+                                <div class="cloudbackup-provider-icon">${p.icon}</div>
+                                <div class="cloudbackup-provider-name">${p.name}</div>
                             </button>
                         `).join('')}
                     </div>
@@ -13028,7 +13010,7 @@ async function showAddCloudModal() {
         document.body.appendChild(modal);
 
         // Add hover effect for cloud provider buttons
-        modal.querySelectorAll('.cloud-provider-btn').forEach(btn => {
+        modal.querySelectorAll('.cloudbackup-provider-btn').forEach(btn => {
             const color = btn.dataset.color;
             btn.addEventListener('mouseover', () => { btn.style.borderColor = color; });
             btn.addEventListener('mouseout', () => { btn.style.borderColor = 'rgba(255,255,255,0.1)'; });
@@ -13082,25 +13064,25 @@ async function startCloudConfig(provider) {
 function showOAuthModal(provider, instructions) {
     const modal = document.createElement('div');
     modal.id = 'oauth-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100000;';
-    
+    modal.className = 'cloudbackup-modal-overlay';
+
     modal.innerHTML = `
-        <div style="background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 16px; width: 95%; max-width: 500px; padding: 25px;">
-            <h3 style="color: #10b981; margin-bottom: 20px;">🔐 Autorización OAuth</h3>
-            <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                <pre style="white-space: pre-wrap; color: #a0a0b0; font-size: 0.9rem;">${escapeHtml(instructions)}</pre>
+        <div class="cloudbackup-oauth-modal">
+            <h3 class="cloudbackup-oauth-title">🔐 Autorización OAuth</h3>
+            <div class="cloudbackup-oauth-instructions">
+                <pre class="cloudbackup-oauth-instructions-text">${escapeHtml(instructions)}</pre>
             </div>
-            <div style="margin-bottom: 15px;">
-                <label style="color: #fff; display: block; margin-bottom: 8px;">Nombre para esta nube:</label>
-                <input type="text" id="oauth-remote-name" value="${provider}" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+            <div class="cloudbackup-form-group">
+                <label class="cloudbackup-form-label">Nombre para esta nube:</label>
+                <input type="text" id="oauth-remote-name" value="${provider}" class="cloudbackup-form-input">
             </div>
-            <div style="margin-bottom: 20px;">
-                <label style="color: #fff; display: block; margin-bottom: 8px;">Pega el token aquí:</label>
-                <textarea id="oauth-token" rows="4" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff; resize: vertical;"></textarea>
+            <div class="cloudbackup-form-group">
+                <label class="cloudbackup-form-label">Pega el token aquí:</label>
+                <textarea id="oauth-token" rows="4" class="cloudbackup-form-textarea"></textarea>
             </div>
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button data-action="cancel" style="padding: 10px 20px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Cancelar</button>
-                <button data-action="save" style="padding: 10px 20px; background: #10b981; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Guardar</button>
+            <div class="cloudbackup-modal-actions">
+                <button data-action="cancel" class="cloudbackup-btn-cancel">Cancelar</button>
+                <button data-action="save" class="cloudbackup-btn-save">Guardar</button>
             </div>
         </div>
     `;
@@ -13152,35 +13134,35 @@ async function saveOAuthConfig(provider) {
 function showConfigFormModal(provider, fields) {
     const modal = document.createElement('div');
     modal.id = 'config-form-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100000;';
-    
+    modal.className = 'cloudbackup-modal-overlay';
+
     const fieldNames = fields.map(f => f.name);
-    
+
     const fieldsHtml = fields.map(f => `
-        <div style="margin-bottom: 15px;">
-            <label style="color: #fff; display: block; margin-bottom: 8px;">${f.label}${f.required ? ' *' : ''}:</label>
+        <div class="cloudbackup-form-group">
+            <label class="cloudbackup-form-label">${f.label}${f.required ? ' *' : ''}:</label>
             ${f.type === 'select' ? `
-                <select id="config-${f.name}" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+                <select id="config-${f.name}" class="cloudbackup-form-select">
                     ${f.options.map(o => `<option value="${o}">${o}</option>`).join('')}
                 </select>
             ` : `
-                <input type="${f.type}" id="config-${f.name}" value="${f.default || ''}" placeholder="${f.placeholder || ''}" 
-                    style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+                <input type="${f.type}" id="config-${f.name}" value="${f.default || ''}" placeholder="${f.placeholder || ''}"
+                    class="cloudbackup-form-input">
             `}
         </div>
     `).join('');
-    
+
     modal.innerHTML = `
-        <div style="background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 16px; width: 95%; max-width: 500px; padding: 25px;">
-            <h3 style="color: #10b981; margin-bottom: 20px;">⚙️ Configurar ${provider.toUpperCase()}</h3>
-            <div style="margin-bottom: 15px;">
-                <label style="color: #fff; display: block; margin-bottom: 8px;">Nombre para esta nube *:</label>
-                <input type="text" id="config-name" value="${provider}" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+        <div class="cloudbackup-oauth-modal">
+            <h3 class="cloudbackup-oauth-title">⚙️ Configurar ${provider.toUpperCase()}</h3>
+            <div class="cloudbackup-form-group">
+                <label class="cloudbackup-form-label">Nombre para esta nube *:</label>
+                <input type="text" id="config-name" value="${provider}" class="cloudbackup-form-input">
             </div>
             ${fieldsHtml}
-            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
-                <button data-action="cancel" style="padding: 10px 20px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Cancelar</button>
-                <button data-action="save" style="padding: 10px 20px; background: #10b981; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Guardar</button>
+            <div class="cloudbackup-modal-actions-footer">
+                <button data-action="cancel" class="cloudbackup-btn-cancel">Cancelar</button>
+                <button data-action="save" class="cloudbackup-btn-save">Guardar</button>
             </div>
         </div>
     `;
@@ -13236,30 +13218,30 @@ async function saveSimpleConfig(provider, fieldNames) {
 async function browseRemote(remoteName, path = '') {
     const modal = document.createElement('div');
     modal.id = 'remote-browser-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 100000;';
+    modal.className = 'cloudbackup-modal-overlay-dark';
     
     modal.innerHTML = `
-        <div style="background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 16px; width: 95%; max-width: 800px; height: 80vh; display: flex; flex-direction: column;">
-            <div style="padding: 15px 20px; border-bottom: 1px solid #3d3d5c; display: flex; justify-content: space-between; align-items: center;">
+        <div class="cloudbackup-browser-modal">
+            <div class="cloudbackup-browser-header">
                 <div>
-                    <h3 style="margin: 0; color: #10b981;">📂 ${escapeHtml(remoteName)}</h3>
-                    <div id="remote-path-display" style="font-size: 0.85rem; color: #a0a0b0; margin-top: 4px;">/${escapeHtml(path)}</div>
+                    <h3 class="cloudbackup-browser-title">📂 ${escapeHtml(remoteName)}</h3>
+                    <div id="remote-path-display" class="cloudbackup-browser-path">/${escapeHtml(path)}</div>
                 </div>
-                <button data-action="close" style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer;">×</button>
+                <button data-action="close" class="cloudbackup-browser-close">×</button>
             </div>
-            <div style="padding: 10px 20px; border-bottom: 1px solid #3d3d5c; display: flex; gap: 10px;">
-                <button id="remote-back-btn" data-action="back" style="padding: 8px 16px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;" ${!path ? 'disabled style="opacity:0.5;padding: 8px 16px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff;"' : ''}>
+            <div class="cloudbackup-browser-toolbar">
+                <button id="remote-back-btn" data-action="back" class="${!path ? 'cloudbackup-browser-btn-disabled' : 'cloudbackup-browser-btn'}" ${!path ? 'disabled' : ''}>
                     ⬅️ Atrás
                 </button>
-                <button data-action="refresh" style="padding: 8px 16px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;">
+                <button data-action="refresh" class="cloudbackup-browser-btn">
                     🔄 Actualizar
                 </button>
-                <button data-action="sync-folder" style="padding: 8px 16px; background: #10b981; border: none; border-radius: 6px; color: #fff; cursor: pointer;">
+                <button data-action="sync-folder" class="cloudbackup-browser-btn-sync">
                     📥 Sincronizar esta carpeta
                 </button>
             </div>
-            <div id="remote-files-list" style="flex: 1; overflow-y: auto; padding: 15px 20px;">
-                <div style="text-align: center; padding: 40px; color: #a0a0b0;">Cargando...</div>
+            <div id="remote-files-list" class="cloudbackup-browser-files">
+                <div class="cloudbackup-browser-loading">Cargando...</div>
             </div>
         </div>
     `;
@@ -13297,7 +13279,7 @@ async function loadRemoteFiles(remoteName, path) {
         const data = await res.json();
         
         if (!data.items || data.items.length === 0) {
-            listDiv.innerHTML = '<div style="text-align: center; padding: 40px; color: #a0a0b0;">📭 Carpeta vacía</div>';
+            listDiv.innerHTML = '<div class="cloudbackup-browser-empty">📭 Carpeta vacía</div>';
             return;
         }
         
@@ -13309,13 +13291,13 @@ async function loadRemoteFiles(remoteName, path) {
         });
         
         listDiv.innerHTML = sorted.map(item => `
-            <div class="remote-file-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 8px; cursor: ${item.isDir ? 'pointer' : 'default'}; border: 1px solid rgba(255,255,255,0.05);"
+            <div class="cloudbackup-file-item ${item.isDir ? 'cloudbackup-file-item-clickable' : 'cloudbackup-file-item-default'}"
                 ${item.isDir ? `data-action="navigate" data-path="${escapeHtml(item.path)}"` : ''}>
-                <div style="display: flex; align-items: center; gap: 12px; overflow: hidden;">
-                    <span style="font-size: 1.4rem;">${item.isDir ? '📁' : getFileIcon(item.name)}</span>
-                    <div style="overflow: hidden;">
-                        <div style="font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(item.name)}</div>
-                        <div style="font-size: 0.8rem; color: #a0a0b0;">
+                <div class="cloudbackup-file-item-info">
+                    <span class="cloudbackup-file-icon">${item.isDir ? '📁' : getFileIcon(item.name)}</span>
+                    <div class="cloudbackup-file-details">
+                        <div class="cloudbackup-file-name">${escapeHtml(item.name)}</div>
+                        <div class="cloudbackup-file-meta">
                             ${item.isDir ? 'Carpeta' : formatFileSize(item.size)}
                             ${item.modTime ? ' • ' + new Date(item.modTime).toLocaleDateString() : ''}
                         </div>
@@ -13323,7 +13305,7 @@ async function loadRemoteFiles(remoteName, path) {
                 </div>
                 ${!item.isDir ? `
                     <button data-action="download" data-path="${escapeHtml(item.path)}"
-                        style="padding: 6px 12px; background: #6366f1; border: none; border-radius: 6px; color: #fff; cursor: pointer; font-size: 0.85rem;">
+                        class="cloudbackup-file-download-btn">
                         📥
                     </button>
                 ` : ''}
@@ -13349,7 +13331,7 @@ async function loadRemoteFiles(remoteName, path) {
         });
         
     } catch (e) {
-        listDiv.innerHTML = `<div style="text-align: center; padding: 40px; color: #ef4444;">Error: ${e.message}</div>`;
+        listDiv.innerHTML = `<div class="cloudbackup-browser-empty" style="color: #ef4444;">Error: ${e.message}</div>`;
     }
 }
 
@@ -13410,42 +13392,42 @@ async function syncRemote(remoteName) {
 function showSyncWizard(remoteName, remotePath = '') {
     const modal = document.createElement('div');
     modal.id = 'sync-wizard-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 100000;';
+    modal.className = 'cloudbackup-modal-overlay-dark';
     
     modal.innerHTML = `
-        <div style="background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 16px; width: 95%; max-width: 600px; padding: 25px;">
-            <h3 style="color: #10b981; margin-bottom: 20px;">🔄 Configurar Sincronización</h3>
+        <div class="cloudbackup-sync-wizard">
+            <h3 class="cloudbackup-sync-wizard-title">🔄 Configurar Sincronización</h3>
             
-            <div style="margin-bottom: 20px;">
-                <label style="color: #fff; display: block; margin-bottom: 8px;">📤 Origen (nube):</label>
-                <div style="display: flex; gap: 10px;">
+            <div class="cloudbackup-sync-field">
+                <label class="cloudbackup-sync-label">📤 Origen (nube):</label>
+                <div class="cloudbackup-sync-input-group">
                     <input type="text" id="sync-source" value="${remoteName}:${remotePath}" readonly 
-                        style="flex: 1; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
-                    <button data-action="browse-source" style="padding: 10px 15px; background: #6366f1; border: none; border-radius: 6px; color: #fff; cursor: pointer;">📂</button>
+                        class="cloudbackup-sync-input">
+                    <button data-action="browse-source" class="cloudbackup-sync-browse-btn">📂</button>
                 </div>
             </div>
             
-            <div style="margin-bottom: 20px;">
-                <label style="color: #fff; display: block; margin-bottom: 8px;">📥 Destino (NAS):</label>
-                <div style="display: flex; gap: 10px;">
+            <div class="cloudbackup-sync-field">
+                <label class="cloudbackup-sync-label">📥 Destino (NAS):</label>
+                <div class="cloudbackup-sync-input-group">
                     <input type="text" id="sync-dest" value="/mnt/storage/cloud-backup/${remoteName}" 
-                        style="flex: 1; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
-                    <button data-action="browse-dest" style="padding: 10px 15px; background: #6366f1; border: none; border-radius: 6px; color: #fff; cursor: pointer;">📂</button>
+                        class="cloudbackup-sync-input">
+                    <button data-action="browse-dest" class="cloudbackup-sync-browse-btn">📂</button>
                 </div>
             </div>
             
-            <div style="margin-bottom: 20px;">
-                <label style="color: #fff; display: block; margin-bottom: 8px;">⚙️ Modo:</label>
-                <select id="sync-mode" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+            <div class="cloudbackup-sync-field">
+                <label class="cloudbackup-sync-label">⚙️ Modo:</label>
+                <select id="sync-mode" class="cloudbackup-form-select">
                     <option value="copy">📥 Copiar (solo añade archivos nuevos)</option>
                     <option value="sync">🔄 Sincronizar (hace destino idéntico al origen)</option>
                     <option value="move">✂️ Mover (elimina del origen después de copiar)</option>
                 </select>
             </div>
             
-            <div style="margin-bottom: 20px;">
-                <label style="color: #fff; display: block; margin-bottom: 8px;">⏰ Programar:</label>
-                <select id="sync-schedule" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+            <div class="cloudbackup-sync-field">
+                <label class="cloudbackup-sync-label">⏰ Programar:</label>
+                <select id="sync-schedule" class="cloudbackup-form-select">
                     <option value="now">▶️ Ejecutar ahora (una vez)</option>
                     <option value="hourly">🕐 Cada hora</option>
                     <option value="daily">📅 Diariamente (3:00 AM)</option>
@@ -13453,9 +13435,9 @@ function showSyncWizard(remoteName, remotePath = '') {
                 </select>
             </div>
             
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button data-action="cancel" style="padding: 12px 24px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Cancelar</button>
-                <button data-action="start-sync" style="padding: 12px 24px; background: #10b981; border: none; border-radius: 6px; color: #fff; cursor: pointer; font-weight: 600;">🚀 Iniciar</button>
+            <div class="cloudbackup-sync-actions">
+                <button data-action="cancel" class="cloudbackup-sync-btn-cancel">Cancelar</button>
+                <button data-action="start-sync" class="cloudbackup-sync-btn-start">🚀 Iniciar</button>
             </div>
         </div>
     `;
@@ -13536,18 +13518,18 @@ async function startSync() {
 function showSyncProgress(jobId) {
     const toast = document.createElement('div');
     toast.id = `sync-progress-${jobId}`;
-    toast.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 12px; padding: 15px 20px; z-index: 100001; width: 320px;';
+    toast.className = 'cloudbackup-progress-toast';
     toast.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <span style="color: #10b981; font-weight: 600;">🔄 Sincronizando...</span>
-            <button data-action="close" style="background: none; border: none; color: #fff; cursor: pointer; font-size: 18px;">×</button>
+        <div class="cloudbackup-progress-header">
+            <span class="cloudbackup-progress-title">🔄 Sincronizando...</span>
+            <button data-action="close" class="cloudbackup-progress-close">×</button>
         </div>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <span id="sync-progress-text-${jobId}" style="color: #a0a0b0; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px;">Iniciando...</span>
-            <span id="sync-progress-percent-${jobId}" style="color: #10b981; font-weight: 600; font-size: 0.9rem;">0%</span>
+        <div class="cloudbackup-progress-info">
+            <span id="sync-progress-text-${jobId}" class="cloudbackup-progress-text">Iniciando...</span>
+            <span id="sync-progress-percent-${jobId}" class="cloudbackup-progress-percent">0%</span>
         </div>
-        <div style="height: 6px; background: #2d2d44; border-radius: 3px; overflow: hidden;">
-            <div id="sync-progress-bar-${jobId}" style="height: 100%; background: linear-gradient(90deg, #10b981, #6366f1); width: 0%; transition: width 0.5s ease;"></div>
+        <div class="cloudbackup-progress-bg">
+            <div id="sync-progress-bar-${jobId}" class="cloudbackup-progress-bar" style="width: 0%;"></div>
         </div>
     `;
     document.body.appendChild(toast);
