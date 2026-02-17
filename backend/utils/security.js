@@ -42,7 +42,8 @@ async function safeExec(command, args = [], options = {}) {
         'journalctl', 'smbstatus', 'smbd', 'nmbd', 'userdel',
         'apcaccess', 'apctest', 'upsc', 'upscmd', 'rsync', 'tar',
         'crontab', 'mv', 'grep', 'blkid', 'lsblk', 'findmnt',
-        'mkswap', 'swapon', 'swapoff', 'fdisk', 'xorriso', 'mksquashfs'
+        'mkswap', 'swapon', 'swapoff', 'fdisk', 'xorriso', 'mksquashfs',
+        'wg', 'qrencode', 'which'
     ];
 
     // Require absolute path or resolve from PATH - no path traversal tricks
@@ -73,7 +74,8 @@ async function sudoExec(subCommand, args = [], options = {}) {
         'cp', 'mv', 'chown', 'chmod', 'mkdir', 'tee',
         'systemctl', 'smbpasswd', 'useradd', 'usermod', 'userdel',
         'mount', 'umount', 'mkfs.ext4', 'mkfs.xfs', 'parted', 'partprobe',
-        'samba-tool', 'net', 'testparm'
+        'samba-tool', 'net', 'testparm',
+        'apt-get', 'sysctl', 'wg'
     ];
 
     const baseCommand = path.basename(subCommand);

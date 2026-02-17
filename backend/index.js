@@ -60,6 +60,7 @@ const cloudBackupRoutes = require('./routes/cloud-backup');
 const homestoreRoutes = require('./routes/homestore');
 const stacksRoutes = require('./routes/stacks');
 const activeDirectoryRoutes = require('./routes/active-directory');
+const vpnRoutes = require('./routes/vpn');
 
 // Import terminal WebSocket handler
 let setupTerminalWebSocket;
@@ -263,7 +264,7 @@ allowedRootFiles.forEach(file => {
 app.use('/frontend/i18n', express.static(path.join(__dirname, '../frontend/i18n')));
 
 // SPA routes - serve index.html for frontend views
-const spaRoutes = ['/', '/dashboard', '/docker', '/storage', '/files', '/network', '/system', '/terminal', '/shortcuts', '/backup', '/logs', '/users', '/active-backup', '/active-directory', '/cloud-sync', '/cloud-backup', '/homestore', '/stacks', '/setup', '/login', '/setup/storage'];
+const spaRoutes = ['/', '/dashboard', '/docker', '/storage', '/files', '/network', '/system', '/terminal', '/shortcuts', '/backup', '/logs', '/users', '/active-backup', '/active-directory', '/cloud-sync', '/cloud-backup', '/homestore', '/stacks', '/setup', '/login', '/setup/storage', '/vpn'];
 spaRoutes.forEach(route => {
     app.get(route, (req, res) => {
         res.sendFile(path.join(__dirname, '../index.html'));
@@ -338,6 +339,9 @@ app.use('/api/active-backup', activeBackupRoutes);
 app.use('/api/homestore', homestoreRoutes);
 app.use('/api/stacks', stacksRoutes);
 app.use('/api/ad', activeDirectoryRoutes);
+
+// VPN Server (WireGuard)
+app.use('/api/vpn', vpnRoutes);
 
 // =============================================================================
 // GLOBAL ERROR HANDLER
@@ -424,6 +428,7 @@ httpServer.listen(HTTP_PORT, '0.0.0.0', () => {
     console.log('        - routes/scheduler.js      (task scheduler)');
     console.log('        - routes/ups.js            (UPS monitor)');
     console.log('        - routes/ddns.js           (dynamic DNS)');
+    console.log('        - routes/vpn.js            (VPN server)');
     console.log('');
     
     // Setup Terminal WebSocket on HTTP server

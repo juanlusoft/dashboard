@@ -334,7 +334,8 @@ const viewsMap = {
     'homestore': '🏪 HomeStore',
     'logs': 'Visor de Logs',
     'users': 'Gestión de Usuarios',
-    'system': 'Administración del Sistema'
+    'system': 'Administración del Sistema',
+    'vpn': 'Servidor VPN'
 };
 
 // =============================================================================
@@ -2482,6 +2483,7 @@ async function renderContent(view) {
     else if (view === 'active-directory') await renderActiveDirectoryView();
     else if (view === 'cloud-sync') await renderCloudSyncView();
     else if (view === 'cloud-backup') await renderCloudBackupView();
+    else if (view === 'vpn') await renderVPNView();
     else if (view === 'homestore') await renderHomeStoreView();
     else if (view === 'logs') await renderLogsView();
     else if (view === 'users') await renderUsersView();
@@ -8226,6 +8228,525 @@ function showDDNSForm() {
             await loadDDNSServices();
         } catch (err) {
             alert('Error al guardar servicio DDNS');
+        }
+    });
+}
+
+// =============================================================================
+// VPN SERVER (WireGuard)
+// =============================================================================
+
+async function renderVPNView() {
+    dashboardContent.innerHTML = '<div style="padding: 20px; color: var(--text-dim);">Cargando estado VPN...</div>';
+
+    let vpnStatus;
+    try {
+        const res = await authFetch(`${API_BASE}/vpn/status`);
+        if (!res.ok) throw new Error('Error');
+        vpnStatus = await res.json();
+    } catch (e) {
+        dashboardContent.innerHTML = '<div class="glass-card" style="grid-column:1/-1; padding: 30px; text-align: center; color: #ef4444;">Error al conectar con el servicio VPN</div>';
+        return;
+    }
+
+    dashboardContent.innerHTML = '';
+
+    // --- Tarjeta de estado principal ---
+    const statusCard = document.createElement('div');
+    statusCard.className = 'glass-card';
+    statusCard.style.cssText = 'grid-column: 1 / -1;';
+
+    const isRunning = vpnStatus.running;
+    const isInstalled = vpnStatus.installed;
+
+    statusCard.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <div style="width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; background: ${isRunning ? 'rgba(16,185,129,0.15)' : 'rgba(148,163,184,0.15)'};">
+                    🔒
+                </div>
+                <div>
+                    <h3 style="margin: 0;">Servidor VPN WireGuard</h3>
+                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                        <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${isRunning ? '#10b981' : isInstalled ? '#f59e0b' : '#94a3b8'};"></span>
+                        <span style="font-size: 0.9rem; color: var(--text-dim);">${isRunning ? 'Activo' : isInstalled ? 'Instalado - Detenido' : 'No instalado'}</span>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;" id="vpn-action-btns">
+                ${!isInstalled ? `
+                    <button class="btn-primary" id="vpn-install-btn">📦 Instalar WireGuard</button>
+                ` : `
+                    ${isRunning ? `
+                        <button class="btn-primary" id="vpn-stop-btn" style="background: #f59e0b;">⏹ Detener</button>
+                        <button class="btn-primary" id="vpn-restart-btn">🔄 Reiniciar</button>
+                    ` : `
+                        <button class="btn-primary" id="vpn-start-btn">▶ Activar</button>
+                    `}
+                    <button id="vpn-uninstall-btn" style="padding: 8px 16px; background: #ef4444; border: none; color: white; border-radius: 8px; cursor: pointer; font-size: 0.85rem;">🗑 Desinstalar</button>
+                `}
+            </div>
+        </div>
+    `;
+    dashboardContent.appendChild(statusCard);
+
+    // Event listeners para botones de estado
+    const installBtn = document.getElementById('vpn-install-btn');
+    if (installBtn) {
+        installBtn.addEventListener('click', async () => {
+            installBtn.disabled = true;
+            installBtn.textContent = '⏳ Instalando...';
+            try {
+                const r = await authFetch(`${API_BASE}/vpn/install`, { method: 'POST' });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.error || 'Error');
+                showNotification('WireGuard instalado correctamente', 'success');
+                await renderVPNView();
+            } catch (e) {
+                showNotification(`Error: ${e.message}`, 'error');
+                installBtn.disabled = false;
+                installBtn.textContent = '📦 Instalar WireGuard';
+            }
+        });
+    }
+
+    const startBtn = document.getElementById('vpn-start-btn');
+    if (startBtn) {
+        startBtn.addEventListener('click', async () => {
+            startBtn.disabled = true;
+            try {
+                const r = await authFetch(`${API_BASE}/vpn/start`, { method: 'POST' });
+                if (!r.ok) throw new Error('Error');
+                showNotification('VPN activada', 'success');
+                await renderVPNView();
+            } catch (e) {
+                showNotification('Error al activar VPN', 'error');
+                startBtn.disabled = false;
+            }
+        });
+    }
+
+    const stopBtn = document.getElementById('vpn-stop-btn');
+    if (stopBtn) {
+        stopBtn.addEventListener('click', async () => {
+            stopBtn.disabled = true;
+            try {
+                const r = await authFetch(`${API_BASE}/vpn/stop`, { method: 'POST' });
+                if (!r.ok) throw new Error('Error');
+                showNotification('VPN detenida', 'success');
+                await renderVPNView();
+            } catch (e) {
+                showNotification('Error al detener VPN', 'error');
+                stopBtn.disabled = false;
+            }
+        });
+    }
+
+    const restartBtn = document.getElementById('vpn-restart-btn');
+    if (restartBtn) {
+        restartBtn.addEventListener('click', async () => {
+            restartBtn.disabled = true;
+            try {
+                const r = await authFetch(`${API_BASE}/vpn/restart`, { method: 'POST' });
+                if (!r.ok) throw new Error('Error');
+                showNotification('VPN reiniciada', 'success');
+                await renderVPNView();
+            } catch (e) {
+                showNotification('Error al reiniciar VPN', 'error');
+                restartBtn.disabled = false;
+            }
+        });
+    }
+
+    const uninstallBtn = document.getElementById('vpn-uninstall-btn');
+    if (uninstallBtn) {
+        uninstallBtn.addEventListener('click', async () => {
+            const confirmed = await showConfirmModal('Desinstalar VPN', '¿Seguro que quieres desinstalar WireGuard? Se eliminarán todos los clientes y la configuración.');
+            if (!confirmed) return;
+            uninstallBtn.disabled = true;
+            try {
+                const r = await authFetch(`${API_BASE}/vpn/uninstall`, { method: 'POST' });
+                if (!r.ok) throw new Error('Error');
+                showNotification('WireGuard desinstalado', 'success');
+                await renderVPNView();
+            } catch (e) {
+                showNotification('Error al desinstalar', 'error');
+                uninstallBtn.disabled = false;
+            }
+        });
+    }
+
+    // Si no está instalado, no mostrar más
+    if (!isInstalled) return;
+
+    // --- Info del servidor ---
+    const infoCard = document.createElement('div');
+    infoCard.className = 'glass-card';
+    infoCard.innerHTML = `
+        <h4 style="margin: 0 0 15px 0;">⚙️ Configuración del Servidor</h4>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.9rem;">
+            <div><strong>Endpoint:</strong> ${escapeHtml(vpnStatus.endpoint || vpnStatus.publicIP || 'No configurado')}</div>
+            <div><strong>Puerto:</strong> ${vpnStatus.port}</div>
+            <div><strong>DNS:</strong> ${escapeHtml(vpnStatus.dns)}</div>
+            <div><strong>Subred:</strong> ${escapeHtml(vpnStatus.subnet)}</div>
+            <div><strong>IP Pública:</strong> ${escapeHtml(vpnStatus.publicIP || 'Desconocida')}</div>
+            <div><strong>Clientes:</strong> ${vpnStatus.clientCount}</div>
+        </div>
+        <div style="margin-top: 15px;">
+            <button class="btn-primary btn-sm" id="vpn-edit-config-btn">✏️ Editar Configuración</button>
+        </div>
+    `;
+    dashboardContent.appendChild(infoCard);
+
+    // Stats de peers conectados
+    const peersCard = document.createElement('div');
+    peersCard.className = 'glass-card';
+    const connectedCount = (vpnStatus.connectedPeers || []).filter(p => p.connected).length;
+    peersCard.innerHTML = `
+        <h4 style="margin: 0 0 15px 0;">📡 Peers Conectados (${connectedCount})</h4>
+        <div id="vpn-peers-list">
+            ${(vpnStatus.connectedPeers || []).length === 0 ? '<div style="color: var(--text-dim); font-size: 0.9rem;">No hay peers conectados actualmente</div>' : ''}
+        </div>
+    `;
+
+    const peersList = peersCard.querySelector('#vpn-peers-list');
+    for (const peer of (vpnStatus.connectedPeers || [])) {
+        const peerEl = document.createElement('div');
+        peerEl.style.cssText = 'display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; background: var(--bg-hover); margin-bottom: 6px;';
+        const rxMB = (peer.transferRx / 1024 / 1024).toFixed(1);
+        const txMB = (peer.transferTx / 1024 / 1024).toFixed(1);
+        const handshakeTime = peer.latestHandshake ? new Date(peer.latestHandshake).toLocaleString('es-ES') : 'Nunca';
+        peerEl.innerHTML = `
+            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${peer.connected ? '#10b981' : '#94a3b8'};"></span>
+            <div style="flex: 1; min-width: 0;">
+                <div style="font-weight: 600;">${escapeHtml(peer.name)}</div>
+                <div style="font-size: 0.8rem; color: var(--text-dim);">
+                    ${peer.endpoint ? escapeHtml(peer.endpoint) : 'Sin conexión'}
+                    · ↓${rxMB} MB · ↑${txMB} MB
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-dim);">Último handshake: ${handshakeTime}</div>
+            </div>
+        `;
+        peersList.appendChild(peerEl);
+    }
+    dashboardContent.appendChild(peersCard);
+
+    // --- Lista de clientes ---
+    const clientsCard = document.createElement('div');
+    clientsCard.className = 'glass-card';
+    clientsCard.style.cssText = 'grid-column: 1 / -1;';
+    clientsCard.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h4 style="margin: 0;">👥 Clientes VPN</h4>
+            <button class="btn-primary btn-sm" id="vpn-add-client-btn">+ Nuevo Cliente</button>
+        </div>
+        <div id="vpn-clients-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;"></div>
+    `;
+    dashboardContent.appendChild(clientsCard);
+
+    // Renderizar clientes
+    const clientsGrid = clientsCard.querySelector('#vpn-clients-grid');
+    const clients = vpnStatus.clients || [];
+    const activeClients = clients.filter(c => !c.revoked);
+    const revokedClients = clients.filter(c => c.revoked);
+
+    if (activeClients.length === 0) {
+        clientsGrid.innerHTML = '<div style="color: var(--text-dim); grid-column: 1 / -1; text-align: center; padding: 20px;">No hay clientes configurados. Crea uno para conectarte por VPN.</div>';
+    }
+
+    for (const client of activeClients) {
+        const clientEl = document.createElement('div');
+        clientEl.style.cssText = 'padding: 15px; border-radius: 10px; background: var(--bg-hover); position: relative;';
+        clientEl.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: start;">
+                <div>
+                    <div style="font-weight: 600; font-size: 1rem;">📱 ${escapeHtml(client.name)}</div>
+                    <div style="font-size: 0.85rem; color: var(--text-dim); margin-top: 4px;">IP: ${escapeHtml(client.address)}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-dim);">Creado: ${new Date(client.createdAt).toLocaleDateString('es-ES')}</div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 6px; margin-top: 12px;">
+                <button class="btn-primary btn-sm vpn-qr-btn" data-id="${client.id}" style="font-size: 0.8rem; padding: 5px 12px;">📱 QR Code</button>
+                <button class="btn-primary btn-sm vpn-download-btn" data-id="${client.id}" data-name="${escapeHtml(client.name)}" style="font-size: 0.8rem; padding: 5px 12px; background: #6366f1;">⬇ Descargar</button>
+                <button class="vpn-revoke-btn" data-id="${client.id}" data-name="${escapeHtml(client.name)}" style="font-size: 0.8rem; padding: 5px 12px; background: #ef4444; border: none; color: white; border-radius: 6px; cursor: pointer;">✕ Revocar</button>
+            </div>
+        `;
+        clientsGrid.appendChild(clientEl);
+    }
+
+    // Mostrar revocados colapsados
+    if (revokedClients.length > 0) {
+        const revokedSection = document.createElement('div');
+        revokedSection.style.cssText = 'grid-column: 1 / -1; margin-top: 10px;';
+        revokedSection.innerHTML = `
+            <details>
+                <summary style="cursor: pointer; color: var(--text-dim); font-size: 0.85rem; padding: 8px 0;">Clientes revocados (${revokedClients.length})</summary>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; margin-top: 8px;">
+                    ${revokedClients.map(c => `
+                        <div style="padding: 10px; border-radius: 8px; background: var(--bg-hover); opacity: 0.5;">
+                            <span style="text-decoration: line-through;">${escapeHtml(c.name)}</span>
+                            <span style="font-size: 0.75rem; color: #ef4444; margin-left: 8px;">Revocado</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </details>
+        `;
+        clientsGrid.appendChild(revokedSection);
+    }
+
+    // --- Event Listeners ---
+
+    // Añadir cliente
+    document.getElementById('vpn-add-client-btn').addEventListener('click', () => showVPNAddClientModal());
+
+    // Botones QR
+    clientsCard.querySelectorAll('.vpn-qr-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const clientId = btn.dataset.id;
+            btn.disabled = true;
+            try {
+                const r = await authFetch(`${API_BASE}/vpn/clients/${clientId}/config`);
+                if (!r.ok) throw new Error('Error');
+                const data = await r.json();
+                showVPNQRModal(data);
+            } catch (e) {
+                showNotification('Error al obtener QR', 'error');
+            }
+            btn.disabled = false;
+        });
+    });
+
+    // Botones descargar
+    clientsCard.querySelectorAll('.vpn-download-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const clientId = btn.dataset.id;
+            const clientName = btn.dataset.name;
+            btn.disabled = true;
+            try {
+                const r = await authFetch(`${API_BASE}/vpn/clients/${clientId}/config`);
+                if (!r.ok) throw new Error('Error');
+                const data = await r.json();
+                // Descargar como archivo .conf
+                const blob = new Blob([data.config], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${clientName}.conf`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (e) {
+                showNotification('Error al descargar configuración', 'error');
+            }
+            btn.disabled = false;
+        });
+    });
+
+    // Botones revocar
+    clientsCard.querySelectorAll('.vpn-revoke-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const clientId = btn.dataset.id;
+            const clientName = btn.dataset.name;
+            const confirmed = await showConfirmModal('Revocar cliente', `¿Seguro que quieres revocar el cliente "${clientName}"? No podrá conectarse más.`);
+            if (!confirmed) return;
+            btn.disabled = true;
+            try {
+                const r = await authFetch(`${API_BASE}/vpn/clients/${clientId}`, { method: 'DELETE' });
+                if (!r.ok) throw new Error('Error');
+                showNotification(`Cliente ${clientName} revocado`, 'success');
+                await renderVPNView();
+            } catch (e) {
+                showNotification('Error al revocar cliente', 'error');
+                btn.disabled = false;
+            }
+        });
+    });
+
+    // Editar configuración
+    const editConfigBtn = document.getElementById('vpn-edit-config-btn');
+    if (editConfigBtn) {
+        editConfigBtn.addEventListener('click', () => showVPNConfigModal(vpnStatus));
+    }
+}
+
+/**
+ * Modal para añadir nuevo cliente VPN
+ */
+function showVPNAddClientModal() {
+    const existing = document.getElementById('vpn-client-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'vpn-client-modal';
+    modal.className = 'modal active';
+    modal.style.cssText = 'display: flex; position: fixed; inset: 0; z-index: 1000; align-items: center; justify-content: center; background: rgba(0,0,0,0.5);';
+
+    modal.innerHTML = `
+        <div class="glass-card modal-content" style="max-width: 420px; width: 90%;">
+            <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0;">Nuevo Cliente VPN</h3>
+                <button class="btn-close" id="close-vpn-client-modal">&times;</button>
+            </header>
+            <p style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 15px;">
+                Crea un perfil de cliente para conectar un dispositivo a tu VPN.
+                Se generará un QR code para escanear desde la app WireGuard.
+            </p>
+            <form id="vpn-client-form" style="display: flex; flex-direction: column; gap: 12px;">
+                <div class="input-group">
+                    <input type="text" id="vpn-client-name" required placeholder=" " pattern="[a-zA-Z0-9_-]{1,32}" maxlength="32">
+                    <label>Nombre del dispositivo</label>
+                </div>
+                <div style="font-size: 0.8rem; color: var(--text-dim);">Ej: iPhone-Pablo, Laptop-Maria, Tablet-casa</div>
+                <button type="submit" class="btn-primary" id="vpn-create-client-submit">🔑 Crear Cliente</button>
+            </form>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    document.getElementById('close-vpn-client-modal').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    document.getElementById('vpn-client-name').focus();
+
+    document.getElementById('vpn-client-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('vpn-client-name').value.trim();
+        const submitBtn = document.getElementById('vpn-create-client-submit');
+        submitBtn.disabled = true;
+        submitBtn.textContent = '⏳ Creando...';
+
+        try {
+            const res = await authFetch(`${API_BASE}/vpn/clients`, {
+                method: 'POST',
+                body: JSON.stringify({ name })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Error');
+
+            modal.remove();
+            showNotification(`Cliente "${name}" creado`, 'success');
+
+            // Mostrar QR inmediatamente
+            showVPNQRModal(data);
+
+            // Refrescar vista
+            await renderVPNView();
+        } catch (err) {
+            showNotification(`Error: ${err.message}`, 'error');
+            submitBtn.disabled = false;
+            submitBtn.textContent = '🔑 Crear Cliente';
+        }
+    });
+}
+
+/**
+ * Modal con QR code del cliente
+ */
+function showVPNQRModal(data) {
+    const existing = document.getElementById('vpn-qr-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'vpn-qr-modal';
+    modal.className = 'modal active';
+    modal.style.cssText = 'display: flex; position: fixed; inset: 0; z-index: 1001; align-items: center; justify-content: center; background: rgba(0,0,0,0.5);';
+
+    const clientName = data.client ? data.client.name : 'Cliente';
+
+    modal.innerHTML = `
+        <div class="glass-card modal-content" style="max-width: 500px; width: 90%; text-align: center;">
+            <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0;">📱 ${escapeHtml(clientName)}</h3>
+                <button class="btn-close" id="close-vpn-qr-modal">&times;</button>
+            </header>
+            <p style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 15px;">
+                Escanea este QR desde la app <strong>WireGuard</strong> en tu dispositivo móvil.
+            </p>
+            <div id="vpn-qr-container" style="display: inline-block; background: white; padding: 20px; border-radius: 12px; margin-bottom: 15px;">
+                ${data.qrSvg ? data.qrSvg : '<div style="padding: 40px; color: #666;">QR no disponible. Instala qrencode en el servidor.</div>'}
+            </div>
+            <div style="margin-top: 10px;">
+                <details style="text-align: left;">
+                    <summary style="cursor: pointer; font-size: 0.85rem; color: var(--text-dim);">Ver configuración de texto</summary>
+                    <pre style="background: var(--bg-hover); padding: 12px; border-radius: 8px; font-size: 0.75rem; margin-top: 8px; overflow-x: auto; white-space: pre-wrap; text-align: left;">${escapeHtml(data.config || '')}</pre>
+                </details>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    document.getElementById('close-vpn-qr-modal').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+    // Ajustar tamaño del SVG dentro del QR
+    const svgEl = modal.querySelector('#vpn-qr-container svg');
+    if (svgEl) {
+        svgEl.style.width = '250px';
+        svgEl.style.height = '250px';
+    }
+}
+
+/**
+ * Modal para editar configuración del servidor VPN
+ */
+function showVPNConfigModal(currentStatus) {
+    const existing = document.getElementById('vpn-config-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'vpn-config-modal';
+    modal.className = 'modal active';
+    modal.style.cssText = 'display: flex; position: fixed; inset: 0; z-index: 1000; align-items: center; justify-content: center; background: rgba(0,0,0,0.5);';
+
+    modal.innerHTML = `
+        <div class="glass-card modal-content" style="max-width: 450px; width: 90%;">
+            <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0;">⚙️ Configuración VPN</h3>
+                <button class="btn-close" id="close-vpn-config-modal">&times;</button>
+            </header>
+            <form id="vpn-config-form" style="display: flex; flex-direction: column; gap: 12px;">
+                <div class="input-group">
+                    <input type="text" id="vpn-cfg-endpoint" value="${escapeHtml(currentStatus.endpoint || '')}" placeholder=" ">
+                    <label>Endpoint (dominio o IP pública)</label>
+                </div>
+                <div style="font-size: 0.8rem; color: var(--text-dim);">IP o dominio DDNS por donde se conectan los clientes</div>
+                <div class="input-group">
+                    <input type="number" id="vpn-cfg-port" value="${currentStatus.port || 51820}" min="1024" max="65535" placeholder=" ">
+                    <label>Puerto UDP</label>
+                </div>
+                <div class="input-group">
+                    <input type="text" id="vpn-cfg-dns" value="${escapeHtml(currentStatus.dns || '1.1.1.1, 8.8.8.8')}" placeholder=" ">
+                    <label>Servidores DNS (separados por coma)</label>
+                </div>
+                <button type="submit" class="btn-primary">💾 Guardar</button>
+            </form>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    document.getElementById('close-vpn-config-modal').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+    document.getElementById('vpn-config-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = {
+            endpoint: document.getElementById('vpn-cfg-endpoint').value.trim(),
+            port: parseInt(document.getElementById('vpn-cfg-port').value),
+            dns: document.getElementById('vpn-cfg-dns').value.trim()
+        };
+
+        try {
+            const res = await authFetch(`${API_BASE}/vpn/config`, {
+                method: 'PUT',
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Error');
+            modal.remove();
+            showNotification('Configuración VPN actualizada', 'success');
+            await renderVPNView();
+        } catch (err) {
+            showNotification(`Error: ${err.message}`, 'error');
         }
     });
 }
