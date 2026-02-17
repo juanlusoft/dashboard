@@ -11723,22 +11723,22 @@ let systemArch = null;
 async function renderHomeStoreView() {
     dashboardContent.innerHTML = `
         <div class="section">
-            <div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 10px;">
-                <div id="homestore-status" style="display: flex; gap: 15px; align-items: center;">
+            <div class="homestore-header">
+                <div id="homestore-status" class="homestore-status">
                     <div id="homestore-arch-status"></div>
                     <div id="homestore-docker-status"></div>
                 </div>
             </div>
-            <p style="color: var(--text-secondary); margin-bottom: 20px;">
+            <p class="homestore-description">
                 Instala aplicaciones con un clic. Todas funcionan sobre Docker.
             </p>
-            
-            <div id="homestore-categories" style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;"></div>
-            
-            <div id="homestore-apps" class="grid-3" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;"></div>
+
+            <div id="homestore-categories" class="homestore-categories"></div>
+
+            <div id="homestore-apps" class="homestore-apps-grid"></div>
         </div>
     `;
-    
+
     await loadHomeStoreCatalog();
 }
 
@@ -11766,7 +11766,7 @@ async function loadHomeStoreCatalog() {
         if (archStatusDiv && systemArch) {
             const archLabel = systemArch.isArm ? 'ARM' : (systemArch.isX86 ? 'x86' : systemArch.arch);
             const archIcon = systemArch.isArm ? '🍓' : '💻';
-            archStatusDiv.innerHTML = `<span style="color: var(--text-secondary);">${archIcon} ${archLabel.toUpperCase()}</span>`;
+            archStatusDiv.innerHTML = `<span class="homestore-status-arch">${archIcon} ${archLabel.toUpperCase()}</span>`;
         }
         
         // Check Docker status
@@ -11774,13 +11774,13 @@ async function loadHomeStoreCatalog() {
         const dockerData = await dockerRes.json();
         
         if (!dockerData.available) {
-            dockerStatusDiv.innerHTML = `<span style="color: #ef4444;">⚠️ Docker no disponible</span>`;
+            dockerStatusDiv.innerHTML = `<span class="homestore-status-docker-error">⚠️ Docker no disponible</span>`;
             appsDiv.innerHTML = `
-                <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-secondary);">
-                    <p style="font-size: 48px; margin-bottom: 20px;">🐳</p>
+                <div class="homestore-empty">
+                    <p class="homestore-empty-icon">🐳</p>
                     <p>Docker no está instalado o no está corriendo.</p>
-                    <p style="margin-top: 10px;">Instala Docker primero desde el Gestor de Docker.</p>
-                    <button data-action="go-docker" class="btn" style="margin-top: 20px; background: var(--primary); color: #000; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;">
+                    <p class="homestore-description">Instala Docker primero desde el Gestor de Docker.</p>
+                    <button data-action="go-docker" class="homestore-go-docker-btn">
                         Ir a Gestor de Docker
                     </button>
                 </div>
@@ -11789,7 +11789,7 @@ async function loadHomeStoreCatalog() {
             return;
         }
 
-        dockerStatusDiv.innerHTML = `<span style="color: #10b981;">✓ Docker activo</span>`;
+        dockerStatusDiv.innerHTML = `<span class="homestore-status-docker-active">✓ Docker activo</span>`;
 
         // Load catalog
         const res = await authFetch(`${API_BASE}/homestore/catalog`);
@@ -11802,17 +11802,14 @@ async function loadHomeStoreCatalog() {
         // Render categories
         const categories = Object.entries(data.categories).sort((a, b) => a[1].order - b[1].order);
         categoriesDiv.innerHTML = `
-            <button class="homestore-cat-btn ${homestoreFilter === 'all' ? 'active' : ''}" data-cat="all" 
-                    style="padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border); background: ${homestoreFilter === 'all' ? 'var(--primary)' : 'var(--bg-card)'}; color: ${homestoreFilter === 'all' ? '#000' : 'var(--text)'}; cursor: pointer;">
+            <button class="homestore-cat-btn ${homestoreFilter === 'all' ? 'active' : ''}" data-cat="all">
                 Todas
             </button>
-            <button class="homestore-cat-btn ${homestoreFilter === 'installed' ? 'active' : ''}" data-cat="installed"
-                    style="padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border); background: ${homestoreFilter === 'installed' ? 'var(--primary)' : 'var(--bg-card)'}; color: ${homestoreFilter === 'installed' ? '#000' : 'var(--text)'}; cursor: pointer;">
+            <button class="homestore-cat-btn ${homestoreFilter === 'installed' ? 'active' : ''}" data-cat="installed">
                 ✓ Instaladas
             </button>
             ${categories.map(([id, cat]) => `
-                <button class="homestore-cat-btn ${homestoreFilter === id ? 'active' : ''}" data-cat="${id}"
-                        style="padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border); background: ${homestoreFilter === id ? 'var(--primary)' : 'var(--bg-card)'}; color: ${homestoreFilter === id ? '#000' : 'var(--text)'}; cursor: pointer;">
+                <button class="homestore-cat-btn ${homestoreFilter === id ? 'active' : ''}" data-cat="${id}">
                     ${cat.icon} ${cat.name}
                 </button>
             `).join('')}
@@ -11837,7 +11834,7 @@ async function loadHomeStoreCatalog() {
         // Render apps
         if (apps.length === 0) {
             appsDiv.innerHTML = `
-                <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-secondary);">
+                <div class="homestore-empty">
                     <p>No hay aplicaciones en esta categoría.</p>
                 </div>
             `;
@@ -11863,9 +11860,9 @@ async function loadHomeStoreCatalog() {
     } catch (error) {
         console.error('Error loading HomeStore:', error);
         appsDiv.innerHTML = `
-            <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #ef4444;">
+            <div class="homestore-error">
                 <p>Error al cargar el catálogo: ${error.message}</p>
-                <button data-action="retry-catalog" class="btn" style="margin-top: 20px;">Reintentar</button>
+                <button data-action="retry-catalog" class="homestore-go-docker-btn">Reintentar</button>
             </div>
         `;
         appsDiv.querySelector('[data-action="retry-catalog"]')?.addEventListener('click', () => loadHomeStoreCatalog());
@@ -11888,7 +11885,7 @@ function renderHomeStoreAppCard(app, categories) {
     
     if (!isCompatible) {
         compatWarning = `
-            <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 0.85rem; color: #92400e;">
+            <div class="homestore-compat-warning">
                 ⚠️ No compatible con ${systemArch.arch.toUpperCase()}${archNote ? ` — ${archNote}` : ''}
             </div>
         `;
@@ -11896,28 +11893,28 @@ function renderHomeStoreAppCard(app, categories) {
     
     if (app.installed) {
         if (isRunning) {
-            statusBadge = `<span style="background: #10b981; color: #fff; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem;">● Activa</span>`;
+            statusBadge = `<span class="homestore-status-badge homestore-status-badge--running">● Activa</span>`;
             actionButtons = `
-                <button class="homestore-open-btn" style="background: var(--primary); color: #000; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                <button class="homestore-open-btn">
                     Abrir
                 </button>
-                <button class="homestore-stop-btn" style="background: #6b7280; color: #fff; padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer;">
+                <button class="homestore-stop-btn">
                     ⏹ Parar
                 </button>
-                <button class="homestore-logs-btn" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; cursor: pointer;">
+                <button class="homestore-logs-btn">
                     📋
                 </button>
             `;
         } else {
-            statusBadge = `<span style="background: #6b7280; color: #fff; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem;">○ Parada</span>`;
+            statusBadge = `<span class="homestore-status-badge homestore-status-badge--stopped">○ Parada</span>`;
             actionButtons = `
-                <button class="homestore-start-btn" style="background: #10b981; color: #fff; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                <button class="homestore-start-btn">
                     ▶ Iniciar
                 </button>
-                <button class="homestore-uninstall-btn" style="background: #ef4444; color: #fff; padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer;">
+                <button class="homestore-uninstall-btn">
                     🗑
                 </button>
-                <button class="homestore-update-btn" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; cursor: pointer;">
+                <button class="homestore-update-btn">
                     ↻
                 </button>
             `;
@@ -11925,19 +11922,19 @@ function renderHomeStoreAppCard(app, categories) {
     } else {
         if (isCompatible) {
             actionButtons = `
-                <button class="homestore-install-btn" style="background: var(--primary); color: #000; padding: 8px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                <button class="homestore-install-btn">
                     Instalar
                 </button>
-                <a href="${app.docs}" target="_blank" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; text-decoration: none; display: inline-block;">
+                <a href="${app.docs}" target="_blank" class="homestore-docs-link">
                     📖 Docs
                 </a>
             `;
         } else {
             actionButtons = `
-                <button disabled style="background: #6b7280; color: #fff; padding: 8px 20px; border: none; border-radius: 6px; cursor: not-allowed; font-weight: 500; opacity: 0.6;">
+                <button disabled class="homestore-unavailable-btn">
                     No disponible
                 </button>
-                <a href="${app.docs}" target="_blank" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; text-decoration: none; display: inline-block;">
+                <a href="${app.docs}" target="_blank" class="homestore-docs-link">
                     📖 Docs
                 </a>
             `;
@@ -11947,7 +11944,7 @@ function renderHomeStoreAppCard(app, categories) {
     // Show supported architectures
     const archBadges = appArch.map(a => {
         const isCurrentArch = systemArch && systemArch.arch === a;
-        return `<span style="background: ${isCurrentArch ? '#10b981' : 'var(--bg-card)'}; color: ${isCurrentArch ? '#fff' : 'var(--text-secondary)'}; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; border: 1px solid var(--border);">${a}</span>`;
+        return `<span class="homestore-arch-badge ${isCurrentArch ? 'homestore-arch-badge--current' : 'homestore-arch-badge--other'}">${a}</span>`;
     }).join(' ');
     
     // Build config info section for installed apps
@@ -11960,18 +11957,18 @@ function renderHomeStoreAppCard(app, categories) {
         const volumeEntries = Object.entries(configVolumes).slice(0, 2);
         const volumeInfo = volumeEntries.map(([container, host]) => {
             const shortPath = host.length > 30 ? '...' + host.slice(-27) : host;
-            return `<span style="font-family: monospace; font-size: 0.75rem; color: var(--text-secondary);" title="${escapeHtml(host)}">📁 ${escapeHtml(shortPath)}</span>`;
+            return `<span class="homestore-config-volume-path" title="${escapeHtml(host)}">📁 ${escapeHtml(shortPath)}</span>`;
         }).join('<br>');
-        
+
         // Show port
         const portEntry = Object.entries(configPorts)[0];
-        const portInfo = portEntry ? `<span style="font-family: monospace; font-size: 0.75rem; color: var(--text-secondary);">🌐 :${escapeHtml(portEntry[0].split('/')[0])}</span>` : '';
-        
+        const portInfo = portEntry ? `<span class="homestore-config-port-info">🌐 :${escapeHtml(portEntry[0].split('/')[0])}</span>` : '';
+
         if (volumeInfo || portInfo) {
             configInfoHtml = `
-                <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 0.8rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
-                        <div style="flex: 1; line-height: 1.6;">${volumeInfo}</div>
+                <div class="homestore-config-info">
+                    <div class="homestore-config-info-inner">
+                        <div class="homestore-config-volume-info">${volumeInfo}</div>
                         <div>${portInfo}</div>
                     </div>
                 </div>
@@ -11980,26 +11977,26 @@ function renderHomeStoreAppCard(app, categories) {
     }
     
     return `
-        <div id="homestore-app-${app.id}" class="card" style="background: rgba(30, 30, 50, 0.95); border: 2px solid ${isCompatible ? 'rgba(100, 100, 140, 0.5)' : '#f59e0b'}; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); color: #fff; ${!isCompatible ? 'opacity: 0.7;' : ''}">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    ${app.icon && app.icon.startsWith('http') ? `<img src="${app.icon}" style="width: 48px; height: 48px; border-radius: 8px;" onerror="this.outerHTML='📦'">` : `<span style="font-size: 2rem;">${app.icon || '📦'}</span>`}
+        <div id="homestore-app-${app.id}" class="homestore-card ${!isCompatible ? 'homestore-card--incompatible' : ''}">
+            <div class="homestore-card-header">
+                <div class="homestore-card-icon-row">
+                    ${app.icon && app.icon.startsWith('http') ? `<img src="${app.icon}" class="homestore-card-icon" onerror="this.outerHTML='📦'">` : `<span class="homestore-card-icon-emoji">${app.icon || '📦'}</span>`}
                     <div>
-                        <h3 style="margin: 0; font-size: 1.1rem; color: #fff;">${app.name}</h3>
-                        <span style="color: rgba(255,255,255,0.7); font-size: 0.85rem;">${cat.icon} ${cat.name}</span>
+                        <h3 class="homestore-card-title">${app.name}</h3>
+                        <span class="homestore-card-category">${cat.icon} ${cat.name}</span>
                     </div>
                 </div>
                 ${statusBadge}
             </div>
             ${compatWarning}
-            <p style="color: rgba(255,255,255,0.8); font-size: 0.9rem; margin-bottom: 12px; line-height: 1.4;">
+            <p class="homestore-card-desc">
                 ${app.description}
             </p>
             ${configInfoHtml}
-            <div style="margin-bottom: 12px;">
+            <div class="homestore-arch-badges">
                 ${archBadges}
             </div>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <div class="homestore-actions">
                 ${actionButtons}
             </div>
         </div>
@@ -12057,19 +12054,17 @@ async function showHomeStoreConfigModal(appId) {
         }
         
         return `
-            <div class="homestore-config-volume" style="margin-bottom: 16px;">
-                <label style="color: var(--text-secondary); font-size: 0.85rem; display: block; margin-bottom: 6px;">
-                    ${icon} ${escapeHtml(label)} <code style="font-size: 0.75rem; opacity: 0.7;">(${escapeHtml(containerPath)})</code>
+            <div class="homestore-config-volume">
+                <label class="homestore-config-label">
+                    ${icon} ${escapeHtml(label)} <code class="homestore-config-label-code">(${escapeHtml(containerPath)})</code>
                 </label>
-                <div style="display: flex; gap: 8px;">
-                    <input type="text" 
-                           class="homestore-volume-input" 
+                <div class="homestore-config-input-row">
+                    <input type="text"
+                           class="homestore-volume-input"
                            data-container-path="${escapeHtml(containerPath)}"
                            value="${escapeHtml(savedPath)}"
-                           placeholder="${escapeHtml(hostPath)}"
-                           style="flex: 1; padding: 10px 12px; background: rgba(255,255,255,0.1); border: 1px solid #3a3a5e; border-radius: 8px; color: #fff; font-family: monospace; font-size: 0.9rem;">
+                           placeholder="${escapeHtml(hostPath)}">
                     <button type="button" class="homestore-browse-btn" data-target="${escapeHtml(containerPath)}"
-                            style="padding: 10px 14px; background: rgba(255,255,255,0.1); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; color: var(--text);"
                             title="Explorar carpetas">
                         📂
                     </button>
@@ -12083,19 +12078,18 @@ async function showHomeStoreConfigModal(appId) {
     const portInputs = Object.entries(defaultPorts).map(([hostPort, containerPort]) => {
         const savedPort = previousConfig?.ports?.[hostPort] || hostPort;
         return `
-            <div class="homestore-config-port" style="margin-bottom: 12px;">
-                <label style="color: var(--text-secondary); font-size: 0.85rem; display: block; margin-bottom: 6px;">
+            <div class="homestore-config-port">
+                <label class="homestore-config-label">
                     🌐 Puerto ${escapeHtml(String(containerPort).replace('/udp', ' (UDP)').replace('/tcp', ''))}
                 </label>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <input type="number" 
-                           class="homestore-port-input" 
+                <div class="homestore-port-input-row">
+                    <input type="number"
+                           class="homestore-port-input"
                            data-original-port="${escapeHtml(hostPort)}"
                            data-container-port="${escapeHtml(containerPort)}"
                            value="${escapeHtml(savedPort.toString().split('/')[0])}"
-                           min="1" max="65535"
-                           style="width: 100px; padding: 10px 12px; background: rgba(255,255,255,0.1); border: 1px solid #3a3a5e; border-radius: 8px; color: #fff; font-family: monospace;">
-                    <span style="color: var(--text-secondary);">→ ${escapeHtml(containerPort)}</span>
+                           min="1" max="65535">
+                    <span class="homestore-port-arrow">→ ${escapeHtml(containerPort)}</span>
                 </div>
             </div>
         `;
@@ -12107,16 +12101,15 @@ async function showHomeStoreConfigModal(appId) {
         const savedValue = previousConfig?.env?.[key] ?? value;
         const isPassword = key.toLowerCase().includes('password') || key.toLowerCase().includes('secret');
         return `
-            <div class="homestore-config-env" style="margin-bottom: 12px;">
-                <label style="color: var(--text-secondary); font-size: 0.85rem; display: block; margin-bottom: 6px;">
+            <div class="homestore-config-env">
+                <label class="homestore-config-label">
                     ${isPassword ? '🔑' : '📝'} ${escapeHtml(key)}
                 </label>
-                <input type="${isPassword ? 'password' : 'text'}" 
-                       class="homestore-env-input" 
+                <input type="${isPassword ? 'password' : 'text'}"
+                       class="homestore-env-input"
                        data-env-key="${escapeHtml(key)}"
                        value="${escapeHtml(savedValue)}"
-                       placeholder="${escapeHtml(value)}"
-                       style="width: 100%; padding: 10px 12px; background: rgba(255,255,255,0.1); border: 1px solid #3a3a5e; border-radius: 8px; color: #fff; font-family: monospace; font-size: 0.9rem;">
+                       placeholder="${escapeHtml(value)}">
             </div>
         `;
     }).join('') : '';
@@ -12124,64 +12117,64 @@ async function showHomeStoreConfigModal(appId) {
     // Create the modal
     const modal = document.createElement('div');
     modal.id = 'homestore-config-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.92); display: flex; align-items: center; justify-content: center; z-index: 100000; backdrop-filter: blur(4px);';
+    modal.className = 'homestore-modal-overlay';
     modal.innerHTML = `
-        <div style="background: #1a1a2e; border: 1px solid #3a3a5e; border-radius: 16px; width: 90%; max-width: 600px; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.5);">
-            <div style="padding: 20px 24px; border-bottom: 1px solid #3a3a5e; display: flex; justify-content: space-between; align-items: center; background: #1a1a2e;">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    ${app.icon && app.icon.startsWith('http') ? `<img src="${app.icon}" style="width: 48px; height: 48px; border-radius: 8px;" onerror="this.outerHTML='📦'">` : `<span style="font-size: 2rem;">${app.icon || '📦'}</span>`}
+        <div class="homestore-modal-container">
+            <div class="homestore-modal-header">
+                <div class="homestore-modal-header-content">
+                    ${app.icon && app.icon.startsWith('http') ? `<img src="${app.icon}" class="homestore-modal-header-icon" onerror="this.outerHTML='📦'">` : `<span class="homestore-modal-header-icon-emoji">${app.icon || '📦'}</span>`}
                     <div>
-                        <h3 style="margin: 0; font-size: 1.2rem; color: var(--text);">Configurar ${escapeHtml(app.name)}</h3>
-                        <span style="color: var(--text-secondary); font-size: 0.85rem;">Personaliza la instalación</span>
+                        <h3 class="homestore-modal-title">Configurar ${escapeHtml(app.name)}</h3>
+                        <span class="homestore-modal-subtitle">Personaliza la instalación</span>
                     </div>
                 </div>
-                <button id="homestore-config-close" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); padding: 4px 8px;">&times;</button>
+                <button id="homestore-config-close" class="homestore-modal-close">&times;</button>
             </div>
-            
-            <div style="padding: 24px; overflow-y: auto; flex: 1;">
+
+            <div class="homestore-modal-body">
                 ${previousConfig ? `
-                    <div style="background: rgba(34, 197, 94, 0.1); border: 1px solid #22c55e; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-                        <span style="font-size: 1.2rem;">♻️</span>
+                    <div class="homestore-prev-config-alert">
+                        <span class="homestore-prev-config-icon">♻️</span>
                         <div>
-                            <div style="color: #22c55e; font-weight: 500;">Configuración anterior encontrada</div>
-                            <div style="color: var(--text-secondary); font-size: 0.85rem;">Se han restaurado los paths de la instalación previa</div>
+                            <div class="homestore-prev-config-title">Configuración anterior encontrada</div>
+                            <div class="homestore-prev-config-desc">Se han restaurado los paths de la instalación previa</div>
                         </div>
                     </div>
                 ` : ''}
-                
+
                 ${volumeInputs ? `
-                    <div style="margin-bottom: 24px;">
-                        <h4 style="color: var(--primary); margin: 0 0 16px 0; font-size: 1rem; display: flex; align-items: center; gap: 8px;">
+                    <div class="homestore-config-section">
+                        <h4 class="homestore-config-section-title">
                             📂 Rutas de almacenamiento
                         </h4>
                         ${volumeInputs}
                     </div>
                 ` : ''}
-                
+
                 ${portInputs ? `
-                    <div style="margin-bottom: 24px;">
-                        <h4 style="color: var(--primary); margin: 0 0 16px 0; font-size: 1rem; display: flex; align-items: center; gap: 8px;">
+                    <div class="homestore-config-section">
+                        <h4 class="homestore-config-section-title">
                             🌐 Puertos
                         </h4>
                         ${portInputs}
                     </div>
                 ` : ''}
-                
+
                 ${envInputs ? `
-                    <div style="margin-bottom: 24px;">
-                        <h4 style="color: var(--primary); margin: 0 0 16px 0; font-size: 1rem; display: flex; align-items: center; gap: 8px;">
+                    <div class="homestore-config-section">
+                        <h4 class="homestore-config-section-title">
                             ⚙️ Variables de entorno
                         </h4>
                         ${envInputs}
                     </div>
                 ` : ''}
             </div>
-            
-            <div style="padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 12px; justify-content: flex-end;">
-                <button id="homestore-config-cancel" style="padding: 12px 24px; background: rgba(255,255,255,0.1); border: 1px solid #3a3a5e; border-radius: 8px; cursor: pointer; color: #fff; font-size: 0.95rem;">
+
+            <div class="homestore-modal-footer">
+                <button id="homestore-config-cancel" class="homestore-cancel-btn">
                     Cancelar
                 </button>
-                <button id="homestore-config-install" style="padding: 12px 24px; background: var(--primary); border: none; border-radius: 8px; cursor: pointer; color: #000; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+                <button id="homestore-config-install" class="homestore-install-modal-btn">
                     🚀 Instalar
                 </button>
             </div>
@@ -12211,27 +12204,27 @@ async function showHomeStoreConfigModal(appId) {
             const currentPath = input.value || '/mnt/storage';
             const pickerModal = document.createElement('div');
             pickerModal.id = 'folder-picker-modal';
-            pickerModal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 999999;';
-            
+            pickerModal.className = 'homestore-folder-picker-overlay';
+
             pickerModal.innerHTML = `
-                <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; width: 90%; max-width: 500px; max-height: 70vh; display: flex; flex-direction: column;">
-                    <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-                        <h3 style="margin: 0; font-size: 1rem;">📂 Seleccionar carpeta</h3>
-                        <button id="folder-picker-close" style="background: none; border: none; font-size: 1.3rem; cursor: pointer; color: var(--text-secondary);">&times;</button>
+                <div class="homestore-folder-picker-container">
+                    <div class="homestore-folder-picker-header">
+                        <h3 class="homestore-folder-picker-title">📂 Seleccionar carpeta</h3>
+                        <button id="folder-picker-close" class="homestore-folder-picker-close">&times;</button>
                     </div>
-                    <div style="padding: 16px 20px;">
-                        <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-                            <input type="text" id="folder-picker-path" value="${escapeHtml(currentPath)}" 
-                                   style="flex: 1; padding: 10px 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: monospace;">
-                            <button id="folder-picker-go" style="padding: 10px 14px; background: var(--primary); border: none; border-radius: 8px; cursor: pointer; color: #000;">Ir</button>
+                    <div class="homestore-folder-picker-body">
+                        <div class="homestore-folder-picker-path-row">
+                            <input type="text" id="folder-picker-path" value="${escapeHtml(currentPath)}"
+                                   class="homestore-folder-picker-path-input">
+                            <button id="folder-picker-go" class="homestore-folder-picker-go-btn">Ir</button>
                         </div>
-                        <div id="folder-picker-list" style="max-height: 300px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 8px;">
-                            <div style="padding: 20px; text-align: center; color: var(--text-secondary);">Cargando...</div>
+                        <div id="folder-picker-list" class="homestore-folder-picker-list">
+                            <div class="homestore-folder-picker-loading">Cargando...</div>
                         </div>
                     </div>
-                    <div style="padding: 12px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end;">
-                        <button id="folder-picker-cancel" style="padding: 10px 20px; background: rgba(255,255,255,0.1); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; color: var(--text);">Cancelar</button>
-                        <button id="folder-picker-select" style="padding: 10px 20px; background: var(--primary); border: none; border-radius: 8px; cursor: pointer; color: #000; font-weight: 600;">Seleccionar</button>
+                    <div class="homestore-folder-picker-footer">
+                        <button id="folder-picker-cancel" class="homestore-folder-picker-cancel">Cancelar</button>
+                        <button id="folder-picker-select" class="homestore-folder-picker-select">Seleccionar</button>
                     </div>
                 </div>
             `;
@@ -12250,13 +12243,13 @@ async function showHomeStoreConfigModal(appId) {
             const listDiv = document.getElementById('folder-picker-list');
             
             async function loadFolders(path) {
-                listDiv.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Cargando...</div>';
+                listDiv.innerHTML = '<div class="homestore-folder-picker-loading">Cargando...</div>';
                 try {
                     const res = await authFetch(`${API_BASE}/files/list?path=${encodeURIComponent(path)}`);
                     const data = await res.json();
-                    
+
                     if (!data.success && data.error) {
-                        listDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #ef4444;">${escapeHtml(data.error)}</div>`;
+                        listDiv.innerHTML = `<div class="homestore-folder-picker-error">${escapeHtml(data.error)}</div>`;
                         return;
                     }
                     
@@ -12265,35 +12258,33 @@ async function showHomeStoreConfigModal(appId) {
                     // Add parent directory option
                     let html = '';
                     if (path !== '/') {
-                        html += `<div class="folder-item folder-item-hover" data-path="${escapeHtml(path.split('/').slice(0, -1).join('/') || '/')}"
-                                     style="padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; border-radius: 6px; margin-bottom: 4px;">
-                                    📁 <span style="color: var(--text-secondary);">..</span>
+                        html += `<div class="folder-item-hover" data-path="${escapeHtml(path.split('/').slice(0, -1).join('/') || '/')}">
+                                    📁 <span class="folder-item-parent">..</span>
                                  </div>`;
                     }
-                    
+
                     folders.forEach(f => {
                         const fullPath = path === '/' ? `/${f.name}` : `${path}/${f.name}`;
-                        html += `<div class="folder-item folder-item-hover" data-path="${escapeHtml(fullPath)}"
-                                     style="padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; border-radius: 6px; margin-bottom: 4px;">
+                        html += `<div class="folder-item-hover" data-path="${escapeHtml(fullPath)}">
                                     📁 ${escapeHtml(f.name)}
                                  </div>`;
                     });
-                    
+
                     if (folders.length === 0 && path !== '/') {
-                        html += '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Sin subcarpetas</div>';
+                        html += '<div class="homestore-folder-picker-empty">Sin subcarpetas</div>';
                     }
-                    
-                    listDiv.innerHTML = html || '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Vacío</div>';
+
+                    listDiv.innerHTML = html || '<div class="homestore-folder-picker-empty">Vacío</div>';
                     
                     // Add click handlers for folders
-                    listDiv.querySelectorAll('.folder-item').forEach(item => {
+                    listDiv.querySelectorAll('.folder-item-hover').forEach(item => {
                         item.addEventListener('click', () => {
                             pathInput.value = item.dataset.path;
                             loadFolders(item.dataset.path);
                         });
                     });
                 } catch (e) {
-                    listDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #ef4444;">Error: ${escapeHtml(e.message)}</div>`;
+                    listDiv.innerHTML = `<div class="homestore-folder-picker-error">Error: ${escapeHtml(e.message)}</div>`;
                 }
             }
             
@@ -12451,14 +12442,14 @@ async function showHomeStoreAppLogs(appId) {
         
         // Create modal
         const modal = document.createElement('div');
-        modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; align-items: center; justify-content: center;';
+        modal.className = 'homestore-logs-modal-overlay';
         modal.innerHTML = `
-            <div style="background: var(--bg-card); border-radius: 12px; padding: 20px; width: 90%; max-width: 800px; max-height: 80vh; display: flex; flex-direction: column;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="margin: 0;">📋 Logs: ${appId}</h3>
-                    <button id="close-logs-modal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text);">×</button>
+            <div class="homestore-logs-modal-container">
+                <div class="homestore-logs-modal-header">
+                    <h3 class="homestore-logs-modal-title">📋 Logs: ${appId}</h3>
+                    <button id="close-logs-modal" class="homestore-logs-modal-close">×</button>
                 </div>
-                <pre style="background: #1a1a2e; color: #0f0; padding: 15px; border-radius: 8px; overflow: auto; flex: 1; font-size: 0.85rem; line-height: 1.4;">${data.logs || 'No logs available'}</pre>
+                <pre class="homestore-logs-content">${data.logs || 'No logs available'}</pre>
             </div>
         `;
         
