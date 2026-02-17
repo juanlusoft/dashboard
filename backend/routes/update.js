@@ -15,8 +15,8 @@ const { criticalLimiter } = require('../middleware/rateLimit');
 const { logSecurityEvent } = require('../utils/security');
 
 const INSTALL_DIR = '/opt/homepinas';
-const REPO_URL = 'https://github.com/juanlusoft/homepinas-v2.git';
-const EXPECTED_REMOTE = 'github.com/juanlusoft/homepinas-v2'; // SECURITY: Expected repo pattern
+const REPO_URL = 'https://github.com/juanlusoft/dashboard.git';
+const EXPECTED_REMOTE = 'github.com/juanlusoft/dashboard'; // SECURITY: Expected repo pattern
 
 // Check for updates
 router.get('/check', requireAuth, async (req, res) => {
