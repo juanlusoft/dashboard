@@ -7,11 +7,21 @@
  * - Crear/eliminar clientes con QR codes
  * - Ver estado y clientes conectados
  * - Configuración de puerto y DNS
+ *
+ * SECURITY:
+ * - Claves privadas NUNCA se guardan en data.json
+ * - Clave privada del servidor solo existe en /etc/wireguard/wg0.conf
+ * - Claves privadas de clientes se guardan en /etc/wireguard/clients/<name>.conf
+ * - data.json solo almacena metadatos (nombre, IP, publicKey, fecha, revoked)
+ * - Solo usuarios admin pueden gestionar VPN (requireAdmin middleware)
+ * - Interfaz de red detectada dinámicamente (no hardcoded eth0)
+ * - wg syncconf para recargar sin desconectar peers
  */
 
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/rbac');
 const { logSecurityEvent, sudoExec } = require('../utils/security');
 const { getData, saveData } = require('../utils/data');
 const { execFile, spawn } = require('child_process');
@@ -19,6 +29,7 @@ const { promisify } = require('util');
 const execFileAsync = promisify(execFile);
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 /**
  * Helper: ejecutar comando con stdin usando spawn
@@ -45,8 +56,9 @@ const WG_DIR = '/etc/wireguard';
 const WG_CONF = path.join(WG_DIR, 'wg0.conf');
 const WG_CLIENTS_DIR = path.join(WG_DIR, 'clients');
 
-// Todas las rutas requieren autenticación
+// Todas las rutas requieren autenticación + admin
 router.use(requireAuth);
+router.use(requireAdmin);
 
 // --- Helpers ---
 
@@ -87,10 +99,35 @@ async function isServiceEnabled() {
 }
 
 /**
+ * Detectar la interfaz de red predeterminada dinámicamente.
+ * Usa `ip route show default` para obtener la interfaz real.
+ * En Pi CM5 puede ser end0, eth1, wlan0, etc.
+ */
+async function getDefaultInterface() {
+    try {
+        const { stdout } = await execFileAsync('ip', ['route', 'show', 'default']);
+        const match = stdout.match(/dev\s+(\S+)/);
+        if (match && match[1]) return match[1];
+    } catch (e) {
+        console.warn('[VPN] No se pudo detectar interfaz por defecto via ip route:', e.message);
+    }
+
+    // Fallback: buscar primera interfaz IPv4 no-interna
+    const interfaces = os.networkInterfaces();
+    for (const [name, addrs] of Object.entries(interfaces)) {
+        for (const addr of addrs) {
+            if (addr.family === 'IPv4' && !addr.internal) {
+                return name;
+            }
+        }
+    }
+    return 'eth0';
+}
+
+/**
  * Obtener la IP local principal del servidor
  */
 function getServerLocalIP() {
-    const os = require('os');
     const interfaces = os.networkInterfaces();
     for (const iface of Object.values(interfaces)) {
         for (const addr of iface) {
@@ -143,6 +180,7 @@ async function generatePresharedKey() {
 
 /**
  * Leer la configuración VPN almacenada en data.json
+ * NOTA: Solo metadatos, NUNCA claves privadas
  */
 function getVpnConfig() {
     const data = getData();
@@ -154,7 +192,6 @@ function getVpnConfig() {
             subnet: '10.66.66.0/24',
             endpoint: '',
             serverPublicKey: '',
-            serverPrivateKey: '',
             clients: []
         };
     }
@@ -162,7 +199,7 @@ function getVpnConfig() {
 }
 
 /**
- * Guardar configuración VPN
+ * Guardar configuración VPN (solo metadatos)
  */
 function saveVpnConfig(vpnConfig) {
     const data = getData();
@@ -171,18 +208,21 @@ function saveVpnConfig(vpnConfig) {
 }
 
 /**
- * Generar el archivo wg0.conf del servidor
+ * Generar el archivo wg0.conf del servidor.
+ * Requiere la clave privada del servidor como parámetro (no la lee de data.json).
+ * Detecta la interfaz de red dinámicamente.
  */
-function generateServerConfig(vpnConfig) {
+function generateServerConfig(vpnConfig, serverPrivateKey, netInterface) {
     const serverAddr = vpnConfig.subnet.split('/')[0].replace(/\.\d+$/, '.1');
+    const iface = netInterface || 'eth0';
     let config = '[Interface]\n';
     config += `Address = ${serverAddr}/24\n`;
     config += `ListenPort = ${vpnConfig.port}\n`;
-    config += `PrivateKey = ${vpnConfig.serverPrivateKey}\n`;
-    config += 'PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE\n';
-    config += 'PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE\n';
+    config += `PrivateKey = ${serverPrivateKey}\n`;
+    config += `PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o ${iface} -j MASQUERADE\n`;
+    config += `PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o ${iface} -j MASQUERADE\n`;
 
-    // Añadir peers (clientes)
+    // Añadir peers (clientes) - solo publicKey y presharedKey (no privateKey)
     const clients = vpnConfig.clients || [];
     for (const client of clients) {
         if (!client.revoked) {
@@ -198,18 +238,19 @@ function generateServerConfig(vpnConfig) {
 }
 
 /**
- * Generar configuración de cliente
+ * Generar configuración de cliente.
+ * La clave privada del cliente se lee del archivo en disco, no de data.json.
  */
-function generateClientConfig(vpnConfig, client) {
+function generateClientConfig(vpnConfig, clientPrivateKey, clientAddress, clientPresharedKey) {
     const serverAddress = vpnConfig.endpoint || getServerLocalIP();
     let config = '[Interface]\n';
-    config += `PrivateKey = ${client.privateKey}\n`;
-    config += `Address = ${client.address}/32\n`;
+    config += `PrivateKey = ${clientPrivateKey}\n`;
+    config += `Address = ${clientAddress}/32\n`;
     config += `DNS = ${vpnConfig.dns}\n`;
     config += '\n';
     config += '[Peer]\n';
     config += `PublicKey = ${vpnConfig.serverPublicKey}\n`;
-    config += `PresharedKey = ${client.presharedKey}\n`;
+    config += `PresharedKey = ${clientPresharedKey}\n`;
     config += `Endpoint = ${serverAddress}:${vpnConfig.port}\n`;
     config += 'AllowedIPs = 0.0.0.0/0, ::/0\n';
     config += 'PersistentKeepalive = 25\n';
@@ -219,13 +260,98 @@ function generateClientConfig(vpnConfig, client) {
 /**
  * Escribir la configuración del servidor al disco
  */
-async function writeServerConfig(vpnConfig) {
-    const config = generateServerConfig(vpnConfig);
+async function writeServerConfig(vpnConfig, serverPrivateKey) {
+    const netInterface = await getDefaultInterface();
+    const config = generateServerConfig(vpnConfig, serverPrivateKey, netInterface);
     const tmpFile = '/tmp/wg0.conf.tmp';
     fs.writeFileSync(tmpFile, config, { mode: 0o600 });
     await sudoExec('cp', [tmpFile, WG_CONF]);
     await sudoExec('chmod', ['600', WG_CONF]);
     fs.unlinkSync(tmpFile);
+}
+
+/**
+ * Guardar configuración de cliente en /etc/wireguard/clients/<name>.conf
+ */
+async function saveClientConfFile(clientName, configContent) {
+    const tmpFile = `/tmp/vpn-client-${clientName}.conf`;
+    const destFile = path.join(WG_CLIENTS_DIR, `${clientName}.conf`);
+    fs.writeFileSync(tmpFile, configContent, { mode: 0o600 });
+    await sudoExec('cp', [tmpFile, destFile]);
+    await sudoExec('chmod', ['600', destFile]);
+    fs.unlinkSync(tmpFile);
+}
+
+/**
+ * Leer configuración de cliente desde /etc/wireguard/clients/<name>.conf
+ */
+async function readClientConfFile(clientName) {
+    const confPath = path.join(WG_CLIENTS_DIR, `${clientName}.conf`);
+    try {
+        const { stdout } = await sudoExec('cat', [confPath]);
+        return stdout;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Eliminar configuración de cliente del disco
+ */
+async function deleteClientConfFile(clientName) {
+    const confPath = path.join(WG_CLIENTS_DIR, `${clientName}.conf`);
+    try {
+        // Sobrescribir con ceros antes de eliminar (seguridad)
+        await sudoExec('tee', [confPath], { timeout: 5000 });
+    } catch {
+        // Ignorar si no existe
+    }
+}
+
+/**
+ * Leer la clave privada del servidor desde wg0.conf
+ */
+async function readServerPrivateKey() {
+    try {
+        const { stdout } = await sudoExec('cat', [WG_CONF]);
+        const match = stdout.match(/PrivateKey\s*=\s*(\S+)/);
+        return match ? match[1] : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Recargar configuración de WireGuard sin desconectar peers.
+ * Genera un stripped config (sin PostUp/PostDown que wg no entiende)
+ * y usa wg syncconf para hot-reload. Si falla, hace restart completo.
+ */
+async function reloadWireguard() {
+    const status = await getServiceStatus();
+    if (status !== 'active') return;
+
+    try {
+        // Leer wg0.conf y eliminar las líneas que wg syncconf no soporta
+        // (Address, PostUp, PostDown, DNS, SaveConfig)
+        const { stdout: fullConf } = await sudoExec('cat', [WG_CONF]);
+        const unsupportedKeys = /^\s*(Address|PostUp|PostDown|DNS|SaveConfig)\s*=/i;
+        const strippedLines = fullConf.split('\n').filter(line => !unsupportedKeys.test(line));
+        const stripped = strippedLines.join('\n');
+
+        const tmpStripped = '/tmp/wg0-stripped.conf';
+        fs.writeFileSync(tmpStripped, stripped, { mode: 0o600 });
+
+        await sudoExec('wg', ['syncconf', 'wg0', tmpStripped]);
+        fs.unlinkSync(tmpStripped);
+        console.log('[VPN] Configuración recargada con wg syncconf (sin desconectar peers)');
+    } catch (e) {
+        console.warn('[VPN] wg syncconf falló, haciendo restart completo:', e.message);
+        try {
+            await sudoExec('systemctl', ['restart', 'wg-quick@wg0']);
+        } catch (restartErr) {
+            console.error('[VPN] Error en restart fallback:', restartErr.message);
+        }
+    }
 }
 
 /**
@@ -318,6 +444,7 @@ router.get('/status', async (req, res) => {
             id: c.id,
             name: c.name,
             address: c.address,
+            publicKey: c.publicKey,
             createdAt: c.createdAt,
             revoked: c.revoked || false
         }));
@@ -375,7 +502,7 @@ router.post('/install', async (req, res) => {
         // Configurar
         const vpnConfig = getVpnConfig();
         vpnConfig.installed = true;
-        vpnConfig.serverPrivateKey = serverKeys.privateKey;
+        // Solo guardamos la clave pública en data.json
         vpnConfig.serverPublicKey = serverKeys.publicKey;
 
         // Obtener endpoint (IP pública o DDNS configurado)
@@ -391,8 +518,8 @@ router.post('/install', async (req, res) => {
             }
         }
 
-        // Escribir configuración del servidor
-        await writeServerConfig(vpnConfig);
+        // Escribir configuración del servidor (clave privada solo va al archivo)
+        await writeServerConfig(vpnConfig, serverKeys.privateKey);
         saveVpnConfig(vpnConfig);
 
         logSecurityEvent('vpn_installed', {
@@ -512,13 +639,14 @@ router.put('/config', async (req, res) => {
             vpnConfig.endpoint = endpoint.trim();
         }
 
-        // Reescribir configuración
-        if (vpnConfig.serverPrivateKey) {
-            await writeServerConfig(vpnConfig);
+        // Reescribir configuración (leer clave privada del servidor desde disco)
+        const serverPrivateKey = await readServerPrivateKey();
+        if (serverPrivateKey) {
+            await writeServerConfig(vpnConfig, serverPrivateKey);
         }
         saveVpnConfig(vpnConfig);
 
-        // Reiniciar si estaba activo
+        // Reiniciar si estaba activo (cambio de puerto requiere restart completo)
         const status = await getServiceStatus();
         if (status === 'active') {
             await sudoExec('systemctl', ['restart', 'wg-quick@wg0']);
@@ -562,10 +690,10 @@ router.post('/clients', async (req, res) => {
         const presharedKey = await generatePresharedKey();
         const clientIP = getNextClientIP(vpnConfig);
 
-        const client = {
+        // En data.json solo guardamos metadatos (NO la clave privada)
+        const clientMeta = {
             id: Date.now().toString(36),
             name: safeName,
-            privateKey: clientKeys.privateKey,
             publicKey: clientKeys.publicKey,
             presharedKey: presharedKey,
             address: clientIP,
@@ -573,14 +701,20 @@ router.post('/clients', async (req, res) => {
             revoked: false
         };
 
-        vpnConfig.clients.push(client);
+        vpnConfig.clients.push(clientMeta);
         saveVpnConfig(vpnConfig);
 
         // Reescribir config del servidor con el nuevo peer
-        await writeServerConfig(vpnConfig);
+        const serverPrivateKey = await readServerPrivateKey();
+        if (serverPrivateKey) {
+            await writeServerConfig(vpnConfig, serverPrivateKey);
+        }
 
-        // Generar configuración del cliente
-        const clientConf = generateClientConfig(vpnConfig, client);
+        // Generar configuración del cliente (con clave privada)
+        const clientConf = generateClientConfig(vpnConfig, clientKeys.privateKey, clientIP, presharedKey);
+
+        // Guardar .conf del cliente en disco (clave privada solo aquí)
+        await saveClientConfFile(safeName, clientConf);
 
         // Generar QR code como SVG
         let qrSvg = null;
@@ -591,15 +725,8 @@ router.post('/clients', async (req, res) => {
             console.warn('[VPN] No se pudo generar QR:', e.message);
         }
 
-        // Si el servicio está activo, recargar la configuración
-        const status = await getServiceStatus();
-        if (status === 'active') {
-            try {
-                await sudoExec('systemctl', ['restart', 'wg-quick@wg0']);
-            } catch (e) {
-                console.warn('[VPN] Error recargando WireGuard:', e.message);
-            }
-        }
+        // Si el servicio está activo, recargar sin desconectar peers
+        await reloadWireguard();
 
         logSecurityEvent('vpn_client_created', {
             user: req.user,
@@ -610,10 +737,10 @@ router.post('/clients', async (req, res) => {
         res.status(201).json({
             success: true,
             client: {
-                id: client.id,
-                name: client.name,
-                address: client.address,
-                createdAt: client.createdAt
+                id: clientMeta.id,
+                name: clientMeta.name,
+                address: clientMeta.address,
+                createdAt: clientMeta.createdAt
             },
             config: clientConf,
             qrSvg
@@ -626,6 +753,7 @@ router.post('/clients', async (req, res) => {
 
 /**
  * GET /clients/:id/config - Obtener configuración de un cliente (para descargar/QR)
+ * Lee la clave privada desde el archivo en disco, nunca de data.json
  */
 router.get('/clients/:id/config', async (req, res) => {
     try {
@@ -640,7 +768,11 @@ router.get('/clients/:id/config', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Cliente revocado' });
         }
 
-        const clientConf = generateClientConfig(vpnConfig, client);
+        // Leer .conf del disco
+        const clientConf = await readClientConfFile(client.name);
+        if (!clientConf) {
+            return res.status(404).json({ success: false, error: 'Archivo de configuración del cliente no encontrado' });
+        }
 
         // Generar QR
         let qrSvg = null;
@@ -682,23 +814,20 @@ router.delete('/clients/:id', async (req, res) => {
         const client = vpnConfig.clients[clientIndex];
         client.revoked = true;
         client.revokedAt = new Date().toISOString();
-        // Limpiar claves privadas por seguridad
-        client.privateKey = '[REVOKED]';
 
         saveVpnConfig(vpnConfig);
 
-        // Reescribir config del servidor sin este peer
-        await writeServerConfig(vpnConfig);
+        // Eliminar archivo .conf del cliente (contiene la clave privada)
+        await deleteClientConfFile(client.name);
 
-        // Reiniciar si activo
-        const status = await getServiceStatus();
-        if (status === 'active') {
-            try {
-                await sudoExec('systemctl', ['restart', 'wg-quick@wg0']);
-            } catch (e) {
-                console.warn('[VPN] Error recargando WireGuard:', e.message);
-            }
+        // Reescribir config del servidor sin este peer
+        const serverPrivateKey = await readServerPrivateKey();
+        if (serverPrivateKey) {
+            await writeServerConfig(vpnConfig, serverPrivateKey);
         }
+
+        // Recargar sin desconectar otros peers
+        await reloadWireguard();
 
         logSecurityEvent('vpn_client_revoked', {
             user: req.user,
@@ -732,7 +861,6 @@ router.post('/uninstall', async (req, res) => {
         // Limpiar configuración local
         const vpnConfig = getVpnConfig();
         vpnConfig.installed = false;
-        vpnConfig.serverPrivateKey = '';
         vpnConfig.serverPublicKey = '';
         vpnConfig.clients = [];
         saveVpnConfig(vpnConfig);

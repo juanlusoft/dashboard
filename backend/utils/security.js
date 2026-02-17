@@ -43,7 +43,7 @@ async function safeExec(command, args = [], options = {}) {
         'apcaccess', 'apctest', 'upsc', 'upscmd', 'rsync', 'tar',
         'crontab', 'mv', 'grep', 'blkid', 'lsblk', 'findmnt',
         'mkswap', 'swapon', 'swapoff', 'fdisk', 'xorriso', 'mksquashfs',
-        'wg', 'qrencode', 'which'
+        'wg', 'qrencode', 'which', 'ip'
     ];
 
     // Require absolute path or resolve from PATH - no path traversal tricks
@@ -71,7 +71,7 @@ async function safeExec(command, args = [], options = {}) {
 async function sudoExec(subCommand, args = [], options = {}) {
     // SECURITY: Only these commands can be run with sudo
     const allowedSudoCommands = [
-        'cp', 'mv', 'chown', 'chmod', 'mkdir', 'tee',
+        'cp', 'mv', 'chown', 'chmod', 'mkdir', 'tee', 'cat',
         'systemctl', 'smbpasswd', 'useradd', 'usermod', 'userdel',
         'mount', 'umount', 'mkfs.ext4', 'mkfs.xfs', 'parted', 'partprobe',
         'samba-tool', 'net', 'testparm',
