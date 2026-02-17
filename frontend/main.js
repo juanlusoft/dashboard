@@ -691,7 +691,7 @@ function showDiskActionModal() {
             <div class="dash-disk-modal-header">
                 <h3 class="dash-disk-modal-title">🆕 Configurar Nuevo Disco</h3>
                 <div class="dash-disk-modal-btns">
-                    <button id="disk-modal-minimize" class="dash-disk-modal-icon-btn" style="display: none;" title="Minimizar">─</button>
+                    <button id="disk-modal-minimize" class="dash-disk-modal-icon-btn dash-minimize-hidden" title="Minimizar">─</button>
                     <button id="disk-modal-close" class="dash-disk-modal-icon-btn dash-disk-modal-icon-btn--close">×</button>
                 </div>
             </div>
@@ -1032,7 +1032,7 @@ async function applyDiskActions() {
                 const resultEl = document.getElementById(`progress-${disk.id}-result`);
                 if (resultEl) {
                     resultEl.style.display = 'block';
-                    resultEl.innerHTML = `<span style="color: #10b981; font-weight: 600;">✅ ${data.message || 'Completado'}</span>`;
+                    resultEl.innerHTML = `<span class="dash-status-success">✅ ${data.message || 'Completado'}</span>`;
                 }
             } else if (res) {
                 const err = await res.json().catch(() => ({ error: 'Error desconocido' }));
@@ -1046,7 +1046,7 @@ async function applyDiskActions() {
                 const resultEl = document.getElementById(`progress-${disk.id}-result`);
                 if (resultEl) {
                     resultEl.style.display = 'block';
-                    resultEl.innerHTML = `<span style="color: #ef4444; font-weight: 600;">&#10060; ${escapeHtml(err.error)}</span>`;
+                    resultEl.innerHTML = `<span class="dash-status-error">&#10060; ${escapeHtml(err.error)}</span>`;
                 }
             }
         } catch (e) {
@@ -1063,7 +1063,7 @@ async function applyDiskActions() {
             const resultEl = document.getElementById(`progress-${disk.id}-result`);
             if (resultEl) {
                 resultEl.style.display = 'block';
-                resultEl.innerHTML = `<span style="color: #ef4444; font-weight: 600;">&#10060; ${escapeHtml(e.message)}</span>`;
+                resultEl.innerHTML = `<span class="dash-status-error">&#10060; ${escapeHtml(e.message)}</span>`;
             }
         }
     }
@@ -3066,8 +3066,8 @@ async function renderDockerManager() {
         emptyCard.className = 'glass-card';
         emptyCard.style.cssText = 'grid-column: 1/-1; text-align:center; padding: 40px;';
         emptyCard.innerHTML = `
-            <h4 style="color: var(--text-dim);">${t("docker.noContainers", "No Containers Detected")}</h4>
-            <p style="color: var(--text-dim); font-size: 0.9rem;">Import a docker-compose file or run containers manually.</p>
+            <h4 class="docker-empty-title">${t("docker.noContainers", "No Containers Detected")}</h4>
+            <p class="docker-empty-subtitle">Import a docker-compose file or run containers manually.</p>
         `;
         dashboardContent.appendChild(emptyCard);
     } else {
@@ -3131,13 +3131,13 @@ async function renderDockerManager() {
                 const statsRow = document.createElement('div');
                 statsRow.style.cssText = 'display: flex; gap: 20px; margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 8px;';
                 statsRow.innerHTML = `
-                    <div style="flex: 1; text-align: center;">
-                        <div style="font-size: 0.7rem; color: var(--text-dim);">CPU</div>
-                        <div style="font-size: 1rem; font-weight: 600; color: ${cpuNum > 50 ? '#f59e0b' : '#10b981'}">${escapeHtml(cpuVal)}</div>
+                    <div class="docker-stat-cell">
+                        <div class="docker-stat-label">CPU</div>
+                        <div class="docker-stat-value ${cpuNum > 50 ? 'docker-stat-value-cpu-warn' : 'docker-stat-value-cpu-ok'}">${escapeHtml(cpuVal)}</div>
                     </div>
-                    <div style="flex: 1; text-align: center;">
-                        <div style="font-size: 0.7rem; color: var(--text-dim);">RAM</div>
-                        <div style="font-size: 1rem; font-weight: 600; color: #6366f1;">${escapeHtml(ramVal)}</div>
+                    <div class="docker-stat-cell">
+                        <div class="docker-stat-label">RAM</div>
+                        <div class="docker-stat-value docker-stat-value-ram">${escapeHtml(ramVal)}</div>
                     </div>
                 `;
                 card.appendChild(statsRow);
@@ -3397,33 +3397,24 @@ function openComposeModal() {
     `;
 
     modal.innerHTML = `
-        <div style="background: var(--card-bg); padding: 30px; border-radius: 16px; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="margin: 0;">${t('docker.importCompose', 'Importar Docker Compose')}</h3>
-                <button id="close-compose-modal" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer;">&times;</button>
+        <div class="docker-compose-modal">
+            <div class="docker-compose-header">
+                <h3 class="docker-compose-title">${t('docker.importCompose', 'Importar Docker Compose')}</h3>
+                <button id="close-compose-modal" class="docker-compose-close">&times;</button>
             </div>
-            <div class="input-group" style="margin-bottom: 15px;">
+            <div class="input-group docker-compose-input-group">
                 <input type="text" id="compose-name" placeholder=" " required>
                 <label>${t('docker.stackName', 'Nombre del Stack')}</label>
             </div>
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 8px; color: var(--text-dim);">docker-compose.yml content:</label>
-                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                    <label style="
-                        flex: 1; padding: 12px; background: rgba(99, 102, 241, 0.2);
-                        border: 2px dashed rgba(99, 102, 241, 0.5); border-radius: 8px;
-                        color: #6366f1; text-align: center; cursor: pointer;
-                        transition: all 0.2s ease;
-                    ">
+            <div class="docker-compose-label-wrap">
+                <label class="docker-compose-label">docker-compose.yml content:</label>
+                <div class="docker-compose-file-row">
+                    <label class="docker-compose-file-label">
                         📁 ${t('docker.uploadYml', 'Subir archivo .yml')}
-                        <input type="file" id="compose-file-input" accept=".yml,.yaml" style="display: none;">
+                        <input type="file" id="compose-file-input" accept=".yml,.yaml" class="docker-compose-file-input">
                     </label>
                 </div>
-                <textarea id="compose-content" style="
-                    width: 100%; height: 300px; background: rgba(0,0,0,0.3);
-                    border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
-                    color: white; font-family: monospace; padding: 15px; resize: vertical;
-                " placeholder="version: '3'
+                <textarea id="compose-content" class="docker-compose-textarea" placeholder="version: '3'
 services:
   myapp:
     image: nginx:latest
@@ -3431,8 +3422,8 @@ services:
       - '8080:80'"></textarea>
             </div>
             <div class="cloudbackup-sync-input-group">
-                <button id="save-compose-btn" class="btn-primary" style="flex: 1; padding: 12px;">${t('docker.saveCompose', 'Guardar Compose')}</button>
-                <button id="save-run-compose-btn" class="btn-primary" style="flex: 1; padding: 12px; background: #10b981;">${t('docker.saveAndRun', 'Guardar y Ejecutar')}</button>
+                <button id="save-compose-btn" class="btn-primary docker-compose-save-btn">${t('docker.saveCompose', 'Guardar Compose')}</button>
+                <button id="save-run-compose-btn" class="btn-primary docker-compose-save-run-btn">${t('docker.saveAndRun', 'Guardar y Ejecutar')}</button>
             </div>
         </div>
     `;
@@ -3481,7 +3472,7 @@ async function saveCompose(andRun) {
     const modal = document.getElementById("compose-modal");
     const modalContent = modal.querySelector("div");
     modalContent.innerHTML = `
-        <h3 style="margin: 0 0 20px 0;">Desplegando Stack: ${escapeHtml(name)}</h3>
+        <h3 class="docker-deploy-title">Desplegando Stack: ${escapeHtml(name)}</h3>
         <div id="deploy-steps">
             <div class="deploy-step" id="step-save">
                 <span class="step-icon">⏳</span>
@@ -3496,15 +3487,15 @@ async function saveCompose(andRun) {
                 <span class="step-text">Iniciando contenedores...</span>
             </div>` : ""}
         </div>
-        <div style="margin: 20px 0;">
-            <div style="background: rgba(255,255,255,0.1); border-radius: 8px; height: 8px; overflow: hidden;">
-                <div id="deploy-progress" style="height: 100%; background: linear-gradient(90deg, #6366f1, #10b981); width: 0%; transition: width 0.3s ease;"></div>
+        <div class="docker-deploy-progress-wrap">
+            <div class="docker-deploy-progress-bg">
+                <div id="deploy-progress" class="docker-deploy-progress-bar"></div>
             </div>
-            <div id="deploy-status" style="margin-top: 10px; font-size: 0.9rem; color: var(--text-dim); text-align: center;">Inicializando...</div>
+            <div id="deploy-status" class="docker-deploy-status">Inicializando...</div>
         </div>
-        <div id="deploy-log" style="display: none; margin: 15px 0; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px; font-family: monospace; font-size: 0.8rem; max-height: 200px; overflow-y: auto; white-space: pre-wrap;"></div>
-        <div id="deploy-actions" style="display: none; text-align: center;">
-            <button id="deploy-close-btn" class="btn-primary" style="padding: 12px 30px;">Accept</button>
+        <div id="deploy-log" class="docker-deploy-log"></div>
+        <div id="deploy-actions" class="docker-deploy-actions">
+            <button id="deploy-close-btn" class="btn-primary docker-deploy-close">Accept</button>
         </div>
     `;
 
@@ -3678,26 +3669,22 @@ async function openEditComposeModal(composeName) {
     const modal = document.createElement('div');
     modal.className = 'modal active';
     modal.innerHTML = `
-        <div class="glass-card modal-content" style="max-width: 700px; max-height: 80vh; overflow-y: auto;">
+        <div class="glass-card modal-content docker-edit-modal">
             <header class="modal-header">
                 <h3>✏️ ${t('docker.editCompose', 'Editar Compose')}: ${escapeHtml(composeName)}</h3>
                 <button id="close-edit-compose" class="btn-close">&times;</button>
             </header>
-            <div style="padding: 20px;">
-                <textarea id="edit-compose-content" style="
-                    width: 100%; height: 400px; background: rgba(0,0,0,0.3);
-                    border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
-                    color: white; font-family: monospace; padding: 15px; resize: vertical;
-                ">${escapeHtml(content)}</textarea>
+            <div class="docker-edit-padding">
+                <textarea id="edit-compose-content" class="docker-edit-textarea">${escapeHtml(content)}</textarea>
             </div>
-            <div class="modal-footer" style="display: flex; gap: 10px; padding: 15px;">
-                <button id="cancel-edit-compose" class="btn-primary" style="background: var(--text-dim);">
+            <div class="modal-footer docker-edit-footer">
+                <button id="cancel-edit-compose" class="btn-primary docker-edit-cancel">
                     ${t('common.cancel', 'Cancelar')}
                 </button>
                 <button id="save-edit-compose" class="btn-primary">
                     ${t('common.save', 'Guardar')}
                 </button>
-                <button id="save-run-edit-compose" class="btn-primary" style="background: #10b981;">
+                <button id="save-run-edit-compose" class="btn-primary docker-edit-save-run">
                     ${t('docker.saveAndRun', 'Guardar y Ejecutar')}
                 </button>
             </div>
@@ -4224,7 +4211,7 @@ function renderSystemView() {
     const updateStatus = document.createElement('div');
     updateStatus.id = 'update-status';
     updateStatus.style.cssText = 'margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px;';
-    updateStatus.innerHTML = `<span style="color: var(--text-dim);">${t('system.clickToCheck', 'Haz clic en "Buscar" para verificar...')}</span>`;
+    updateStatus.innerHTML = `<span class="misc-status-placeholder">${t('system.clickToCheck', 'Haz clic en "Buscar" para verificar...')}</span>`;
 
     const dashBtnContainer = document.createElement('div');
     dashBtnContainer.style.cssText = 'display: flex; gap: 15px; margin-top: 20px;';
@@ -4264,7 +4251,7 @@ function renderSystemView() {
     const osStatus = document.createElement('div');
     osStatus.id = 'os-update-status';
     osStatus.style.cssText = 'margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px;';
-    osStatus.innerHTML = `<span style="color: var(--text-dim);">${t('system.clickToCheck', 'Haz clic en "Buscar" para verificar...')}</span>`;
+    osStatus.innerHTML = `<span class="misc-status-placeholder">${t('system.clickToCheck', 'Haz clic en "Buscar" para verificar...')}</span>`;
 
     const osBtnContainer = document.createElement('div');
     osBtnContainer.style.cssText = 'display: flex; gap: 15px; margin-top: 20px;';
@@ -4332,7 +4319,7 @@ async function checkForUpdates() {
 
     if (!statusEl) return;
 
-    statusEl.innerHTML = `<span style="color: #f59e0b;">${t('system.checkingUpdates', 'Buscando actualizaciones...')}</span>`;
+    statusEl.innerHTML = `<span class="misc-status-checking">${t('system.checkingUpdates', 'Buscando actualizaciones...')}</span>`;
     if (applyBtn) applyBtn.style.display = 'none';
 
     try {
@@ -4345,33 +4332,33 @@ async function checkForUpdates() {
 
         // Warning for local changes
         const localChangesWarning = data.localChanges ? `
-            <div style="margin-top: 12px; padding: 10px; background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; border-radius: 8px;">
-                <div style="color: #f59e0b; font-weight: 600;">⚠️ Cambios locales detectados</div>
-                <div style="margin-top: 4px; font-size: 0.85rem; color: var(--text-dim);">
+            <div class="misc-update-warning-box">
+                <div class="misc-update-warning-title">⚠️ Cambios locales detectados</div>
+                <div class="misc-update-warning-text">
                     Hay archivos modificados localmente. La actualización hará <code>git reset --hard</code> y perderás estos cambios:
                 </div>
-                <code style="display: block; margin-top: 5px; padding: 6px; background: rgba(0,0,0,0.2); border-radius: 4px; font-size: 0.8rem;">${escapeHtml((data.localChangesFiles || []).join('\n'))}</code>
+                <code class="misc-update-code">${escapeHtml((data.localChangesFiles || []).join('\n'))}</code>
             </div>
         ` : '';
 
         if (data.updateAvailable) {
             statusEl.innerHTML = `
-                <div style="color: #10b981; font-weight: 600;">${t('system.updateAvailable', '¡Actualización Disponible!')}</div>
-                <div style="margin-top: 8px; color: var(--text-dim);">
+                <div class="misc-update-available-title">${t('system.updateAvailable', '¡Actualización Disponible!')}</div>
+                <div class="misc-update-version-info">
                     ${t('system.current', 'Actual')}: <strong>v${escapeHtml(data.currentVersion)}</strong> →
-                    ${t('system.latest', 'Última')}: <strong style="color: #10b981;">v${escapeHtml(data.latestVersion)}</strong>
+                    ${t('system.latest', 'Última')}: <strong class="misc-update-version-highlight">v${escapeHtml(data.latestVersion)}</strong>
                 </div>
-                <div style="margin-top: 10px; font-size: 0.85rem; color: var(--text-dim);">
+                <div class="misc-update-changelog-wrap">
                     <strong>${t('system.changes', 'Cambios')}:</strong><br>
-                    <code style="display: block; margin-top: 5px; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 4px; white-space: pre-wrap;">${escapeHtml(data.changelog || t('common.info', 'Ver GitHub para detalles'))}</code>
+                    <code class="misc-update-changelog-code">${escapeHtml(data.changelog || t('common.info', 'Ver GitHub para detalles'))}</code>
                 </div>
                 ${localChangesWarning}
             `;
             if (applyBtn) applyBtn.style.display = 'inline-block';
         } else {
             statusEl.innerHTML = `
-                <div style="color: #6366f1;">${t('system.upToDate', '¡Estás al día!')}</div>
-                <div style="margin-top: 8px; color: var(--text-dim);">
+                <div class="misc-update-uptodate-title">${t('system.upToDate', '¡Estás al día!')}</div>
+                <div class="misc-update-uptodate-text">
                     ${t('system.version', 'Versión')}: <strong>v${escapeHtml(data.currentVersion)}</strong>
                 </div>
                 ${localChangesWarning}
@@ -4379,7 +4366,7 @@ async function checkForUpdates() {
         }
     } catch (e) {
         console.error('Update check error:', e);
-        statusEl.innerHTML = `<span style="color: #ef4444;">Error: ${escapeHtml(e.message)}</span>`;
+        statusEl.innerHTML = `<span class="dash-status-error">Error: ${escapeHtml(e.message)}</span>`;
     }
 }
 
@@ -4391,7 +4378,7 @@ async function applyUpdate() {
     const applyBtn = document.getElementById('apply-update-btn');
 
     if (statusEl) {
-        statusEl.innerHTML = `<span style="color: #f59e0b;">${t('system.installingUpdate', 'Instalando actualización... Por favor espera.')}</span>`;
+        statusEl.innerHTML = `<span class="misc-status-checking">${t('system.installingUpdate', 'Instalando actualización... Por favor espera.')}</span>`;
     }
     if (applyBtn) {
         applyBtn.disabled = true;
@@ -4408,13 +4395,13 @@ async function applyUpdate() {
 
         if (statusEl) {
             statusEl.innerHTML = `
-                <div style="color: #10b981; font-weight: 600;">Update started!</div>
-                <div style="margin-top: 8px; color: var(--text-dim);">
+                <div class="misc-update-progress-info">Update started!</div>
+                <div class="misc-update-progress-text">
                     The service is restarting. This page will refresh automatically in 30 seconds...
                 </div>
-                <div style="margin-top: 10px;">
-                    <div class="progress-bar" style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
-                        <div id="update-progress" style="height: 100%; background: #10b981; width: 0%; transition: width 0.5s;"></div>
+                <div class="misc-update-progress-wrap">
+                    <div class="misc-update-progress-bar-bg">
+                        <div id="update-progress" class="misc-update-progress-bar"></div>
                     </div>
                 </div>
             `;
@@ -4435,7 +4422,7 @@ async function applyUpdate() {
     } catch (e) {
         console.error('Update apply error:', e);
         if (statusEl) {
-            statusEl.innerHTML = `<span style="color: #ef4444;">${t('system.updateFailed', 'Actualización fallida')}: ${escapeHtml(e.message)}</span>`;
+            statusEl.innerHTML = `<span class="dash-status-error">${t('system.updateFailed', 'Actualización fallida')}: ${escapeHtml(e.message)}</span>`;
         }
         if (applyBtn) {
             applyBtn.disabled = false;
@@ -4454,7 +4441,7 @@ async function checkOsUpdates() {
     const applyBtn = document.getElementById('apply-os-update-btn');
     if (!statusEl) return;
 
-    statusEl.innerHTML = `<span style="color: #f59e0b;">${t('system.checkingOsUpdates', 'Buscando actualizaciones del sistema... (puede tardar)')}</span>`;
+    statusEl.innerHTML = `<span class="misc-status-checking">${t('system.checkingOsUpdates', 'Buscando actualizaciones del sistema... (puede tardar)')}</span>`;
     if (applyBtn) applyBtn.style.display = 'none';
 
     try {
@@ -4465,25 +4452,25 @@ async function checkOsUpdates() {
 
         if (data.updatesAvailable > 0) {
             const secBadge = data.securityUpdates > 0
-                ? `<span style="color: #ef4444; font-weight: 600;"> (${data.securityUpdates} de seguridad)</span>` : '';
+                ? `<span class="misc-os-update-security-badge"> (${data.securityUpdates} de seguridad)</span>` : '';
             const pkgList = (data.packages || []).slice(0, 15).map(p =>
                 `${escapeHtml(p.name)} ${p.currentVersion ? escapeHtml(p.currentVersion) + ' → ' : ''}${escapeHtml(p.newVersion)}`
             ).join('\n');
             const moreCount = data.updatesAvailable > 15 ? `\n... y ${data.updatesAvailable - 15} más` : '';
 
             statusEl.innerHTML = `
-                <div style="color: #f59e0b; font-weight: 600;">${data.updatesAvailable} ${t('system.osUpdatesAvailable', 'actualizaciones disponibles')}${secBadge}</div>
-                <code style="display: block; margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 4px; font-size: 0.8rem; white-space: pre-wrap; max-height: 200px; overflow-y: auto;">${escapeHtml(pkgList + moreCount)}</code>
+                <div class="misc-os-update-available-title">${data.updatesAvailable} ${t('system.osUpdatesAvailable', 'actualizaciones disponibles')}${secBadge}</div>
+                <code class="misc-os-update-code">${escapeHtml(pkgList + moreCount)}</code>
             `;
             if (applyBtn) applyBtn.style.display = 'inline-block';
         } else {
             statusEl.innerHTML = `
-                <div style="color: #6366f1;">${t('system.osUpToDate', '¡Sistema operativo al día!')}</div>
-                <div style="margin-top: 4px; color: var(--text-dim);">${t('system.noOsUpdates', 'No hay paquetes pendientes de actualización.')}</div>
+                <div class="misc-os-uptodate-title">${t('system.osUpToDate', '¡Sistema operativo al día!')}</div>
+                <div class="misc-os-uptodate-text">${t('system.noOsUpdates', 'No hay paquetes pendientes de actualización.')}</div>
             `;
         }
     } catch (e) {
-        statusEl.innerHTML = `<span style="color: #ef4444;">Error: ${escapeHtml(e.message)}</span>`;
+        statusEl.innerHTML = `<span class="dash-status-error">Error: ${escapeHtml(e.message)}</span>`;
     }
 }
 
@@ -4497,7 +4484,7 @@ async function applyOsUpdate() {
     const statusEl = document.getElementById('os-update-status');
     const applyBtn = document.getElementById('apply-os-update-btn');
 
-    if (statusEl) statusEl.innerHTML = `<span style="color: #f59e0b;">${t('system.installingOsUpdate', 'Instalando actualizaciones del SO... Esto puede tardar varios minutos.')}</span>`;
+    if (statusEl) statusEl.innerHTML = `<span class="misc-status-checking">${t('system.installingOsUpdate', 'Instalando actualizaciones del SO... Esto puede tardar varios minutos.')}</span>`;
     if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = t('system.installing', 'Instalando...'); }
 
     try {
@@ -4507,13 +4494,13 @@ async function applyOsUpdate() {
 
         if (statusEl) {
             statusEl.innerHTML = `
-                <div style="color: #10b981; font-weight: 600;">${t('system.osUpdateStarted', '¡Actualización del SO iniciada!')}</div>
-                <div style="margin-top: 8px; color: var(--text-dim);">${t('system.osUpdateRunning', 'Las actualizaciones se están instalando en segundo plano. Puedes seguir usando el dashboard.')}</div>
+                <div class="misc-os-install-started-title">${t('system.osUpdateStarted', '¡Actualización del SO iniciada!')}</div>
+                <div class="misc-os-install-started-text">${t('system.osUpdateRunning', 'Las actualizaciones se están instalando en segundo plano. Puedes seguir usando el dashboard.')}</div>
             `;
         }
         if (applyBtn) applyBtn.style.display = 'none';
     } catch (e) {
-        if (statusEl) statusEl.innerHTML = `<span style="color: #ef4444;">Error: ${escapeHtml(e.message)}</span>`;
+        if (statusEl) statusEl.innerHTML = `<span class="dash-status-error">Error: ${escapeHtml(e.message)}</span>`;
         if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = t('system.retryUpdate', 'Reintentar'); }
     }
 }
@@ -4551,13 +4538,13 @@ async function applyOsUpdate() {
         banner.id = 'update-banner';
         banner.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 9998; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 16px 20px; border-radius: 12px; box-shadow: 0 8px 24px rgba(99,102,241,0.4); display: flex; align-items: center; gap: 12px; max-width: 400px; animation: slideInRight 0.4s ease;';
         banner.innerHTML = `
-            <div style="font-size: 24px;">🆕</div>
-            <div style="flex: 1;">
-                <div style="font-weight: 600; font-size: 14px;">${t('system.updateAvailableBanner', '¡Actualización disponible!')}</div>
-                <div style="font-size: 12px; opacity: 0.9; margin-top: 2px;">v${escapeHtml(currentVersion)} → v${escapeHtml(latestVersion)}</div>
+            <div class="misc-update-banner-icon">🆕</div>
+            <div class="misc-update-banner-content">
+                <div class="misc-update-banner-title">${t('system.updateAvailableBanner', '¡Actualización disponible!')}</div>
+                <div class="misc-update-banner-version">v${escapeHtml(currentVersion)} → v${escapeHtml(latestVersion)}</div>
             </div>
-            <button onclick="document.getElementById('update-banner').remove(); document.querySelector('[data-view=system]')?.click();" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; white-space: nowrap;">${t('system.viewUpdate', 'Ver')}</button>
-            <button onclick="document.getElementById('update-banner').remove();" style="background: none; border: none; color: rgba(255,255,255,0.7); cursor: pointer; font-size: 18px; padding: 0 4px;">&times;</button>
+            <button onclick="document.getElementById('update-banner').remove(); document.querySelector('[data-view=system]')?.click();" class="misc-update-banner-view-btn">${t('system.viewUpdate', 'Ver')}</button>
+            <button onclick="document.getElementById('update-banner').remove();" class="misc-update-banner-close-btn">&times;</button>
         `;
         document.body.appendChild(banner);
     }
@@ -4711,7 +4698,7 @@ async function renderTerminalView() {
     header.style.cssText = 'grid-column: 1 / -1; margin-bottom: 20px;';
     header.innerHTML = `
         <h3>${t('terminal.title', 'Terminal y Herramientas')}</h3>
-        <p style="color: var(--text-dim); margin-top: 10px;">
+        <p class="misc-about-text">
             ${t('shortcuts.defaultShortcuts', 'Accesos rápidos a herramientas del sistema')}
         </p>
     `;
@@ -4924,7 +4911,7 @@ function openTerminal(command = 'bash', title = 'Terminal') {
         });
 
     } else {
-        containerEl.innerHTML = '<p style="color: #ef4444; padding: 20px;">Error: xterm.js no disponible</p>';
+        containerEl.innerHTML = '<p class="misc-terminal-error">Error: xterm.js no disponible</p>';
     }
 }
 
@@ -4986,7 +4973,7 @@ function openAddShortcutModal() {
     modal.id = 'shortcut-modal';
     modal.className = 'modal active';
     modal.innerHTML = `
-        <div class="glass-card modal-content" style="max-width: 500px;">
+        <div class="glass-card modal-content misc-shortcut-modal">
             <header class="modal-header">
                 <h3>${t('shortcuts.addShortcut', 'Añadir Acceso Directo')}</h3>
                 <button id="close-shortcut-modal" class="btn-close">&times;</button>
@@ -5005,12 +4992,12 @@ function openAddShortcutModal() {
                     <label>${t('shortcuts.description', 'Descripción')}</label>
                 </div>
                 <div class="cloudbackup-sync-field">
-                    <label style="display: block; margin-bottom: 10px; color: var(--text-dim);">${t('shortcuts.icon', 'Icono')}</label>
-                    <div id="icon-picker" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+                    <label class="misc-shortcut-icon-label">${t('shortcuts.icon', 'Icono')}</label>
+                    <div id="icon-picker" class="misc-shortcut-icon-picker"></div>
                 </div>
                 <input type="hidden" id="shortcut-icon" value="💻">
-                <div class="modal-footer" style="display: flex; gap: 10px;">
-                    <button type="button" id="cancel-shortcut-modal" class="btn-primary" style="background: var(--text-dim);">
+                <div class="modal-footer misc-shortcut-modal-footer">
+                    <button type="button" id="cancel-shortcut-modal" class="btn-primary misc-shortcut-cancel-btn">
                         ${t('common.cancel', 'Cancelar')}
                     </button>
                     <button type="submit" class="btn-primary">${t('common.save', 'Guardar')}</button>
@@ -5079,12 +5066,12 @@ async function openContainerLogs(containerId, containerName) {
     modal.className = 'modal active';
     modal.innerHTML = `
         <div class="glass-card logs-modal-content">
-            <header class="modal-header" style="padding: 15px 20px; border-bottom: 1px solid var(--card-border);">
+            <header class="modal-header logview-modal-header">
                 <h3>📜 Logs: ${escapeHtml(containerName)}</h3>
                 <button id="close-logs-modal" class="btn-close">&times;</button>
             </header>
             <div class="logs-container" id="logs-content">
-                <span style="color: var(--text-dim);">${t('common.loading', 'Cargando...')}</span>
+                <span class="logview-loading">${t('common.loading', 'Cargando...')}</span>
             </div>
         </div>
     `;
@@ -5106,10 +5093,10 @@ async function openContainerLogs(containerId, containerName) {
             logsEl.textContent = data.logs;
             logsEl.scrollTop = logsEl.scrollHeight;
         } else {
-            logsEl.innerHTML = `<span style="color: var(--text-dim);">${t('logs.noLogs', 'No hay logs disponibles')}</span>`;
+            logsEl.innerHTML = `<span class="logview-empty">${t('logs.noLogs', 'No hay logs disponibles')}</span>`;
         }
     } catch (e) {
-        document.getElementById('logs-content').innerHTML = `<span style="color: #ef4444;">Error: ${escapeHtml(e.message)}</span>`;
+        document.getElementById('logs-content').innerHTML = `<span class="logview-error">Error: ${escapeHtml(e.message)}</span>`;
     }
 }
 
@@ -5372,8 +5359,8 @@ async function renderFilesView() {
                 <polyline points="17 8 12 3 7 8"/>
                 <line x1="12" y1="3" x2="12" y2="15"/>
             </svg>
-            <p style="margin-top: 12px; font-size: 1.1rem; font-weight: 600;">Suelta los archivos aquí</p>
-            <p style="font-size: 0.85rem; color: var(--text-dim);">Se subirán a <strong>${escapeHtml(currentFilePath)}</strong></p>
+            <p class="fm-dropzone-title">Suelta los archivos aquí</p>
+            <p class="fm-dropzone-path">Se subirán a <strong>${escapeHtml(currentFilePath)}</strong></p>
         </div>
     `;
     content.appendChild(dropZone);
@@ -5437,7 +5424,7 @@ async function loadFolderTree() {
     const treeContainer = document.getElementById('fm-tree');
     if (!treeContainer) return;
     
-    treeContainer.innerHTML = '<div style="padding: 12px; color: var(--text-dim);">Cargando...</div>';
+    treeContainer.innerHTML = '<div class="fm-tree-loading">Cargando...</div>';
     
     try {
         // Build tree starting from root
@@ -5446,7 +5433,7 @@ async function loadFolderTree() {
         renderFolderTree(treeContainer, tree, 0);
     } catch (e) {
         console.error('loadFolderTree error:', e);
-        treeContainer.innerHTML = '<div style="padding: 12px; color: #ef4444;">Error al cargar</div>';
+        treeContainer.innerHTML = '<div class="fm-tree-error">Error al cargar</div>';
     }
 }
 
@@ -5636,8 +5623,8 @@ async function loadFiles(filePath) {
                 <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" stroke-width="1" opacity="0.4">
                     <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
                 </svg>
-                <p style="margin-top:12px">Carpeta vacía</p>
-                <p style="font-size:0.8rem;color:var(--text-dim)">Arrastra archivos aquí o usa el botón Subir</p>
+                <p class="fm-empty-title">Carpeta vacía</p>
+                <p class="fm-empty-subtitle">Arrastra archivos aquí o usa el botón Subir</p>
             </div>`;
             return;
         }
@@ -5658,7 +5645,7 @@ async function loadFiles(filePath) {
         }
     } catch (e) {
         console.error('Load files error:', e);
-        filesList.innerHTML = '<div class="fm-empty-state" style="color:#ef4444"><p>❌ Error al cargar archivos</p></div>';
+        filesList.innerHTML = '<div class="fm-empty-state fm-error-state"><p>❌ Error al cargar archivos</p></div>';
     }
 }
 
@@ -5670,7 +5657,7 @@ function renderFilteredFiles(files, highlightQuery = '') {
     if (files.length === 0) {
         filesList.innerHTML = `<div class="fm-empty-state">
             <p>🔍 Sin resultados${highlightQuery ? ' para "' + highlightQuery + '"' : ''}</p>
-            <p style="font-size:0.8rem;color:var(--text-dim)">Presiona Enter para buscar en subcarpetas</p>
+            <p class="fm-search-hint">Presiona Enter para buscar en subcarpetas</p>
         </div>`;
         return;
     }
