@@ -1,8 +1,8 @@
-# HomePiNAS v2.5.0
+# HomePiNAS v2.9.0
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.5.0-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.9.0-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -26,6 +26,14 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - **⏰ Task Scheduler** — Cron jobs from dashboard
 - **🔌 UPS Support** — APC UPS monitoring
 - **🌐 DDNS** — DuckDNS, No-IP, Dynu remote access
+
+### 🔒 VPN Server (WireGuard)
+- **One-click install** — WireGuard with async progress bar
+- **Client management** — Create/revoke clients with QR codes
+- **Mobile-ready** — Scan QR from WireGuard mobile app
+- **Connected peers** — Real-time status and traffic stats
+- **Hot-reload** — `wg syncconf` without disconnecting peers
+- **Security** — Private keys never stored in config DB, admin-only RBAC
 
 ### ☁️ Cloud Sync (Syncthing)
 - **Real-time folder sync** between NAS and other devices
@@ -128,6 +136,33 @@ http://<IP>                     (HTTP - redirige a HTTPS)
 ```
 
 ## 📜 Version History
+
+### v2.9.0 — VPN Server + Security Hardening
+- **VPN Server** — Full WireGuard integration from dashboard
+- **Client QR codes** — Create clients, scan QR from mobile
+- **Async install** — Background install with real-time progress bar
+- **Private key isolation** — Keys stored only in /etc/wireguard, never in data.json
+- **RBAC** — VPN management restricted to admin users only
+- **Dynamic interface detection** — Auto-detects network interface (end0, eth0, etc.)
+- **Hot-reload** — `wg syncconf` reloads config without disconnecting peers
+- **Version in header** — Shows current version next to HomePiNAS title
+- **Security** — execFile hardening, CSP improvements, SRI hashes
+
+### v2.8.0 — Active Directory + Security Audit
+- **Active Directory** — Samba AD DC integration
+- **Security audit fixes** — exec→execFile, rate limiting, path validation
+- **CSRF protection** — Token-based CSRF middleware
+- **RBAC middleware** — Role-based access control system
+
+### v2.7.0 — ISO Builder + Cloud Backup
+- **USB Recovery ISO** — Bootable Debian ISO builder
+- **Cloud Backup** — rclone integration for remote storage
+- **App Store** — Install apps from dashboard
+
+### v2.6.0 — Updates + OS Management
+- **Dashboard updates** — Check and apply updates from UI
+- **OS updates** — apt-get upgrade from dashboard
+- **Update banner** — Notification when new version available
 
 ### v2.5.0 — Cloud Sync + Polish
 - **Cloud Sync** — Syncthing integration for real-time folder sync
