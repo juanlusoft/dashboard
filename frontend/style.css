@@ -5211,3 +5211,349 @@ body.fm-dragging .fm-tree-item {
         grid-template-columns: 1fr;
     }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   DOCKER STACKS
+   ═══════════════════════════════════════════════════════════════ */
+
+.stacks-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+}
+
+.stacks-container {
+    background: var(--bg-card, #1a1a2e);
+    border: 1px solid var(--border, #3d3d5c);
+    border-radius: 16px;
+    width: 95%;
+    max-width: 900px;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.stacks-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--border, #3d3d5c);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.stacks-header h2 {
+    margin: 0;
+    color: #10b981;
+}
+
+.stacks-close-btn {
+    background: none;
+    border: none;
+    color: var(--text, #ffffff);
+    font-size: 24px;
+    cursor: pointer;
+}
+
+.stacks-toolbar {
+    padding: 20px;
+    border-bottom: 1px solid var(--border, #3d3d5c);
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.stacks-btn-new {
+    background: #10b981;
+    color: white;
+}
+
+.stacks-btn-template {
+    background: #6366f1;
+    color: white;
+}
+
+.stacks-btn-refresh {
+    background: var(--bg-hover, #4a4a6a);
+    color: white;
+}
+
+.stacks-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.stacks-loading {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-secondary, #a0a0b0);
+}
+
+.stacks-empty {
+    text-align: center;
+    padding: 60px;
+    color: var(--text-secondary, #a0a0b0);
+}
+
+.stacks-empty-icon {
+    font-size: 48px;
+    margin-bottom: 20px;
+}
+
+.stacks-error {
+    text-align: center;
+    padding: 40px;
+    color: #ef4444;
+}
+
+.stacks-card {
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.stacks-card-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.stacks-card-icon {
+    font-size: 32px;
+}
+
+.stacks-card-name {
+    margin: 0;
+    color: var(--text);
+}
+
+.stacks-card-desc {
+    margin: 4px 0 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.stacks-card-services {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.stacks-service-badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+}
+
+.stacks-service-badge--running {
+    background: rgba(16,185,129,0.2);
+    color: #10b981;
+}
+
+.stacks-service-badge--stopped {
+    background: rgba(239,68,68,0.2);
+    color: #ef4444;
+}
+
+.stacks-card-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.stacks-status-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.stacks-status-badge--running {
+    background: rgba(16,185,129,0.2);
+    color: #10b981;
+}
+
+.stacks-status-badge--partial {
+    background: rgba(245,158,11,0.2);
+    color: #f59e0b;
+}
+
+.stacks-status-badge--stopped {
+    background: rgba(107,114,128,0.2);
+    color: #6b7280;
+}
+
+.stacks-action-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+.stacks-action-btn--start {
+    background: #10b981;
+}
+
+.stacks-action-btn--stop {
+    background: #ef4444;
+}
+
+.stacks-action-btn--edit {
+    background: #6366f1;
+}
+
+.stacks-action-btn--logs {
+    background: var(--bg-hover);
+}
+
+.stacks-action-btn--delete {
+    background: #ef4444;
+}
+
+.stacks-back-btn {
+    background: none;
+    border: none;
+    color: var(--text);
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.stacks-back-btn--template {
+    background: var(--bg-hover, #4a4a6a);
+    border: none;
+    color: var(--text, #ffffff);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 8px 16px;
+    border-radius: 6px;
+}
+
+.stacks-form-body {
+    padding: 20px;
+    overflow-y: auto;
+    max-height: 70vh;
+}
+
+.stacks-form-group {
+    margin-bottom: 16px;
+}
+
+.stacks-form-label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--text-secondary);
+}
+
+.stacks-form-input {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border, #4a4a6a);
+    background: var(--bg-card, #1a1a2e);
+    color: var(--text, #e0e0e0);
+    font-size: 14px;
+}
+
+.stacks-form-textarea {
+    width: 100%;
+    height: 300px;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border, #4a4a6a);
+    background: var(--bg-card, #1a1a2e);
+    color: var(--text, #e0e0e0);
+    font-family: monospace;
+    font-size: 13px;
+    resize: vertical;
+}
+
+.stacks-form-textarea--tall {
+    height: 400px;
+}
+
+.stacks-btn-create {
+    width: 100%;
+    padding: 12px;
+    background: #10b981;
+    font-size: 14px;
+}
+
+.stacks-editor-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.stacks-btn-save {
+    flex: 1;
+    padding: 12px;
+    background: #10b981;
+}
+
+.stacks-btn-redeploy {
+    flex: 1;
+    padding: 12px;
+    background: #6366f1;
+}
+
+.stacks-logs-pre {
+    background: #0a0a0a;
+    padding: 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 12px;
+    color: #10b981;
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.stacks-template-card {
+    background: var(--bg-hover, #2d2d44);
+    border: 1px solid var(--border, #3d3d5c);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.stacks-template-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.stacks-template-icon {
+    font-size: 32px;
+}
+
+.stacks-template-name {
+    margin: 0;
+    color: var(--text, #ffffff);
+}
+
+.stacks-template-desc {
+    margin: 4px 0 0;
+    color: var(--text-secondary, #a0a0b0);
+    font-size: 13px;
+}
+
+.stacks-btn-use {
+    padding: 8px 16px;
+    background: #10b981;
+    color: white;
+}

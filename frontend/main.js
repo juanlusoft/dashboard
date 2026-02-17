@@ -12669,60 +12669,37 @@ async function openStacksManager() {
     // Remove existing modal
     const existing = document.getElementById('stacks-modal');
     if (existing) existing.remove();
-    
+
     const modal = document.createElement('div');
     modal.id = 'stacks-modal';
-    modal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.85);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 99999;
-    `;
-    
+    modal.className = 'stacks-overlay';
+
     modal.innerHTML = `
-        <div style="
-            background: #1a1a2e;
-            border: 1px solid #3d3d5c;
-            border-radius: 16px;
-            width: 95%;
-            max-width: 900px;
-            max-height: 90vh;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        ">
-            <div style="padding: 20px; border-bottom: 1px solid #3d3d5c; display: flex; justify-content: space-between; align-items: center;">
-                <h2 style="margin: 0; color: #10b981;">🗂️ Docker Stacks</h2>
-                <button id="stacks-close-btn" style="background: none; border: none; color: #ffffff; font-size: 24px; cursor: pointer;">×</button>
+        <div class="stacks-container">
+            <div class="stacks-header">
+                <h2>🗂️ Docker Stacks</h2>
+                <button id="stacks-close-btn" class="stacks-close-btn">×</button>
             </div>
-            <div style="padding: 20px; border-bottom: 1px solid #3d3d5c; display: flex; gap: 10px; flex-wrap: wrap;">
-                <button id="stacks-new-btn" class="btn-primary" style="background: #10b981; color: white;">➕ Nuevo Stack</button>
-                <button id="stacks-template-btn" class="btn-primary" style="background: #6366f1; color: white;">📋 Desde Template</button>
-                <button id="stacks-refresh-btn" class="btn-primary" style="background: #4a4a6a; color: white;">🔄 Refrescar</button>
+            <div class="stacks-toolbar">
+                <button id="stacks-new-btn" class="btn-primary stacks-btn-new">➕ Nuevo Stack</button>
+                <button id="stacks-template-btn" class="btn-primary stacks-btn-template">📋 Desde Template</button>
+                <button id="stacks-refresh-btn" class="btn-primary stacks-btn-refresh">🔄 Refrescar</button>
             </div>
-            <div id="stacks-list" style="flex: 1; overflow-y: auto; padding: 20px;">
-                <div style="text-align: center; padding: 40px; color: #a0a0b0;">
-                    Cargando stacks...
-                </div>
+            <div id="stacks-list" class="stacks-body">
+                <div class="stacks-loading">Cargando stacks...</div>
             </div>
         </div>
     `;
-    
+
     document.body.appendChild(modal);
-    
+
     // Event listeners
     document.getElementById('stacks-close-btn').addEventListener('click', () => modal.remove());
     document.getElementById('stacks-new-btn').addEventListener('click', openNewStackModal);
     document.getElementById('stacks-template-btn').addEventListener('click', openTemplateSelector);
     document.getElementById('stacks-refresh-btn').addEventListener('click', loadStacksList);
     modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
-    
+
     await loadStacksList();
 }
 
@@ -12730,7 +12707,7 @@ async function loadStacksList() {
     const listDiv = document.getElementById('stacks-list');
     if (!listDiv) return;
     
-    listDiv.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-secondary);">Cargando...</div>';
+    listDiv.innerHTML = '<div class="stacks-loading">Cargando...</div>';
     
     try {
         const res = await authFetch(`${API_BASE}/stacks/list`);
@@ -12742,8 +12719,8 @@ async function loadStacksList() {
         
         if (data.stacks.length === 0) {
             listDiv.innerHTML = `
-                <div style="text-align: center; padding: 60px; color: var(--text-secondary);">
-                    <div style="font-size: 48px; margin-bottom: 20px;">📦</div>
+                <div class="stacks-empty">
+                    <div class="stacks-empty-icon">📦</div>
                     <h3>No hay stacks</h3>
                     <p>Crea tu primer stack o usa una plantilla predefinida.</p>
                 </div>
@@ -12752,57 +12729,33 @@ async function loadStacksList() {
         }
         
         listDiv.innerHTML = data.stacks.map(stack => `
-            <div class="stack-card" style="
-                background: var(--bg-hover);
-                border: 1px solid var(--border);
-                border-radius: 12px;
-                padding: 16px;
-                margin-bottom: 12px;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                flex-wrap: wrap;
-                gap: 12px;
-            ">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <span style="font-size: 32px;">${stack.icon || '📦'}</span>
+            <div class="stacks-card">
+                <div class="stacks-card-info">
+                    <span class="stacks-card-icon">${stack.icon || '📦'}</span>
                     <div>
-                        <h4 style="margin: 0; color: var(--text);">${escapeHtml(stack.name || stack.id)}</h4>
-                        <p style="margin: 4px 0 0; color: var(--text-secondary); font-size: 13px;">${escapeHtml(stack.description || 'Sin descripción')}</p>
-                        <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+                        <h4 class="stacks-card-name">${escapeHtml(stack.name || stack.id)}</h4>
+                        <p class="stacks-card-desc">${escapeHtml(stack.description || 'Sin descripción')}</p>
+                        <div class="stacks-card-services">
                             ${stack.services.map(s => `
-                                <span style="
-                                    padding: 2px 8px;
-                                    border-radius: 4px;
-                                    font-size: 11px;
-                                    background: ${s.state === 'running' ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'};
-                                    color: ${s.state === 'running' ? '#10b981' : '#ef4444'};
-                                ">${escapeHtml(s.name)}</span>
+                                <span class="stacks-service-badge ${s.state === 'running' ? 'stacks-service-badge--running' : 'stacks-service-badge--stopped'}">${escapeHtml(s.name)}</span>
                             `).join('')}
                         </div>
                     </div>
                 </div>
-                <div style="display: flex; gap: 8px; align-items: center;">
-                    <span style="
-                        padding: 4px 12px;
-                        border-radius: 20px;
-                        font-size: 12px;
-                        font-weight: 600;
-                        background: ${stack.status === 'running' ? 'rgba(16,185,129,0.2)' : stack.status === 'partial' ? 'rgba(245,158,11,0.2)' : 'rgba(107,114,128,0.2)'};
-                        color: ${stack.status === 'running' ? '#10b981' : stack.status === 'partial' ? '#f59e0b' : '#6b7280'};
-                    ">${stack.status === 'running' ? '● En Ejecución' : stack.status === 'partial' ? '◐ Parcial' : '○ Detenido'}</span>
+                <div class="stacks-card-actions">
+                    <span class="stacks-status-badge ${stack.status === 'running' ? 'stacks-status-badge--running' : stack.status === 'partial' ? 'stacks-status-badge--partial' : 'stacks-status-badge--stopped'}">${stack.status === 'running' ? '● En Ejecución' : stack.status === 'partial' ? '◐ Parcial' : '○ Detenido'}</span>
 
                     <button data-action="toggle" data-stack="${stack.id}" data-cmd="${stack.status === 'running' ? 'down' : 'up'}"
-                        class="btn-primary stack-btn" style="padding: 6px 12px; font-size: 12px; background: ${stack.status === 'running' ? '#ef4444' : '#10b981'};">
+                        class="btn-primary stack-btn stacks-action-btn ${stack.status === 'running' ? 'stacks-action-btn--stop' : 'stacks-action-btn--start'}">
                         ${stack.status === 'running' ? '⏹ Detener' : '▶ Iniciar'}
                     </button>
-                    <button data-action="edit" data-stack="${stack.id}" class="btn-primary stack-btn" style="padding: 6px 12px; font-size: 12px; background: #6366f1;">
+                    <button data-action="edit" data-stack="${stack.id}" class="btn-primary stack-btn stacks-action-btn stacks-action-btn--edit">
                         ✏️ Editar
                     </button>
-                    <button data-action="logs" data-stack="${stack.id}" class="btn-primary stack-btn" style="padding: 6px 12px; font-size: 12px; background: var(--bg-hover);">
+                    <button data-action="logs" data-stack="${stack.id}" class="btn-primary stack-btn stacks-action-btn stacks-action-btn--logs">
                         📜 Logs
                     </button>
-                    <button data-action="delete" data-stack="${stack.id}" class="btn-primary stack-btn" style="padding: 6px 12px; font-size: 12px; background: #ef4444;">
+                    <button data-action="delete" data-stack="${stack.id}" class="btn-primary stack-btn stacks-action-btn stacks-action-btn--delete">
                         🗑️
                     </button>
                 </div>
@@ -12827,7 +12780,7 @@ async function loadStacksList() {
         });
         
     } catch (e) {
-        listDiv.innerHTML = `<div style="text-align: center; padding: 40px; color: #ef4444;">Error: ${escapeHtml(e.message)}</div>`;
+        listDiv.innerHTML = `<div class="stacks-error">Error: ${escapeHtml(e.message)}</div>`;
     }
 }
 
@@ -12837,56 +12790,29 @@ async function openNewStackModal() {
     
     const content = modal.querySelector('div > div');
     content.innerHTML = `
-        <div style="padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-            <h2 style="margin: 0; color: var(--primary);">➕ Nuevo Stack</h2>
-            <button id="stack-back-btn" style="background: none; border: none; color: var(--text); font-size: 14px; cursor: pointer;">← Volver</button>
+        <div class="stacks-header">
+            <h2>➕ Nuevo Stack</h2>
+            <button id="stack-back-btn" class="stacks-back-btn">← Volver</button>
         </div>
-        <div style="padding: 20px; overflow-y: auto; max-height: 70vh;">
-            <div style="margin-bottom: 16px;">
-                <label style="display: block; margin-bottom: 6px; color: var(--text-secondary);">Nombre del Stack</label>
-                <input type="text" id="stack-name" placeholder="mi-stack" style="
-                    width: 100%;
-                    padding: 10px;
-                    border-radius: 8px;
-                    border: 1px solid #4a4a6a;
-                    background: #1a1a2e;
-                    color: #e0e0e0;
-                    font-size: 14px;
-                ">
+        <div class="stacks-form-body">
+            <div class="stacks-form-group">
+                <label class="stacks-form-label">Nombre del Stack</label>
+                <input type="text" id="stack-name" placeholder="mi-stack" class="stacks-form-input">
             </div>
-            <div style="margin-bottom: 16px;">
-                <label style="display: block; margin-bottom: 6px; color: var(--text-secondary);">Descripción (opcional)</label>
-                <input type="text" id="stack-desc" placeholder="Descripción del stack" style="
-                    width: 100%;
-                    padding: 10px;
-                    border-radius: 8px;
-                    border: 1px solid #4a4a6a;
-                    background: #1a1a2e;
-                    color: #e0e0e0;
-                    font-size: 14px;
-                ">
+            <div class="stacks-form-group">
+                <label class="stacks-form-label">Descripción (opcional)</label>
+                <input type="text" id="stack-desc" placeholder="Descripción del stack" class="stacks-form-input">
             </div>
-            <div style="margin-bottom: 16px;">
-                <label style="display: block; margin-bottom: 6px; color: var(--text-secondary);">docker-compose.yml</label>
+            <div class="stacks-form-group">
+                <label class="stacks-form-label">docker-compose.yml</label>
                 <textarea id="stack-compose" placeholder="version: '3.8'
 services:
   web:
     image: nginx
     ports:
-      - '8080:80'" style="
-                    width: 100%;
-                    height: 300px;
-                    padding: 12px;
-                    border-radius: 8px;
-                    border: 1px solid #4a4a6a;
-                    background: #1a1a2e;
-                    color: #e0e0e0;
-                    font-family: monospace;
-                    font-size: 13px;
-                    resize: vertical;
-                "></textarea>
+      - '8080:80'" class="stacks-form-textarea"></textarea>
             </div>
-            <button id="stack-create-btn" class="btn-primary" style="width: 100%; padding: 12px; background: #10b981; font-size: 14px;">
+            <button id="stack-create-btn" class="btn-primary stacks-btn-create">
                 🚀 Crear Stack
             </button>
         </div>
@@ -12933,12 +12859,12 @@ async function openTemplateSelector() {
     
     const content = modal.querySelector('div > div');
     content.innerHTML = `
-        <div style="padding: 20px; border-bottom: 1px solid #3d3d5c; display: flex; justify-content: space-between; align-items: center;">
-            <h2 style="margin: 0; color: #10b981;">📋 Plantillas</h2>
-            <button id="template-back-btn" style="background: #4a4a6a; border: none; color: #ffffff; font-size: 14px; cursor: pointer; padding: 8px 16px; border-radius: 6px;">← Volver</button>
+        <div class="stacks-header">
+            <h2>📋 Plantillas</h2>
+            <button id="template-back-btn" class="stacks-back-btn--template">← Volver</button>
         </div>
-        <div id="templates-list" style="padding: 20px; overflow-y: auto; max-height: 70vh;">
-            <div style="text-align: center; padding: 40px; color: #a0a0b0;">Cargando plantillas...</div>
+        <div id="templates-list" class="stacks-form-body">
+            <div class="stacks-loading">Cargando plantillas...</div>
         </div>
     `;
     
@@ -12950,24 +12876,15 @@ async function openTemplateSelector() {
         
         const list = document.getElementById('templates-list');
         list.innerHTML = data.templates.map(t => `
-            <div style="
-                background: #2d2d44;
-                border: 1px solid #3d3d5c;
-                border-radius: 12px;
-                padding: 16px;
-                margin-bottom: 12px;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-            ">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <span style="font-size: 32px;">${t.icon}</span>
+            <div class="stacks-template-card">
+                <div class="stacks-template-info">
+                    <span class="stacks-template-icon">${t.icon}</span>
                     <div>
-                        <h4 style="margin: 0; color: #ffffff;">${escapeHtml(t.name)}</h4>
-                        <p style="margin: 4px 0 0; color: #a0a0b0; font-size: 13px;">${escapeHtml(t.description)}</p>
+                        <h4 class="stacks-template-name">${escapeHtml(t.name)}</h4>
+                        <p class="stacks-template-desc">${escapeHtml(t.description)}</p>
                     </div>
                 </div>
-                <button data-action="use-template" data-template-id="${t.id}" class="btn-primary" style="padding: 8px 16px; background: #10b981; color: white;">
+                <button data-action="use-template" data-template-id="${t.id}" class="btn-primary stacks-btn-use">
                     Usar
                 </button>
             </div>
@@ -12977,7 +12894,7 @@ async function openTemplateSelector() {
             btn.addEventListener('click', () => useTemplate(btn.dataset.templateId));
         });
     } catch (e) {
-        document.getElementById('templates-list').innerHTML = `<div style="color: #ef4444;">Error: ${e.message}</div>`;
+        document.getElementById('templates-list').innerHTML = `<div class="stacks-error">Error: ${e.message}</div>`;
     }
 }
 
@@ -13031,30 +12948,20 @@ async function openStackEditor(stackId) {
         const content = modal.querySelector('div > div');
         
         content.innerHTML = `
-            <div style="padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-                <h2 style="margin: 0; color: var(--primary);">✏️ Editar: ${escapeHtml(data.stack.name || stackId)}</h2>
-                <button id="editor-back-btn" style="background: none; border: none; color: var(--text); font-size: 14px; cursor: pointer;">← Volver</button>
+            <div class="stacks-header">
+                <h2>✏️ Editar: ${escapeHtml(data.stack.name || stackId)}</h2>
+                <button id="editor-back-btn" class="stacks-back-btn">← Volver</button>
             </div>
-            <div style="padding: 20px; overflow-y: auto; max-height: 70vh;">
-                <div style="margin-bottom: 16px;">
-                    <label style="display: block; margin-bottom: 6px; color: var(--text-secondary);">docker-compose.yml</label>
-                    <textarea id="edit-compose" style="
-                        width: 100%;
-                        height: 400px;
-                        padding: 12px;
-                        border-radius: 8px;
-                        border: 1px solid #4a4a6a;
-                        background: #1a1a2e;
-                        color: #e0e0e0;
-                        font-family: monospace;
-                        font-size: 13px;
-                    ">${escapeHtml(data.stack.compose)}</textarea>
+            <div class="stacks-form-body">
+                <div class="stacks-form-group">
+                    <label class="stacks-form-label">docker-compose.yml</label>
+                    <textarea id="edit-compose" class="stacks-form-textarea stacks-form-textarea--tall">${escapeHtml(data.stack.compose)}</textarea>
                 </div>
-                <div style="display: flex; gap: 10px;">
-                    <button id="save-stack-btn" class="btn-primary" style="flex: 1; padding: 12px; background: #10b981;">
+                <div class="stacks-editor-actions">
+                    <button id="save-stack-btn" class="btn-primary stacks-btn-save">
                         💾 Guardar
                     </button>
-                    <button id="redeploy-stack-btn" class="btn-primary" style="flex: 1; padding: 12px; background: #6366f1;">
+                    <button id="redeploy-stack-btn" class="btn-primary stacks-btn-redeploy">
                         🚀 Guardar y Redesplegar
                     </button>
                 </div>
@@ -13106,21 +13013,12 @@ async function showStackLogs(stackId) {
     const content = modal.querySelector('div > div');
     
     content.innerHTML = `
-        <div style="padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-            <h2 style="margin: 0; color: var(--primary);">📜 Logs: ${escapeHtml(stackId)}</h2>
-            <button id="logs-back-btn" style="background: none; border: none; color: var(--text); font-size: 14px; cursor: pointer;">← Volver</button>
+        <div class="stacks-header">
+            <h2>📜 Logs: ${escapeHtml(stackId)}</h2>
+            <button id="logs-back-btn" class="stacks-back-btn">← Volver</button>
         </div>
-        <div style="padding: 20px; overflow-y: auto; max-height: 70vh;">
-            <pre id="stack-logs" style="
-                background: #0a0a0a;
-                padding: 16px;
-                border-radius: 8px;
-                overflow-x: auto;
-                font-size: 12px;
-                color: #10b981;
-                max-height: 500px;
-                overflow-y: auto;
-            ">Cargando logs...</pre>
+        <div class="stacks-form-body">
+            <pre id="stack-logs" class="stacks-logs-pre">Cargando logs...</pre>
         </div>
     `;
     
