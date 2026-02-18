@@ -6179,7 +6179,7 @@ function fmPreviewFile(file, basePath) {
                 callback(_previewBlobUrl);
             })
             .catch(() => {
-                body.innerHTML = '<p style="color:#ef4444;text-align:center">Error al cargar el archivo</p>';
+                body.innerHTML = '<p class="fm-preview-error">Error al cargar el archivo</p>';
             });
     }
 
@@ -6198,7 +6198,7 @@ function fmPreviewFile(file, basePath) {
         });
     } else if (audioExts.includes(ext)) {
         loadPreviewBlob(url => {
-            body.innerHTML = `<div class="fm-preview-audio-wrap">${getFileIconSVG(file.name, 80)}<audio controls autoplay style="width:100%;margin-top:20px"><source src="${url}"></audio></div>`;
+            body.innerHTML = `<div class="fm-preview-audio-wrap">${getFileIconSVG(file.name, 80)}<audio controls autoplay class="fm-preview-audio"><source src="${url}"></audio></div>`;
         });
     } else if (ext === 'pdf') {
         loadPreviewBlob(url => {
@@ -6213,15 +6213,15 @@ function fmPreviewFile(file, basePath) {
             body.innerHTML = '';
             body.appendChild(pre);
         }).catch(() => {
-            body.innerHTML = '<p style="color:#ef4444;text-align:center">Error al cargar el archivo</p>';
+            body.innerHTML = '<p class="fm-preview-error">Error al cargar el archivo</p>';
         });
     } else {
         body.innerHTML = `
             <div class="fm-preview-nopreview">
                 ${getFileIconSVG(file.name, 80)}
-                <p style="margin-top:16px;font-size:1rem">${escapeHtml(file.name)}</p>
-                <p style="color:var(--text-dim);font-size:0.85rem">${formatFileSize(file.size)} · ${ext.toUpperCase()}</p>
-                <button class="btn-primary btn-sm fm-nopreview-download" style="margin-top:16px">Descargar archivo</button>
+                <p class="fm-preview-file-name">${escapeHtml(file.name)}</p>
+                <p class="fm-preview-file-meta">${formatFileSize(file.size)} · ${ext.toUpperCase()}</p>
+                <button class="btn-primary btn-sm fm-nopreview-download" style="margin-top: 16px;">Descargar archivo</button>
             </div>
         `;
         body.querySelector('.fm-nopreview-download').addEventListener('click', () => downloadFile(fullPath));
@@ -6460,7 +6460,7 @@ async function searchFiles(query) {
             row.innerHTML = `
                 <span></span>
                 <span class="fm-file-icon">${file.type === 'directory' ? getFolderSVG() : getFileIconSVG(file.name || file.path.split('/').pop())}</span>
-                <span class="fm-file-name" style="grid-column: span 2">${file.path || file.name}</span>
+                <span class="fm-file-name" style="grid-column: span 2;">${file.path || file.name}</span>
                 <span class="fm-file-meta">${file.type === 'directory' ? '—' : formatFileSize(file.size)}</span>
                 <span></span><span></span>
             `;
@@ -6474,7 +6474,7 @@ async function searchFiles(query) {
             filesList.appendChild(row);
         });
     } catch (e) {
-        filesList.innerHTML = '<div class="fm-empty-state" style="color:#ef4444">Error en la búsqueda</div>';
+        filesList.innerHTML = '<div class="fm-empty-state" style="color: #ef4444;">Error en la búsqueda</div>';
     }
 }
 
@@ -6594,7 +6594,7 @@ async function renderUsersView() {
     
     const tfaContent = document.createElement('div');
     tfaContent.id = 'tfa-content';
-    tfaContent.innerHTML = '<p style="color: var(--text-dim);">Cargando...</p>';
+    tfaContent.innerHTML = '<p class="users-loading-text">Cargando...</p>';
     tfaCard.appendChild(tfaContent);
     container.appendChild(tfaCard);
 
@@ -6671,7 +6671,7 @@ async function loadUsers() {
             usersList.appendChild(row);
         });
     } catch (e) {
-        usersList.innerHTML = '<div style="padding: 20px; color: var(--text-dim);">Error cargando usuarios</div>';
+        usersList.innerHTML = '<div class="users-error-text">Error cargando usuarios</div>';
     }
 }
 
@@ -6685,12 +6685,12 @@ function showUserForm(editUser = null) {
     modal.style.cssText = 'display: flex; position: fixed; inset: 0; z-index: 1000; align-items: center; justify-content: center; background: rgba(0,0,0,0.5);';
 
     modal.innerHTML = `
-        <div class="glass-card modal-content" style="max-width: 450px; width: 90%;">
-            <header class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="glass-card modal-content users-modal-content">
+            <header class="modal-header users-modal-header">
                 <h3>${editUser ? 'Editar Usuario' : 'Nuevo Usuario'}</h3>
                 <button class="btn-close" id="close-user-form">&times;</button>
             </header>
-            <form id="user-create-form" style="display: flex; flex-direction: column; gap: 15px; margin-top: 15px;">
+            <form id="user-create-form" class="users-create-form">
                 <div class="input-group">
                     <input type="text" id="uf-username" required placeholder=" " value="${editUser?.username || ''}" ${editUser ? 'readonly' : ''}>
                     <label>Usuario</label>
@@ -6700,7 +6700,7 @@ function showUserForm(editUser = null) {
                     <label>${editUser ? 'Nueva contraseña (dejar vacía para mantener)' : 'Contraseña'}</label>
                 </div>
                 <div class="input-group">
-                    <select id="uf-role" style="padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); width: 100%;">
+                    <select id="uf-role" class="users-role-select">
                         <option value="admin" ${editUser?.role === 'admin' ? 'selected' : ''}>Administrador</option>
                         <option value="user" ${(!editUser || editUser?.role === 'user') ? 'selected' : ''}>Usuario</option>
                         <option value="readonly" ${editUser?.role === 'readonly' ? 'selected' : ''}>Solo Lectura</option>
@@ -6762,23 +6762,23 @@ async function load2FAStatus() {
 
         if (data.enabled) {
             content.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 15px;">
+                <div class="users-2fa-container">
                     <span style="font-size: 2rem;">✅</span>
                     <div>
-                        <p style="font-weight: 600; color: #10b981;">2FA Activado</p>
-                        <p style="color: var(--text-dim); font-size: 0.9rem;">Tu cuenta está protegida con autenticación de dos factores.</p>
+                        <p class="users-2fa-active-title">2FA Activado</p>
+                        <p class="users-2fa-description">Tu cuenta está protegida con autenticación de dos factores.</p>
                     </div>
-                    <button class="btn-primary btn-sm" style="margin-left: auto; background: #ef4444;" id="disable-2fa-btn">Desactivar</button>
+                    <button class="btn-primary btn-sm users-2fa-disable-btn" id="disable-2fa-btn">Desactivar</button>
                 </div>
             `;
             document.getElementById('disable-2fa-btn').addEventListener('click', disable2FA);
         } else {
             content.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 15px;">
+                <div class="users-2fa-container">
                     <span style="font-size: 2rem;">🔓</span>
                     <div>
                         <p style="font-weight: 600;">2FA Desactivado</p>
-                        <p style="color: var(--text-dim); font-size: 0.9rem;">Protege tu cuenta con una app de autenticación (Google Authenticator, Authy, etc.)</p>
+                        <p class="users-2fa-description">Protege tu cuenta con una app de autenticación (Google Authenticator, Authy, etc.)</p>
                     </div>
                     <button class="btn-primary btn-sm" id="enable-2fa-btn" style="margin-left: auto;">Activar 2FA</button>
                 </div>
@@ -6786,7 +6786,7 @@ async function load2FAStatus() {
             document.getElementById('enable-2fa-btn').addEventListener('click', setup2FA);
         }
     } catch (e) {
-        content.innerHTML = '<p style="color: var(--text-dim);">No se pudo cargar el estado de 2FA</p>';
+        content.innerHTML = '<p class="users-2fa-error">No se pudo cargar el estado de 2FA</p>';
     }
 }
 
@@ -6800,16 +6800,16 @@ async function setup2FA() {
         const data = await res.json();
 
         content.innerHTML = `
-            <div style="text-align: center; max-width: 400px; margin: 0 auto;">
-                <p style="margin-bottom: 15px;">Escanea este código QR con tu app de autenticación:</p>
-                <div style="background: var(--bg-card); padding: 20px; border-radius: 12px; display: inline-block; margin-bottom: 15px; border: 1px solid var(--border);">
-                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 10px;">Introduce esta clave manualmente en tu app de autenticaci\u00f3n:</p>
-                    <code id="totp-secret-display" style="display: block; background: var(--bg-hover); padding: 12px 16px; border-radius: 8px; font-size: 1.1rem; letter-spacing: 2px; word-break: break-all; user-select: all; cursor: text; color: var(--primary); font-weight: 600;">${escapeHtml(data.secret)}</code>
-                    <button id="totp-copy-btn" style="margin-top: 10px; padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-hover); color: var(--text); cursor: pointer; font-size: 0.85rem;">Copiar clave</button>
+            <div class="users-2fa-setup-container">
+                <p class="users-2fa-setup-instruction">Escanea este código QR con tu app de autenticación:</p>
+                <div class="users-2fa-qr-wrapper">
+                    <p class="users-2fa-secret-label">Introduce esta clave manualmente en tu app de autenticaci\u00f3n:</p>
+                    <code id="totp-secret-display" class="users-2fa-secret-code">${escapeHtml(data.secret)}</code>
+                    <button id="totp-copy-btn" class="users-2fa-copy-btn">Copiar clave</button>
                 </div>
-                <p style="font-size: 0.8rem; color: var(--text-dim); word-break: break-all; margin-bottom: 20px;">Account: ${escapeHtml(data.uri ? new URL(data.uri).pathname.replace(/^\/\/totp\//, '') : '')}</p>
-                <div style="display: flex; gap: 10px; justify-content: center; align-items: center;">
-                    <input type="text" id="totp-verify-code" placeholder="Código de 6 dígitos" maxlength="6" style="padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); width: 160px; text-align: center; font-size: 1.2rem; letter-spacing: 4px;">
+                <p class="users-2fa-account-info">Account: ${escapeHtml(data.uri ? new URL(data.uri).pathname.replace(/^\/\/totp\//, '') : '')}</p>
+                <div class="users-2fa-verify-container">
+                    <input type="text" id="totp-verify-code" placeholder="Código de 6 dígitos" maxlength="6" class="users-2fa-verify-input">
                     <button class="btn-primary" id="verify-totp-btn">Verificar</button>
                 </div>
             </div>
@@ -6915,7 +6915,7 @@ async function renderBackupView() {
 async function loadBackupJobs() {
     const list = document.getElementById('backup-jobs-list');
     if (!list) return;
-    list.innerHTML = '<div style="padding: 20px; color: var(--text-dim);">Cargando...</div>';
+    list.innerHTML = '<div class="misc-backup-loading">Cargando...</div>';
 
     try {
         const res = await authFetch(`${API_BASE}/backup/jobs`);
@@ -6924,7 +6924,7 @@ async function loadBackupJobs() {
         const jobs = data.jobs || data || [];
 
         if (!jobs || jobs.length === 0) {
-            list.innerHTML = '<div style="padding: 30px; text-align: center; color: var(--text-dim);">No hay trabajos de backup configurados</div>';
+            list.innerHTML = '<div class="misc-backup-empty">No hay trabajos de backup configurados</div>';
             return;
         }
 
@@ -6941,9 +6941,9 @@ async function loadBackupJobs() {
             const info = document.createElement('div');
             info.style.cssText = 'flex: 1; min-width: 0;';
             info.innerHTML = `
-                <div style="font-weight: 600;">${escapeHtml(job.name)}</div>
-                <div style="font-size: 0.85rem; color: var(--text-dim);">${escapeHtml(job.type)} • ${escapeHtml(job.source)} → ${escapeHtml(job.destination)}</div>
-                <div style="font-size: 0.8rem; color: var(--text-dim);">${job.schedule?.enabled ? '⏰ ' + escapeHtml(job.schedule.cron) : 'Manual'}${job.lastRun ? ' • Última: ' + new Date(job.lastRun).toLocaleString('es-ES') : ''}</div>
+                <div class="misc-backup-type">${escapeHtml(job.name)}</div>
+                <div class="misc-backup-type">${escapeHtml(job.type)} • ${escapeHtml(job.source)} → ${escapeHtml(job.destination)}</div>
+                <div class="misc-backup-schedule">${job.schedule?.enabled ? '⏰ ' + escapeHtml(job.schedule.cron) : 'Manual'}${job.lastRun ? ' • Última: ' + new Date(job.lastRun).toLocaleString('es-ES') : ''}</div>
             `;
 
             const actions = document.createElement('div');
@@ -6970,7 +6970,7 @@ async function loadBackupJobs() {
             list.appendChild(card);
         });
     } catch (e) {
-        list.innerHTML = '<div style="padding: 20px; color: #ef4444;">Error cargando backups</div>';
+        list.innerHTML = '<div class="misc-backup-error">Error cargando backups</div>';
     }
 }
 
@@ -6984,12 +6984,12 @@ function showBackupJobForm(editJob = null) {
     modal.style.cssText = 'display: flex; position: fixed; inset: 0; z-index: 1000; align-items: center; justify-content: center; background: rgba(0,0,0,0.5);';
 
     modal.innerHTML = `
-        <div class="glass-card modal-content" style="max-width: 500px; width: 90%;">
-            <header class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="glass-card modal-content misc-backup-modal-content">
+            <header class="modal-header misc-backup-modal-header">
                 <h3>${editJob ? 'Editar Backup' : 'Nuevo Backup'}</h3>
                 <button class="btn-close" id="close-backup-form">&times;</button>
             </header>
-            <form id="backup-create-form" style="display: flex; flex-direction: column; gap: 12px; margin-top: 15px;">
+            <form id="backup-create-form" class="misc-backup-form">
                 <div class="input-group">
                     <input type="text" id="bj-name" required placeholder=" " value="${editJob?.name || ''}">
                     <label>Nombre</label>
@@ -7002,14 +7002,14 @@ function showBackupJobForm(editJob = null) {
                     <input type="text" id="bj-dest" required placeholder=" " value="${editJob?.destination || '/mnt/backup'}">
                     <label>Destino</label>
                 </div>
-                <select id="bj-type" style="padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
+                <select id="bj-type" class="misc-backup-type-select">
                     <option value="rsync" ${editJob?.type === 'rsync' ? 'selected' : ''}>Rsync (incremental)</option>
                     <option value="tar" ${editJob?.type === 'tar' ? 'selected' : ''}>Tar (comprimido)</option>
                 </select>
-                <div style="display: flex; gap: 10px; align-items: center;">
+                <div class="misc-backup-cron-row">
                     <input type="checkbox" id="bj-scheduled" ${editJob?.schedule?.enabled ? 'checked' : ''}>
                     <label for="bj-scheduled" style="margin: 0;">Programar</label>
-                    <input type="text" id="bj-cron" placeholder="0 2 * * *" value="${editJob?.schedule?.cron || '0 2 * * *'}" style="flex: 1; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
+                    <input type="text" id="bj-cron" placeholder="0 2 * * *" value="${editJob?.schedule?.cron || '0 2 * * *'}" class="misc-backup-cron-input">
                 </div>
                 <div class="input-group">
                     <input type="text" id="bj-excludes" placeholder=" " value="${editJob?.excludes?.join(', ') || ''}">
@@ -7078,7 +7078,7 @@ async function deleteBackupJob(id) {
 async function loadSchedulerTasks() {
     const list = document.getElementById('scheduler-tasks-list');
     if (!list) return;
-    list.innerHTML = '<div style="padding: 20px; color: var(--text-dim);">Cargando...</div>';
+    list.innerHTML = '<div class="misc-backup-loading">Cargando...</div>';
 
     try {
         const res = await authFetch(`${API_BASE}/scheduler/tasks`);
@@ -7087,7 +7087,7 @@ async function loadSchedulerTasks() {
         const tasks = data.tasks || data || [];
 
         if (!tasks || tasks.length === 0) {
-            list.innerHTML = '<div style="padding: 30px; text-align: center; color: var(--text-dim);">No hay tareas programadas</div>';
+            list.innerHTML = '<div class="misc-task-empty">No hay tareas programadas</div>';
             return;
         }
 
@@ -7106,8 +7106,8 @@ async function loadSchedulerTasks() {
             info.style.cssText = 'flex: 1; min-width: 0;';
             info.innerHTML = `
                 <div style="font-weight: 600;">${escapeHtml(task.name)}</div>
-                <div style="font-size: 0.85rem; color: var(--text-dim); font-family: monospace;">${escapeHtml(task.command)}</div>
-                <div style="font-size: 0.8rem; color: var(--text-dim);">⏰ ${escapeHtml(task.schedule)}</div>
+                <div class="misc-task-command">${escapeHtml(task.command)}</div>
+                <div class="misc-backup-schedule">⏰ ${escapeHtml(task.schedule)}</div>
             `;
 
             const actions = document.createElement('div');
@@ -7133,7 +7133,7 @@ async function loadSchedulerTasks() {
             list.appendChild(row);
         });
     } catch (e) {
-        list.innerHTML = '<div style="padding: 20px; color: #ef4444;">Error cargando tareas</div>';
+        list.innerHTML = '<div class="misc-task-error">Error cargando tareas</div>';
     }
 }
 
@@ -7147,12 +7147,12 @@ function showTaskForm() {
     modal.style.cssText = 'display: flex; position: fixed; inset: 0; z-index: 1000; align-items: center; justify-content: center; background: rgba(0,0,0,0.5);';
 
     modal.innerHTML = `
-        <div class="glass-card modal-content" style="max-width: 450px; width: 90%;">
-            <header class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="glass-card modal-content misc-task-modal-content">
+            <header class="modal-header misc-task-modal-header">
                 <h3>Nueva Tarea Programada</h3>
                 <button class="btn-close" id="close-task-form">&times;</button>
             </header>
-            <form id="task-create-form" style="display: flex; flex-direction: column; gap: 12px; margin-top: 15px;">
+            <form id="task-create-form" class="misc-task-form">
                 <div class="input-group">
                     <input type="text" id="tf-name" required placeholder=" ">
                     <label>Nombre</label>
@@ -7165,7 +7165,7 @@ function showTaskForm() {
                     <input type="text" id="tf-schedule" required placeholder=" " value="0 * * * *">
                     <label>Expresión Cron</label>
                 </div>
-                <div style="font-size: 0.8rem; color: var(--text-dim); padding: 0 4px;">
+                <div class="misc-task-help">
                     Formato: minuto hora día mes día-semana (ej: <code>0 2 * * *</code> = cada día a las 2:00)
                 </div>
                 <button type="submit" class="btn-primary">Crear Tarea</button>
@@ -7409,7 +7409,7 @@ async function loadSambaShares() {
         const shares = data.shares || data || [];
 
         if (!shares || shares.length === 0) {
-            grid.innerHTML = '<div style="padding: 20px; color: var(--text-dim); grid-column: 1 / -1; text-align: center;">No hay comparticiones configuradas</div>';
+            grid.innerHTML = '<div class="samba-empty-state">No hay comparticiones configuradas</div>';
             return;
         }
 
@@ -7419,17 +7419,17 @@ async function loadSambaShares() {
             card.style.cssText = 'padding: 15px;';
 
             card.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                <div class="samba-card-header">
                     <div>
                         <h4 style="margin: 0;">📂 ${escapeHtml(share.name)}</h4>
-                        <span style="font-size: 0.8rem; color: var(--text-dim);">${escapeHtml(share.path)}</span>
+                        <span class="samba-path-text">${escapeHtml(share.path)}</span>
                     </div>
                 </div>
-                <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">
-                    ${share.readOnly ? '<span style="font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; background: rgba(245,158,11,0.15); color: #f59e0b;">Solo lectura</span>' : '<span style="font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; background: rgba(16,185,129,0.15); color: #10b981;">Lectura/Escritura</span>'}
-                    ${share.guestOk ? '<span style="font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; background: rgba(148,163,184,0.15); color: #94a3b8;">Invitados</span>' : ''}
+                <div class="samba-badges-container">
+                    ${share.readOnly ? '<span class="samba-badge-readonly">Solo lectura</span>' : '<span class="samba-badge-readwrite">Lectura/Escritura</span>'}
+                    ${share.guestOk ? '<span class="samba-badge-guest">Invitados</span>' : ''}
                 </div>
-                ${share.comment ? `<p style="font-size: 0.85rem; color: var(--text-dim); margin-top: 8px;">${escapeHtml(share.comment)}</p>` : ''}
+                ${share.comment ? `<p class="samba-comment-text">${escapeHtml(share.comment)}</p>` : ''}
             `;
 
             const delBtn = document.createElement('button');
@@ -7444,7 +7444,7 @@ async function loadSambaShares() {
             grid.appendChild(card);
         });
     } catch (e) {
-        grid.innerHTML = '<div style="padding: 20px; color: #ef4444; grid-column: 1 / -1;">Error cargando comparticiones</div>';
+        grid.innerHTML = '<div class="samba-error-state">Error cargando comparticiones</div>';
     }
 }
 
@@ -7458,12 +7458,12 @@ function showSambaForm() {
     modal.style.cssText = 'display: flex; position: fixed; inset: 0; z-index: 1000; align-items: center; justify-content: center; background: rgba(0,0,0,0.5);';
 
     modal.innerHTML = `
-        <div class="glass-card modal-content" style="max-width: 450px; width: 90%;">
-            <header class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="glass-card modal-content samba-modal-content">
+            <header class="modal-header samba-modal-header">
                 <h3>Nueva Compartición Samba</h3>
                 <button class="btn-close" id="close-samba-form">&times;</button>
             </header>
-            <form id="samba-create-form" style="display: flex; flex-direction: column; gap: 12px; margin-top: 15px;">
+            <form id="samba-create-form" class="samba-create-form">
                 <div class="input-group">
                     <input type="text" id="sf-name" required placeholder=" ">
                     <label>Nombre</label>
@@ -7476,11 +7476,11 @@ function showSambaForm() {
                     <input type="text" id="sf-comment" placeholder=" ">
                     <label>Comentario</label>
                 </div>
-                <div style="display: flex; gap: 20px;">
-                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <div class="samba-checkbox-row">
+                    <label class="samba-checkbox-label">
                         <input type="checkbox" id="sf-readonly"> Solo lectura
                     </label>
-                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                    <label class="samba-checkbox-label">
                         <input type="checkbox" id="sf-guest"> Acceso invitados
                     </label>
                 </div>
@@ -7542,7 +7542,7 @@ async function renderUPSSection(container) {
 
     const content = document.createElement('div');
     content.id = 'ups-content';
-    content.innerHTML = '<p style="color: var(--text-dim);">Cargando estado del UPS...</p>';
+    content.innerHTML = '<p class="ups-loading-text">Cargando estado del UPS...</p>';
     card.appendChild(content);
     container.appendChild(card);
 
@@ -7553,11 +7553,11 @@ async function renderUPSSection(container) {
 
         if (!data.available) {
             content.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 12px; padding: 15px; background: var(--bg-hover); border-radius: 8px;">
+                <div class="ups-not-detected">
                     <span style="font-size: 2rem;">🔌</span>
                     <div>
                         <p style="font-weight: 500;">No se detectó UPS</p>
-                        <p style="color: var(--text-dim); font-size: 0.9rem;">Instala <code>apcupsd</code> o <code>nut</code> para monitorizar tu UPS.</p>
+                        <p class="ups-not-detected-description">Instala <code>apcupsd</code> o <code>nut</code> para monitorizar tu UPS.</p>
                     </div>
                 </div>
             `;
@@ -7566,29 +7566,29 @@ async function renderUPSSection(container) {
 
         const batteryColor = data.batteryCharge > 50 ? '#10b981' : data.batteryCharge > 20 ? '#f59e0b' : '#ef4444';
         content.innerHTML = `
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
-                <div style="padding: 15px; background: var(--bg-hover); border-radius: 10px; text-align: center;">
-                    <div style="font-size: 2rem; margin-bottom: 5px;">🔋</div>
-                    <div style="font-size: 1.5rem; font-weight: 700; color: ${batteryColor};">${data.batteryCharge || '—'}%</div>
-                    <div style="font-size: 0.8rem; color: var(--text-dim);">Batería</div>
+            <div class="ups-stats-grid">
+                <div class="ups-stat-card">
+                    <div class="ups-stat-icon">🔋</div>
+                    <div class="ups-stat-value" style="color: ${batteryColor};">${data.batteryCharge || '—'}%</div>
+                    <div class="ups-stat-label">Batería</div>
                 </div>
-                <div style="padding: 15px; background: var(--bg-hover); border-radius: 10px; text-align: center;">
-                    <div style="font-size: 2rem; margin-bottom: 5px;">⏱️</div>
-                    <div style="font-size: 1.5rem; font-weight: 700;">${data.runtime || '—'}</div>
-                    <div style="font-size: 0.8rem; color: var(--text-dim);">Autonomía</div>
+                <div class="ups-stat-card">
+                    <div class="ups-stat-icon">⏱️</div>
+                    <div class="ups-stat-value">${data.runtime || '—'}</div>
+                    <div class="ups-stat-label">Autonomía</div>
                 </div>
-                <div style="padding: 15px; background: var(--bg-hover); border-radius: 10px; text-align: center;">
-                    <div style="font-size: 2rem; margin-bottom: 5px;">⚡</div>
-                    <div style="font-size: 1.5rem; font-weight: 700;">${data.load || '—'}%</div>
-                    <div style="font-size: 0.8rem; color: var(--text-dim);">Carga</div>
+                <div class="ups-stat-card">
+                    <div class="ups-stat-icon">⚡</div>
+                    <div class="ups-stat-value">${data.load || '—'}%</div>
+                    <div class="ups-stat-label">Carga</div>
                 </div>
-                <div style="padding: 15px; background: var(--bg-hover); border-radius: 10px; text-align: center;">
-                    <div style="font-size: 2rem; margin-bottom: 5px;">🔌</div>
-                    <div style="font-size: 1.5rem; font-weight: 700;">${data.inputVoltage || '—'}V</div>
-                    <div style="font-size: 0.8rem; color: var(--text-dim);">Voltaje</div>
+                <div class="ups-stat-card">
+                    <div class="ups-stat-icon">🔌</div>
+                    <div class="ups-stat-value">${data.inputVoltage || '—'}V</div>
+                    <div class="ups-stat-label">Voltaje</div>
                 </div>
             </div>
-            <div style="margin-top: 15px; padding: 12px; background: var(--bg-hover); border-radius: 8px; display: flex; gap: 20px; flex-wrap: wrap; font-size: 0.9rem;">
+            <div class="ups-details-container">
                 <span><strong>Estado:</strong> ${escapeHtml(data.status || t('common.unknown', 'Desconocido'))}</span>
                 <span><strong>Modelo:</strong> ${escapeHtml(data.model || t('common.unknown', 'Desconocido'))}</span>
                 <span><strong>Driver:</strong> ${escapeHtml(data.driver || t('common.unknown', 'Desconocido'))}</span>
@@ -7619,20 +7619,20 @@ async function renderNotificationsSection(container) {
     // Email config
     const emailSection = document.createElement('div');
     emailSection.innerHTML = `
-        <h4 style="margin-bottom: 12px;">📧 Email (SMTP)</h4>
-        <form id="notif-email-form" style="display: flex; flex-direction: column; gap: 10px;">
-            <input type="text" id="ne-host" placeholder="Servidor SMTP" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
-            <div style="display: flex; gap: 8px;">
-                <input type="number" id="ne-port" placeholder="Puerto" value="587" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); width: 100px;">
-                <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="ne-secure"> SSL</label>
+        <h4 class="notif-section-title">📧 Email (SMTP)</h4>
+        <form id="notif-email-form" class="notif-email-form">
+            <input type="text" id="ne-host" placeholder="Servidor SMTP" class="notif-input">
+            <div class="notif-input-row">
+                <input type="number" id="ne-port" placeholder="Puerto" value="587" class="notif-port-input">
+                <label class="notif-checkbox-label"><input type="checkbox" id="ne-secure"> SSL</label>
             </div>
-            <input type="text" id="ne-user" placeholder="Usuario" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
-            <input type="password" id="ne-pass" placeholder="Contraseña" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
-            <input type="email" id="ne-from" placeholder="Remitente" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
-            <input type="email" id="ne-to" placeholder="Destinatario" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
-            <div style="display: flex; gap: 8px;">
+            <input type="text" id="ne-user" placeholder="Usuario" class="notif-input">
+            <input type="password" id="ne-pass" placeholder="Contraseña" class="notif-input">
+            <input type="email" id="ne-from" placeholder="Remitente" class="notif-input">
+            <input type="email" id="ne-to" placeholder="Destinatario" class="notif-input">
+            <div class="notif-button-row">
                 <button type="submit" class="btn-primary btn-sm">Guardar</button>
-                <button type="button" class="btn-primary btn-sm" id="test-email-btn" style="background: #6366f1;">Probar</button>
+                <button type="button" class="btn-primary btn-sm notif-test-btn" id="test-email-btn">Probar</button>
             </div>
         </form>
     `;
@@ -7640,14 +7640,14 @@ async function renderNotificationsSection(container) {
     // Telegram config
     const telegramSection = document.createElement('div');
     telegramSection.innerHTML = `
-        <h4 style="margin-bottom: 12px;">📱 Telegram</h4>
-        <form id="notif-telegram-form" style="display: flex; flex-direction: column; gap: 10px;">
-            <input type="text" id="nt-token" placeholder="Bot Token" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
-            <input type="text" id="nt-chatid" placeholder="Chat ID" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
-            <label style="display: flex; align-items: center; gap: 6px;"><input type="checkbox" id="nt-enabled"> Activado</label>
-            <div style="display: flex; gap: 8px;">
+        <h4 class="notif-section-title">📱 Telegram</h4>
+        <form id="notif-telegram-form" class="notif-telegram-form">
+            <input type="text" id="nt-token" placeholder="Bot Token" class="notif-input">
+            <input type="text" id="nt-chatid" placeholder="Chat ID" class="notif-input">
+            <label class="notif-checkbox-label-lg"><input type="checkbox" id="nt-enabled"> Activado</label>
+            <div class="notif-button-row">
                 <button type="submit" class="btn-primary btn-sm">Guardar</button>
-                <button type="button" class="btn-primary btn-sm" id="test-telegram-btn" style="background: #6366f1;">Probar</button>
+                <button type="button" class="btn-primary btn-sm notif-test-btn" id="test-telegram-btn">Probar</button>
             </div>
         </form>
     `;
@@ -7727,7 +7727,7 @@ async function renderNotificationsSection(container) {
                 <div id="er-last-check" style="font-size: 0.8rem; color: var(--text-secondary);"></div>
             </div>
 
-            <div style="display: flex; gap: 8px;">
+            <div class="abk-iso-buttons">
                 <button type="submit" class="btn-primary btn-sm">${t('common.save', 'Guardar')}</button>
                 <button type="button" class="btn-primary btn-sm" id="test-error-report-btn" style="background: #6366f1;">
                     ${t('notifications.testErrorReport', 'Probar Escaneo')}
@@ -7946,7 +7946,7 @@ async function loadDDNSServices() {
         const services = data.services || data || [];
 
         if (!services || services.length === 0) {
-            grid.innerHTML = '<div style="padding: 20px; color: var(--text-dim); grid-column: 1 / -1; text-align: center;">No hay servicios DDNS configurados</div>';
+            grid.innerHTML = '<div class="ddns-empty-state">No hay servicios DDNS configurados</div>';
             return;
         }
 
@@ -7957,18 +7957,18 @@ async function loadDDNSServices() {
 
             const providerLogos = { duckdns: '🦆', cloudflare: '☁️', noip: '🔗', dynu: '🌐' };
             card.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <div class="ddns-card-header">
                     <span style="font-size: 1.5rem;">${providerLogos[svc.provider] || '🌐'}</span>
                     <div>
                         <h4 style="margin: 0;">${escapeHtml(svc.domain || svc.hostname || t('common.unknown', 'Desconocido'))}</h4>
-                        <span style="font-size: 0.8rem; color: var(--text-dim);">${escapeHtml(svc.provider)}</span>
+                        <span class="misc-task-schedule">${escapeHtml(svc.provider)}</span>
                     </div>
                     <span style="margin-left: auto; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; ${
                         svc.enabled ? 'background: rgba(16,185,129,0.15); color: #10b981;' : 'background: rgba(148,163,184,0.15); color: #94a3b8;'
                     }">${svc.enabled ? 'Activo' : 'Inactivo'}</span>
                 </div>
-                ${svc.lastUpdate ? `<div style="font-size: 0.8rem; color: var(--text-dim);">Última actualización: ${new Date(svc.lastUpdate).toLocaleString('es-ES')}</div>` : ''}
-                ${svc.lastIP ? `<div style="font-size: 0.8rem; color: var(--text-dim);">IP: ${escapeHtml(svc.lastIP)}</div>` : ''}
+                ${svc.lastUpdate ? `<div class="misc-backup-schedule">Última actualización: ${new Date(svc.lastUpdate).toLocaleString('es-ES')}</div>` : ''}
+                ${svc.lastIP ? `<div class="misc-backup-schedule">IP: ${escapeHtml(svc.lastIP)}</div>` : ''}
             `;
 
             const btnGroup = document.createElement('div');
@@ -8004,7 +8004,7 @@ async function loadDDNSServices() {
             grid.appendChild(card);
         });
     } catch (e) {
-        grid.innerHTML = '<div style="padding: 20px; color: #ef4444; grid-column: 1 / -1;">Error cargando servicios DDNS</div>';
+        grid.innerHTML = '<div class="ddns-error-state">Error cargando servicios DDNS</div>';
     }
 }
 
@@ -8018,20 +8018,20 @@ function showDDNSForm() {
     modal.style.cssText = 'display: flex; position: fixed; inset: 0; z-index: 1000; align-items: center; justify-content: center; background: rgba(0,0,0,0.5);';
 
     modal.innerHTML = `
-        <div class="glass-card modal-content" style="max-width: 450px; width: 90%;">
-            <header class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="glass-card modal-content ddns-modal-content">
+            <header class="modal-header ddns-modal-header">
                 <h3>Añadir Servicio DDNS</h3>
                 <button class="btn-close" id="close-ddns-form">&times;</button>
             </header>
-            <form id="ddns-create-form" style="display: flex; flex-direction: column; gap: 12px; margin-top: 15px;">
-                <select id="df-provider" style="padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
+            <form id="ddns-create-form" class="ddns-create-form">
+                <select id="df-provider" class="ddns-provider-select">
                     <option value="duckdns">🦆 DuckDNS</option>
                     <option value="cloudflare">☁️ Cloudflare</option>
                     <option value="noip">🔗 No-IP</option>
                     <option value="dynu">🌐 Dynu</option>
                 </select>
                 <div id="ddns-provider-fields"></div>
-                <label style="display: flex; align-items: center; gap: 6px;"><input type="checkbox" id="df-enabled" checked> Activado</label>
+                <label class="ddns-enabled-checkbox"><input type="checkbox" id="df-enabled" checked> Activado</label>
                 <button type="submit" class="btn-primary">Guardar Servicio</button>
             </form>
         </div>
@@ -8693,7 +8693,7 @@ async function renderActiveBackupView() {
     const grid = document.createElement('div');
     grid.id = 'ab-devices-grid';
     grid.className = 'abk-devices-grid';
-    grid.innerHTML = '<div style="padding: 20px; color: var(--text-dim);">Cargando dispositivos...</div>';
+    grid.innerHTML = '<div class="abk-loading-text">Cargando dispositivos...</div>';
     headerCard.appendChild(grid);
     container.appendChild(headerCard);
 
@@ -8714,7 +8714,7 @@ async function renderActiveBackupView() {
             </div>
         </div>
         <div id="ab-recovery-status" class="abk-recovery-status">
-            <p style="color: var(--text-dim);">Cargando...</p>
+            <p class="vpn-loading-placeholder">Cargando...</p>
         </div>
     `;
     container.appendChild(recoveryCard);
@@ -9040,7 +9040,7 @@ async function loadABDevices() {
         });
     } catch (e) {
         console.error('Load AB devices error:', e);
-        grid.innerHTML = '<div style="padding: 20px; color: #ef4444;">Error al cargar dispositivos</div>';
+        grid.innerHTML = '<div class="abk-error-state">Error al cargar dispositivos</div>';
     }
 }
 
@@ -9065,7 +9065,7 @@ function showAddDeviceForm(editDevice = null) {
     const curOS = editDevice?.os || 'linux';
 
     modal.innerHTML = `
-        <div class="glass-card modal-content" style="max-width: 520px; width: 90%; max-height: 85vh; overflow-y: auto;">
+        <div class="glass-card modal-content" class="abk-modal-content-wide">
             <header class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
                 <h3>${isEdit ? '⚙️ Editar Dispositivo' : '🖥️ Añadir Dispositivo'}</h3>
                 <button class="btn-close" id="close-ab-form">&times;</button>
@@ -9103,7 +9103,7 @@ function showAddDeviceForm(editDevice = null) {
                 </div>
 
                 <div id="ab-ssh-fields" style="display: ${curType === 'files' ? 'flex' : 'none'}; flex-direction: column; gap: 12px;">
-                    <div style="display: grid; grid-template-columns: 1fr 100px; gap: 10px;">
+                    <div class="abk-ssh-host-row">
                         <div class="input-group">
                             <input type="text" id="ab-user" placeholder=" " value="${escapeHtml(editDevice?.sshUser || '')}">
                             <label>Usuario SSH</label>
@@ -9123,7 +9123,7 @@ function showAddDeviceForm(editDevice = null) {
                     </div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div class="abk-schedule-row">
                     <div class="input-group">
                         <input type="text" id="ab-schedule" required placeholder=" " value="${escapeHtml(editDevice?.schedule || '0 2 * * *')}">
                         <label>Cron (ej: 0 2 * * *)</label>
@@ -9205,12 +9205,12 @@ function showAddDeviceForm(editDevice = null) {
                 info.style.display = 'block';
                 const instr = data.sambaSetup.instructions;
                 info.innerHTML = `
-                    <h4 style="margin-bottom: 12px; color: var(--accent);">💽 ${escapeHtml(instr.title)}</h4>
+                    <h4 class="abk-setup-title">💽 ${escapeHtml(instr.title)}</h4>
                     ${instr.steps.map(step => `
-                        <div style="margin-bottom: 15px;">
-                            <p style="font-weight: 600; font-size: 0.9rem; margin-bottom: 6px;">${escapeHtml(step.title)}</p>
-                            <p style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 6px;">${escapeHtml(step.description)}</p>
-                            <div style="background: #0a0a0a; color: #10b981; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 0.75rem; word-break: break-all; white-space: pre-wrap; position: relative;">${escapeHtml(step.command)}</div>
+                        <div class="abk-setup-step-container">
+                            <p class="abk-setup-step-title">${escapeHtml(step.title)}</p>
+                            <p class="abk-setup-step-description">${escapeHtml(step.description)}</p>
+                            <div class="abk-setup-command">${escapeHtml(step.command)}</div>
                         </div>
                     `).join('')}
                     <button class="btn-primary btn-sm" data-action="close-modal" style="margin-top: 5px;">Entendido, cerrar</button>
@@ -9222,12 +9222,12 @@ function showAddDeviceForm(editDevice = null) {
                 info.style.display = 'block';
                 info.innerHTML = `
                     <h4 style="margin-bottom: 10px; color: var(--accent);">🔑 Configura el acceso SSH</h4>
-                    <p style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 10px;">Ejecuta esto en <strong>${escapeHtml(body.name)}</strong> (${escapeHtml(body.ip)}):</p>
-                    <div style="background: #0a0a0a; color: #10b981; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 0.8rem; word-break: break-all; margin-bottom: 10px;">
+                    <p class="abk-setup-ssh-description">Ejecuta esto en <strong>${escapeHtml(body.name)}</strong> (${escapeHtml(body.ip)}):</p>
+                    <div class="abk-setup-command-lg">
                         <code id="ab-ssh-cmd">mkdir -p ~/.ssh && echo '${escapeHtml(data.sshPublicKey)}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys</code>
                     </div>
                     <button class="btn-primary btn-sm" data-action="copy-ssh-cmd">📋 Copiar comando</button>
-                    <button class="btn-primary btn-sm" data-action="close-modal" style="margin-left: 8px; background: #6366f1;">Listo, cerrar</button>
+                    <button class="btn-primary btn-sm" data-action="close-modal" class="abk-setup-close-btn">Listo, cerrar</button>
                 `;
                 info.querySelector('[data-action="copy-ssh-cmd"]')?.addEventListener('click', function() {
                     navigator.clipboard.writeText(document.getElementById('ab-ssh-cmd').textContent);
@@ -9281,7 +9281,7 @@ async function showABInstructions(device) {
 
         const instr = data.instructions;
         modal.innerHTML = `
-            <div class="glass-card modal-content" style="max-width: 600px; width: 90%; max-height: 85vh; overflow-y: auto;">
+            <div class="glass-card modal-content" class="abk-modal-content-extra-wide">
                 <header class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
                     <h3>💽 ${escapeHtml(instr.title)}</h3>
                     <button class="btn-close" data-action="close-modal">&times;</button>
@@ -9289,8 +9289,8 @@ async function showABInstructions(device) {
                 <div style="margin-top: 15px;">
                     ${instr.steps.map(step => `
                         <div style="margin-bottom: 18px;">
-                            <p style="font-weight: 600; font-size: 0.9rem; margin-bottom: 6px;">${escapeHtml(step.title)}</p>
-                            <p style="font-size: 0.82rem; color: var(--text-dim); margin-bottom: 8px;">${escapeHtml(step.description)}</p>
+                            <p class="abk-setup-step-title">${escapeHtml(step.title)}</p>
+                            <p class="abk-setup-step-description">${escapeHtml(step.description)}</p>
                             <div class="ab-copy-cmd" style="background: #0a0a0a; color: #10b981; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 0.75rem; word-break: break-all; white-space: pre-wrap; cursor: pointer; position: relative;" title="Click para copiar">${escapeHtml(step.command)}</div>
                         </div>
                     `).join('')}
@@ -9326,11 +9326,11 @@ async function openABImageBrowse(device) {
         const allItems = [...windowsBackups, ...images];
 
         panel.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <div class="abk-browse-header">
                 <h3>💽 ${escapeHtml(device.name)} — Imágenes de Backup</h3>
                 <button class="btn-close" data-action="close-panel" style="font-size: 1.5rem;">&times;</button>
             </div>
-            <div style="margin-bottom: 10px; font-size: 0.85rem; color: var(--text-dim);">
+            <div class="abk-backup-summary">
                 Tamaño total: <strong>${formatABSize(data.totalSize || 0)}</strong>
             </div>
         `;
@@ -9338,7 +9338,7 @@ async function openABImageBrowse(device) {
 
         if (allItems.length === 0) {
             panel.innerHTML += `
-                <div style="padding: 30px; text-align: center; color: var(--text-dim);">
+                <div class="abk-backup-empty">
                     <p>No hay imágenes de backup todavía.</p>
                     <p style="margin-top: 8px;">Ejecuta el comando de backup desde el equipo Windows/Linux para que aparezcan aquí.</p>
                 </div>`;
@@ -9359,9 +9359,9 @@ async function openABImageBrowse(device) {
 
             const icon = item.type === 'windows-image' ? '🪟' : item.type === 'directory' ? '📁' : '💾';
             row.innerHTML = `
-                <span style="display: flex; align-items: center; gap: 8px;">${icon} ${escapeHtml(item.name)}</span>
-                <span style="font-size: 0.85rem; color: var(--text-dim);">${formatABSize(item.size)}</span>
-                <span style="font-size: 0.85rem; color: var(--text-dim);">${new Date(item.modified).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                <span class="abk-backup-item-name">${icon} ${escapeHtml(item.name)}</span>
+                <span class="abk-backup-item-size">${formatABSize(item.size)}</span>
+                <span class="abk-backup-item-size">${new Date(item.modified).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                 <span style="font-size: 0.8rem; padding: 2px 8px; border-radius: 8px; background: rgba(99,102,241,0.15); color: #6366f1;">${item.type === 'windows-image' ? 'WIM' : item.name.split('.').pop()}</span>
             `;
             list.appendChild(row);
@@ -9439,8 +9439,8 @@ async function openABBrowse(device) {
 
         if (versions.length === 0) {
             panel.innerHTML = `
-                <h3 style="margin-bottom: 15px;">📂 ${escapeHtml(device.name)} — Sin backups</h3>
-                <p style="color: var(--text-dim);">Ejecuta un backup primero para poder explorar archivos.</p>
+                <h3 class="abk-restore-title">📂 ${escapeHtml(device.name)} — Sin backups</h3>
+                <p class="abk-iso-note">Ejecuta un backup primero para poder explorar archivos.</p>
                 <button class="btn-primary btn-sm" data-action="close-panel" style="margin-top: 10px;">Cerrar</button>
             `;
             panel.querySelector('[data-action="close-panel"]')?.addEventListener('click', () => { document.getElementById('ab-detail-panel').style.display = 'none'; });
@@ -9448,13 +9448,13 @@ async function openABBrowse(device) {
         }
 
         panel.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <div class="abk-browse-header">
                 <h3>📂 ${escapeHtml(device.name)}</h3>
                 <button class="btn-close" data-action="close-panel" style="font-size: 1.5rem;">&times;</button>
             </div>
-            <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center;">
+            <div class="abk-browse-controls">
                 <label style="font-weight: 500;">Versión:</label>
-                <select id="ab-version-select" style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
+                <select id="ab-version-select" class="abk-version-select">
                     ${versions.reverse().map(v => `<option value="${escapeHtml(v.name)}">${escapeHtml(v.name)} — ${new Date(v.date).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} (${formatABSize(v.size)})</option>`).join('')}
                 </select>
             </div>
@@ -9512,7 +9512,7 @@ async function loadABBrowse(deviceId) {
         });
     }
 
-    list.innerHTML = '<div style="padding: 20px; color: var(--text-dim);">Cargando...</div>';
+    list.innerHTML = '<div class="misc-backup-loading">Cargando...</div>';
 
     try {
         const res = await authFetch(`${API_BASE}/active-backup/devices/${deviceId}/browse?version=${encodeURIComponent(abBrowseVersion)}&path=${encodeURIComponent(abBrowsePath)}`);
@@ -9521,7 +9521,7 @@ async function loadABBrowse(deviceId) {
         const items = data.items || [];
 
         if (items.length === 0) {
-            list.innerHTML = '<div style="padding: 30px; text-align: center; color: var(--text-dim);">Carpeta vacía</div>';
+            list.innerHTML = '<div class="abk-browse-empty">Carpeta vacía</div>';
             return;
         }
 
@@ -9541,7 +9541,7 @@ async function loadABBrowse(deviceId) {
 
             const nameSpan = document.createElement('span');
             nameSpan.style.cssText = 'display: flex; align-items: center; gap: 8px;';
-            nameSpan.innerHTML = `<span>${item.type === 'directory' ? '📁' : '📄'}</span><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(item.name)}</span>`;
+            nameSpan.innerHTML = `<span>${item.type === 'directory' ? '📁' : '📄'}</span><span class="abk-browse-item-name">${escapeHtml(item.name)}</span>`;
 
             const sizeSpan = document.createElement('span');
             sizeSpan.style.cssText = 'font-size: 0.85rem; color: var(--text-dim);';
@@ -9581,7 +9581,7 @@ async function loadABBrowse(deviceId) {
             list.appendChild(row);
         });
     } catch(e) {
-        list.innerHTML = '<div style="padding: 20px; color: #ef4444;">Error al explorar backup</div>';
+        list.innerHTML = '<div class="abk-browse-error">Error al explorar backup</div>';
     }
 }
 
@@ -9597,17 +9597,17 @@ async function loadRecoveryStatus() {
             const size = formatABSize(data.iso.size);
             const date = new Date(data.iso.modified).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
             container.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
-                    <div style="flex: 1; min-width: 200px;">
-                        <div style="font-weight: 600; color: var(--accent);">✅ ISO disponible</div>
-                        <div style="font-size: 0.85rem; color: var(--text-dim); margin-top: 4px;">${size} · Creada: ${date}</div>
+                <div class="abk-iso-container">
+                    <div class="abk-iso-info">
+                        <div class="abk-iso-available-title">✅ ISO disponible</div>
+                        <div class="abk-iso-available-details">${size} · Creada: ${date}</div>
                     </div>
-                    <div style="display: flex; gap: 8px;">
+                    <div class="abk-iso-buttons">
                         <button class="btn-primary btn-sm" id="ab-download-iso" style="padding: 10px 16px;">⬇️ Descargar ISO</button>
-                        <button class="btn-primary btn-sm" id="ab-rebuild-iso" style="padding: 10px 16px; background: #64748b;">🔄 Regenerar</button>
+                        <button class="btn-primary btn-sm" id="ab-rebuild-iso" class="abk-iso-rebuild-btn">🔄 Regenerar</button>
                     </div>
                 </div>
-                <div style="margin-top: 12px; padding: 12px; background: #0a0a0a; border-radius: 6px; font-family: monospace; font-size: 0.8rem; color: #10b981;">
+                <div class="abk-iso-path">
                     <strong>Para flashear al USB:</strong><br>
                     sudo dd if=homepinas-recovery.iso of=/dev/sdX bs=4M status=progress && sync
                 </div>
@@ -9619,10 +9619,10 @@ async function loadRecoveryStatus() {
             document.getElementById('ab-rebuild-iso').addEventListener('click', () => buildRecoveryISO());
         } else {
             container.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
-                    <div style="flex: 1; min-width: 200px;">
+                <div class="abk-iso-container">
+                    <div class="abk-iso-info">
                         <div style="font-weight: 500;">No hay ISO generada todavía</div>
-                        <div style="font-size: 0.85rem; color: var(--text-dim); margin-top: 4px;">
+                        <div class="abk-iso-available-details">
                             Genera una ISO bootable (~500MB) que incluye herramientas de restauración, 
                             detección automática del NAS y soporte para BIOS + UEFI.
                         </div>
@@ -9631,8 +9631,8 @@ async function loadRecoveryStatus() {
                 </div>
                 <div style="margin-top: 12px;">
                     <details style="color: var(--text-dim); font-size: 0.85rem;">
-                        <summary style="cursor: pointer; font-weight: 500;">¿Qué incluye?</summary>
-                        <ul style="margin-top: 8px; padding-left: 20px; line-height: 1.8;">
+                        <summary class="abk-iso-details-summary">¿Qué incluye?</summary>
+                        <ul class="abk-iso-details-list">
                             <li>🔍 Detección automática del NAS por red (mDNS)</li>
                             <li>📋 Menú interactivo para seleccionar backup</li>
                             <li>💽 Restauración de imágenes completas (Windows/Linux)</li>
@@ -9649,7 +9649,7 @@ async function loadRecoveryStatus() {
             if (buildBtn) buildBtn.addEventListener('click', () => buildRecoveryISO());
         }
     } catch (e) {
-        container.innerHTML = `<p style="color: var(--text-dim);">Scripts de recovery disponibles. La generación de ISO requiere un sistema x86_64.</p>
+        container.innerHTML = `<p class="abk-iso-note">Scripts de recovery disponibles. La generación de ISO requiere un sistema x86_64.</p>
             <button class="btn-primary btn-sm" data-action="download-scripts" style="margin-top: 10px;">📦 Descargar Scripts</button>`;
         container.querySelector('[data-action="download-scripts"]')?.addEventListener('click', () => { window.open(`${API_BASE}/active-backup/recovery/scripts`, '_blank'); });
     }
@@ -9667,12 +9667,12 @@ async function buildRecoveryISO() {
         const container = document.getElementById('ab-recovery-status');
         if (container) {
             container.innerHTML = `
-                <div style="text-align: center; padding: 20px;">
-                    <div style="font-size: 2rem; margin-bottom: 10px;">⏳</div>
+                <div class="abk-iso-building-container">
+                    <div class="abk-iso-building-icon">⏳</div>
                     <div style="font-weight: 600;">Generando ISO de recuperación...</div>
-                    <div style="color: var(--text-dim); font-size: 0.85rem; margin-top: 8px;">Esto puede tardar 10-20 minutos. No cierres esta página.</div>
-                    <div style="margin-top: 15px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;">
-                        <div style="height: 100%; width: 30%; background: var(--accent); border-radius: 2px; animation: pulse 2s infinite;"></div>
+                    <div class="abk-iso-building-description">Esto puede tardar 10-20 minutos. No cierres esta página.</div>
+                    <div class="abk-iso-building-progress">
+                        <div class="abk-iso-building-bar"></div>
                     </div>
                 </div>
             `;
