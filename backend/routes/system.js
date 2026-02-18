@@ -494,7 +494,7 @@ router.get('/status', async (req, res) => {
     // Read version from package.json
     let version = '';
     try {
-        const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+        const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8'));
         version = pkg.version || '';
     } catch { /* ignore */ }
     res.json({
