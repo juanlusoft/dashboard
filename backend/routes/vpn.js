@@ -57,6 +57,7 @@ const WG_CONF = path.join(WG_DIR, 'wg0.conf');
 const WG_CLIENTS_DIR = path.join(WG_DIR, 'clients');
 
 // Estado de instalación en memoria (para proceso async)
+const INSTALL_LOCK_FILE = path.join(os.tmpdir(), 'homepinas-vpn-install.lock');
 let installState = {
     running: false,
     step: '',
@@ -64,6 +65,20 @@ let installState = {
     error: null,
     completed: false
 };
+
+// Al iniciar, comprobar si quedó un lock de instalación interrumpida
+try {
+    if (fs.existsSync(INSTALL_LOCK_FILE)) {
+        const lockAge = Date.now() - fs.statSync(INSTALL_LOCK_FILE).mtimeMs;
+        if (lockAge > 600000) { // > 10 minutos = instalación zombi
+            fs.unlinkSync(INSTALL_LOCK_FILE);
+            console.warn('[VPN] Lock de instalación huérfano eliminado (>10 min)');
+        } else {
+            installState.error = 'Instalación interrumpida por reinicio del servidor. Inténtelo de nuevo.';
+            fs.unlinkSync(INSTALL_LOCK_FILE);
+        }
+    }
+} catch { /* ignore */ }
 
 // Todas las rutas requieren autenticación + admin
 router.use(requireAuth);
@@ -220,8 +235,10 @@ function saveVpnConfig(vpnConfig) {
  * Generar el archivo wg0.conf del servidor.
  * Requiere la clave privada del servidor como parámetro (no la lee de data.json).
  * Detecta la interfaz de red dinámicamente.
+ * pskMap: opcional, Map<publicKey, presharedKey> para clientes nuevos que aún no están en wg0.conf.
+ * Para clientes existentes, el PSK se lee del wg0.conf actual.
  */
-function generateServerConfig(vpnConfig, serverPrivateKey, netInterface) {
+async function generateServerConfig(vpnConfig, serverPrivateKey, netInterface, pskMap) {
     const serverAddr = vpnConfig.subnet.split('/')[0].replace(/\.\d+$/, '.1');
     const iface = netInterface || 'eth0';
     let config = '[Interface]\n';
@@ -231,14 +248,19 @@ function generateServerConfig(vpnConfig, serverPrivateKey, netInterface) {
     config += `PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o ${iface} -j MASQUERADE\n`;
     config += `PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o ${iface} -j MASQUERADE\n`;
 
-    // Añadir peers (clientes) - solo publicKey y presharedKey (no privateKey)
+    // Añadir peers (clientes) - publicKey y presharedKey (leída de disco o del map de nuevos)
     const clients = vpnConfig.clients || [];
     for (const client of clients) {
         if (!client.revoked) {
+            // PSK: primero del map (cliente nuevo), luego del wg0.conf existente
+            let psk = pskMap?.get(client.publicKey) || null;
+            if (!psk) {
+                psk = await readPresharedKeyFromConf(client.publicKey);
+            }
             config += `\n# ${client.name}\n`;
             config += '[Peer]\n';
             config += `PublicKey = ${client.publicKey}\n`;
-            config += `PresharedKey = ${client.presharedKey}\n`;
+            if (psk) config += `PresharedKey = ${psk}\n`;
             config += `AllowedIPs = ${client.address}/32\n`;
         }
     }
@@ -269,9 +291,14 @@ function generateClientConfig(vpnConfig, clientPrivateKey, clientAddress, client
 /**
  * Escribir la configuración del servidor al disco
  */
-async function writeServerConfig(vpnConfig, serverPrivateKey) {
+/**
+ * @param {object} vpnConfig
+ * @param {string} serverPrivateKey
+ * @param {Map<string,string>} [pskMap] - Map<publicKey, presharedKey> for new clients not yet in wg0.conf
+ */
+async function writeServerConfig(vpnConfig, serverPrivateKey, pskMap) {
     const netInterface = await getDefaultInterface();
-    const config = generateServerConfig(vpnConfig, serverPrivateKey, netInterface);
+    const config = await generateServerConfig(vpnConfig, serverPrivateKey, netInterface, pskMap);
     const tmpFile = '/tmp/wg0.conf.tmp';
     fs.writeFileSync(tmpFile, config, { mode: 0o600 });
     await sudoExec('cp', [tmpFile, WG_CONF]);
@@ -305,15 +332,21 @@ async function readClientConfFile(clientName) {
 }
 
 /**
- * Eliminar configuración de cliente del disco
+ * Eliminar configuración de cliente del disco de forma segura.
+ * Intenta shred (sobrescribe + elimina), fallback a rm -f.
  */
 async function deleteClientConfFile(clientName) {
     const confPath = path.join(WG_CLIENTS_DIR, `${clientName}.conf`);
     try {
-        // Sobrescribir con ceros antes de eliminar (seguridad)
-        await sudoExec('tee', [confPath], { timeout: 5000 });
+        // shred: sobrescribe con datos aleatorios 3 veces y luego elimina
+        await sudoExec('shred', ['-u', '-z', confPath], { timeout: 10000 });
     } catch {
-        // Ignorar si no existe
+        // shred puede no estar disponible; fallback a rm -f
+        try {
+            await sudoExec('rm', ['-f', confPath], { timeout: 5000 });
+        } catch {
+            // Archivo puede no existir → ok
+        }
     }
 }
 
@@ -328,6 +361,27 @@ async function readServerPrivateKey() {
     } catch {
         return null;
     }
+}
+
+/**
+ * Leer el PresharedKey de un peer desde wg0.conf, buscando por su PublicKey.
+ * Devuelve null si no se encuentra.
+ */
+async function readPresharedKeyFromConf(publicKey) {
+    try {
+        const { stdout } = await sudoExec('cat', [WG_CONF]);
+        // Parse peers: split por [Peer]
+        const sections = stdout.split(/^\[Peer\]/m);
+        for (const section of sections) {
+            if (section.includes(publicKey)) {
+                const pskMatch = section.match(/PresharedKey\s*=\s*(\S+)/);
+                return pskMatch ? pskMatch[1] : null;
+            }
+        }
+    } catch {
+        // ignore
+    }
+    return null;
 }
 
 /**
@@ -364,9 +418,10 @@ async function reloadWireguard() {
 }
 
 /**
- * Liberar locks de dpkg/apt matando procesos zombie y eliminando lock files.
- * Esto es necesario cuando una instalación previa fue interrumpida y dejó
- * locks huérfanos que bloquean cualquier operación apt/dpkg.
+ * Liberar locks de dpkg/apt de forma segura.
+ * Solo actúa si los lock files existen (indicando locks huérfanos).
+ * Usa SIGTERM primero, espera, y solo SIGKILL si es necesario.
+ * Siempre ejecuta dpkg --configure -a para reparar estado corrupto.
  */
 async function releaseDpkgLocks() {
     const lockFiles = [
@@ -376,21 +431,49 @@ async function releaseDpkgLocks() {
         '/var/cache/apt/archives/lock'
     ];
 
-    // 1. Matar procesos apt/dpkg que puedan tener el lock
+    // Comprobar si hay locks reales antes de matar nada
+    let hasLocks = false;
+    for (const lockFile of lockFiles) {
+        try {
+            await sudoExec('fuser', [lockFile], { timeout: 5000 });
+            hasLocks = true;
+            break;
+        } catch {
+            // fuser falla si el archivo no está en uso → ok
+        }
+    }
+
+    if (!hasLocks) {
+        console.log('[VPN] No se detectaron locks de dpkg activos');
+        return;
+    }
+
+    // 1. Intento graceful: SIGTERM primero
     const processNames = ['apt-get', 'apt', 'dpkg'];
     for (const procName of processNames) {
         try {
-            await sudoExec('killall', ['-9', procName], { timeout: 5000 });
-            console.log(`[VPN] Proceso ${procName} terminado`);
+            await sudoExec('killall', ['-TERM', procName], { timeout: 5000 });
+            console.log(`[VPN] SIGTERM enviado a ${procName}`);
         } catch {
             // No hay proceso corriendo → ok
         }
     }
 
-    // Esperar un momento para que se liberen los locks
+    // Esperar a que terminen normalmente
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    // 2. Solo si aún hay locks, SIGKILL como último recurso
+    for (const lockFile of lockFiles) {
+        try {
+            await sudoExec('fuser', ['-k', lockFile], { timeout: 5000 });
+        } catch {
+            // ok
+        }
+    }
+
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // 2. Eliminar lock files huérfanos
+    // 3. Eliminar lock files huérfanos
     for (const lockFile of lockFiles) {
         try {
             await sudoExec('rm', ['-f', lockFile], { timeout: 5000 });
@@ -482,10 +565,16 @@ router.get('/status', async (req, res) => {
             }
         }
 
-        // Obtener IP pública
+        // Obtener IP pública y detectar si el endpoint es una IP local
         let publicIP = vpnConfig.endpoint || null;
+        let endpointIsLocal = false;
         if (!publicIP) {
             publicIP = await getPublicIP();
+        }
+        // Comprobar si el endpoint configurado es una IP local/privada
+        const configuredEndpoint = vpnConfig.endpoint || publicIP || '';
+        if (configuredEndpoint) {
+            endpointIsLocal = /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.)/.test(configuredEndpoint);
         }
 
         const clients = (vpnConfig.clients || []).map(c => ({
@@ -508,6 +597,7 @@ router.get('/status', async (req, res) => {
             subnet: vpnConfig.subnet,
             endpoint: vpnConfig.endpoint,
             publicIP,
+            endpointIsLocal,
             clientCount: clients.filter(c => !c.revoked).length,
             clients,
             connectedPeers
@@ -564,6 +654,9 @@ router.post('/install', async (req, res) => {
  * Proceso de instalación en background
  */
 async function runInstallBackground(user) {
+    // Crear lock file para detectar reinicio durante instalación
+    try { fs.writeFileSync(INSTALL_LOCK_FILE, String(Date.now())); } catch { /* ignore */ }
+
     try {
         // Paso 1: Liberar locks de dpkg (matar procesos zombie, eliminar locks huérfanos)
         installState.step = 'Liberando locks del sistema...';
@@ -640,6 +733,7 @@ async function runInstallBackground(user) {
         installState.progress = 100;
         installState.completed = true;
         installState.running = false;
+        try { fs.unlinkSync(INSTALL_LOCK_FILE); } catch { /* ignore */ }
 
         logSecurityEvent('vpn_installed', { user, port: vpnConfig.port });
         console.log('[VPN] Instalación completada exitosamente');
@@ -649,6 +743,7 @@ async function runInstallBackground(user) {
         installState.step = `Error: ${err.message}`;
         installState.error = err.message;
         installState.running = false;
+        try { fs.unlinkSync(INSTALL_LOCK_FILE); } catch { /* ignore */ }
     }
 }
 
@@ -738,6 +833,20 @@ router.put('/config', async (req, res) => {
             if (isNaN(portNum) || portNum < 1024 || portNum > 65535) {
                 return res.status(400).json({ success: false, error: 'Puerto inválido (1024-65535)' });
             }
+            // Comprobar si el puerto ya está en uso por otro servicio
+            if (portNum !== vpnConfig.port) {
+                try {
+                    const { stdout } = await execFileAsync('ss', ['-tulnp']);
+                    const portInUse = stdout.split('\n').some(line =>
+                        line.includes(`:${portNum} `) && !line.includes('wg')
+                    );
+                    if (portInUse) {
+                        return res.status(400).json({ success: false, error: `Puerto ${portNum} ya está en uso por otro servicio` });
+                    }
+                } catch {
+                    // ss no disponible, continuar sin validación
+                }
+            }
             vpnConfig.port = portNum;
         }
 
@@ -808,12 +917,12 @@ router.post('/clients', async (req, res) => {
         const presharedKey = await generatePresharedKey();
         const clientIP = getNextClientIP(vpnConfig);
 
-        // En data.json solo guardamos metadatos (NO la clave privada)
+        // En data.json solo guardamos metadatos (NO claves privadas NI material criptográfico)
+        // PSK se almacena solo en wg0.conf y en el .conf del cliente
         const clientMeta = {
             id: Date.now().toString(36),
             name: safeName,
             publicKey: clientKeys.publicKey,
-            presharedKey: presharedKey,
             address: clientIP,
             createdAt: new Date().toISOString(),
             revoked: false
@@ -823,9 +932,11 @@ router.post('/clients', async (req, res) => {
         saveVpnConfig(vpnConfig);
 
         // Reescribir config del servidor con el nuevo peer
+        // Pass PSK via map since it's not yet in wg0.conf
+        const pskMap = new Map([[clientKeys.publicKey, presharedKey]]);
         const serverPrivateKey = await readServerPrivateKey();
         if (serverPrivateKey) {
-            await writeServerConfig(vpnConfig, serverPrivateKey);
+            await writeServerConfig(vpnConfig, serverPrivateKey, pskMap);
         }
 
         // Generar configuración del cliente (con clave privada)

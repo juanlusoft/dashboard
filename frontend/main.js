@@ -8367,8 +8367,15 @@ async function renderVPNView() {
     // --- Info del servidor ---
     const infoCard = document.createElement('div');
     infoCard.className = 'glass-card';
+    const endpointWarning = vpnStatus.endpointIsLocal ? `
+        <div class="vpn-endpoint-warning">
+            ⚠️ <strong>Atención:</strong> El endpoint configurado (${escapeHtml(vpnStatus.endpoint || vpnStatus.publicIP || '')}) es una IP local.
+            Los clientes externos no podrán conectarse. Configura un dominio DDNS o tu IP pública.
+        </div>
+    ` : '';
     infoCard.innerHTML = `
         <h4>⚙️ Configuración del Servidor</h4>
+        ${endpointWarning}
         <div class="vpn-config-grid">
             <div><strong>Endpoint:</strong> ${escapeHtml(vpnStatus.endpoint || vpnStatus.publicIP || 'No configurado')}</div>
             <div><strong>Puerto:</strong> ${vpnStatus.port}</div>
