@@ -6544,24 +6544,23 @@ function showFileContextMenu(e, filePath, file) {
 
 async function renderUsersView() {
     const container = document.createElement('div');
-    container.style.cssText = 'display: contents;';
+    container.className = 'users-layout';
 
-    // Users card
+    // LEFT COLUMN: Users card
     const usersCard = document.createElement('div');
     usersCard.className = 'glass-card';
-    usersCard.style.cssText = 'grid-column: 1 / -1;';
 
     const header = document.createElement('div');
-    header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;';
-    
+    header.className = 'users-card-header';
+
     const title = document.createElement('h3');
     title.textContent = '👥 Gestión de Usuarios';
-    
+
     const addBtn = document.createElement('button');
     addBtn.className = 'btn-primary btn-sm';
     addBtn.textContent = '+ Añadir Usuario';
     addBtn.addEventListener('click', () => showUserForm());
-    
+
     header.appendChild(title);
     header.appendChild(addBtn);
     usersCard.appendChild(header);
@@ -6569,36 +6568,125 @@ async function renderUsersView() {
     // Users table
     const table = document.createElement('div');
     table.id = 'users-table';
-    table.style.cssText = 'border: 1px solid var(--border); border-radius: 8px; overflow: hidden;';
-    
+    table.className = 'users-table';
+
     const tableHeader = document.createElement('div');
-    tableHeader.style.cssText = 'display: grid; grid-template-columns: 1fr 120px 160px 160px 80px; padding: 12px 20px; background: var(--bg-hover); font-weight: 600; font-size: 0.85rem; color: var(--text-dim);';
-    tableHeader.innerHTML = '<span>Usuario</span><span>Rol</span><span>Creado</span><span>Último Acceso</span><span></span>';
+    tableHeader.className = 'users-table-header';
+    tableHeader.innerHTML = '<span>Usuario</span><span>Rol</span><span>Creado</span><span>Último Acceso</span><span>Acciones</span>';
     table.appendChild(tableHeader);
-    
+
     const usersList = document.createElement('div');
     usersList.id = 'users-list';
     table.appendChild(usersList);
     usersCard.appendChild(table);
     container.appendChild(usersCard);
 
+    // RIGHT COLUMN: My Account + 2FA
+    const rightCol = document.createElement('div');
+    rightCol.className = 'users-right-col';
+
+    // My Account Card
+    const accountCard = document.createElement('div');
+    accountCard.className = 'glass-card';
+
+    const accountTitle = document.createElement('h3');
+    accountTitle.textContent = '👤 Mi Cuenta';
+    accountTitle.style.marginBottom = '15px';
+    accountCard.appendChild(accountTitle);
+
+    const accountContent = document.createElement('div');
+    accountContent.id = 'my-account-content';
+    accountContent.innerHTML = `
+        <div class="users-account-info">
+            <div class="users-account-row">
+                <span class="users-account-label">Usuario</span>
+                <span class="users-account-value">${escapeHtml(state.user?.username || 'admin')}</span>
+            </div>
+            <div class="users-account-row">
+                <span class="users-account-label">Rol</span>
+                <span class="users-account-value">Administrador</span>
+            </div>
+        </div>
+        <hr style="border: none; border-top: 1px solid var(--border); margin: 16px 0;">
+        <h4 style="margin-bottom: 12px; font-size: 0.9rem;">🔑 Cambiar Contraseña</h4>
+        <form id="change-password-form" class="users-password-form">
+            <div class="input-group">
+                <input type="password" id="cp-current" required placeholder=" ">
+                <label>Contraseña actual</label>
+            </div>
+            <div class="input-group">
+                <input type="password" id="cp-new" required placeholder=" " minlength="6">
+                <label>Nueva contraseña</label>
+            </div>
+            <div class="input-group">
+                <input type="password" id="cp-confirm" required placeholder=" " minlength="6">
+                <label>Confirmar nueva contraseña</label>
+            </div>
+            <div id="cp-message" class="users-password-message"></div>
+            <button type="submit" class="btn-primary" style="width: 100%;">Cambiar Contraseña</button>
+        </form>
+    `;
+    accountCard.appendChild(accountContent);
+    rightCol.appendChild(accountCard);
+
     // 2FA Card
     const tfaCard = document.createElement('div');
     tfaCard.className = 'glass-card';
-    tfaCard.style.cssText = 'grid-column: 1 / -1;';
-    
+
     const tfaTitle = document.createElement('h3');
     tfaTitle.textContent = '🔐 Autenticación de Dos Factores (2FA)';
     tfaTitle.style.marginBottom = '15px';
     tfaCard.appendChild(tfaTitle);
-    
+
     const tfaContent = document.createElement('div');
     tfaContent.id = 'tfa-content';
     tfaContent.innerHTML = '<p class="users-loading-text">Cargando...</p>';
     tfaCard.appendChild(tfaContent);
-    container.appendChild(tfaCard);
+    rightCol.appendChild(tfaCard);
+
+    container.appendChild(rightCol);
 
     dashboardContent.appendChild(container);
+
+    // Setup change password form handler
+    document.getElementById('change-password-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msgEl = document.getElementById('cp-message');
+        const currentPassword = document.getElementById('cp-current').value;
+        const newPassword = document.getElementById('cp-new').value;
+        const confirmPassword = document.getElementById('cp-confirm').value;
+
+        if (newPassword !== confirmPassword) {
+            msgEl.textContent = 'Las contraseñas no coinciden';
+            msgEl.className = 'users-password-message users-password-error';
+            return;
+        }
+        if (newPassword.length < 6) {
+            msgEl.textContent = 'La contraseña debe tener al menos 6 caracteres';
+            msgEl.className = 'users-password-message users-password-error';
+            return;
+        }
+
+        try {
+            const res = await authFetch(`${API_BASE}/users/me/password`, {
+                method: 'PUT',
+                body: JSON.stringify({ currentPassword, newPassword })
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.error || 'Error al cambiar contraseña');
+            }
+            msgEl.textContent = '✅ Contraseña cambiada correctamente';
+            msgEl.className = 'users-password-message users-password-success';
+            document.getElementById('cp-current').value = '';
+            document.getElementById('cp-new').value = '';
+            document.getElementById('cp-confirm').value = '';
+        } catch (err) {
+            msgEl.textContent = err.message;
+            msgEl.className = 'users-password-message users-password-error';
+        }
+    });
+
     await loadUsers();
     await load2FAStatus();
 }
@@ -6621,44 +6709,50 @@ async function loadUsers() {
         usersList.innerHTML = '';
         users.forEach(user => {
             const row = document.createElement('div');
-            row.style.cssText = 'display: grid; grid-template-columns: 1fr 120px 160px 160px 80px; padding: 12px 20px; align-items: center; border-top: 1px solid var(--border);';
-            
+            row.className = 'users-table-row';
+
             const nameSpan = document.createElement('span');
-            nameSpan.style.fontWeight = '500';
+            nameSpan.className = 'users-name';
             nameSpan.textContent = user.username;
             if (user.username === state.user?.username) {
                 const badge = document.createElement('span');
                 badge.textContent = ' (tú)';
-                badge.style.cssText = 'color: var(--accent); font-size: 0.8rem;';
+                badge.className = 'users-you-badge';
                 nameSpan.appendChild(badge);
             }
 
             const roleSpan = document.createElement('span');
             const roleBadge = document.createElement('span');
-            roleBadge.style.cssText = `padding: 3px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 500; ${
-                user.role === 'admin' ? 'background: rgba(239,68,68,0.15); color: #ef4444;' :
-                user.role === 'user' ? 'background: rgba(99,102,241,0.15); color: #6366f1;' :
-                'background: rgba(148,163,184,0.15); color: #94a3b8;'
-            }`;
+            const roleClass = user.role === 'admin' ? 'users-role-admin' :
+                user.role === 'user' ? 'users-role-user' : 'users-role-readonly';
+            roleBadge.className = `users-role-badge ${roleClass}`;
             roleBadge.textContent = user.role === 'admin' ? 'Admin' : user.role === 'user' ? 'Usuario' : 'Solo lectura';
             roleSpan.appendChild(roleBadge);
 
             const createdSpan = document.createElement('span');
-            createdSpan.style.cssText = 'font-size: 0.85rem; color: var(--text-dim);';
+            createdSpan.className = 'users-date-text';
             createdSpan.textContent = user.createdAt ? new Date(user.createdAt).toLocaleDateString('es-ES') : '—';
 
             const lastLoginSpan = document.createElement('span');
-            lastLoginSpan.style.cssText = 'font-size: 0.85rem; color: var(--text-dim);';
+            lastLoginSpan.className = 'users-date-text';
             lastLoginSpan.textContent = user.lastLogin ? new Date(user.lastLogin).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 
             const actionsDiv = document.createElement('div');
-            actionsDiv.style.cssText = 'display: flex; gap: 6px;';
+            actionsDiv.className = 'users-actions';
+
+            // Edit button (for all users except self — admin can change role/password)
             if (user.username !== state.user?.username) {
+                const editBtn = document.createElement('button');
+                editBtn.textContent = '✏️';
+                editBtn.title = 'Editar usuario';
+                editBtn.className = 'users-action-btn';
+                editBtn.addEventListener('click', () => showUserForm(user));
+                actionsDiv.appendChild(editBtn);
+
                 const delBtn = document.createElement('button');
                 delBtn.textContent = '🗑';
-                delBtn.style.cssText = 'background: none; border: none; cursor: pointer; font-size: 1rem; opacity: 0.5;';
-                delBtn.addEventListener('mouseenter', () => delBtn.style.opacity = '1');
-                delBtn.addEventListener('mouseleave', () => delBtn.style.opacity = '0.5');
+                delBtn.title = 'Eliminar usuario';
+                delBtn.className = 'users-action-btn users-action-btn-danger';
                 delBtn.addEventListener('click', () => deleteUser(user.username));
                 actionsDiv.appendChild(delBtn);
             }
