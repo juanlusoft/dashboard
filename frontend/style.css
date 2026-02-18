@@ -4919,6 +4919,26 @@ body.fm-dragging .fm-tree-item {
     grid-column: 1 / -1;
 }
 
+.vpn-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+    width: 100%;
+}
+
+@media (min-width: 1100px) {
+    .vpn-layout {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.vpn-col-left,
+.vpn-col-right {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
 .vpn-status-header {
     display: flex;
     justify-content: space-between;

@@ -8364,6 +8364,14 @@ async function renderVPNView() {
     // Si no está instalado, no mostrar más
     if (!isInstalled) return;
 
+    // --- 2-column layout container ---
+    const vpnLayout = document.createElement('div');
+    vpnLayout.className = 'vpn-layout';
+
+    // LEFT COLUMN: Config + Peers
+    const leftCol = document.createElement('div');
+    leftCol.className = 'vpn-col-left';
+
     // --- Info del servidor ---
     const infoCard = document.createElement('div');
     infoCard.className = 'glass-card';
@@ -8388,7 +8396,7 @@ async function renderVPNView() {
             <button class="btn-primary btn-sm" id="vpn-edit-config-btn">✏️ Editar Configuración</button>
         </div>
     `;
-    dashboardContent.appendChild(infoCard);
+    leftCol.appendChild(infoCard);
 
     // Stats de peers conectados
     const peersCard = document.createElement('div');
@@ -8421,11 +8429,15 @@ async function renderVPNView() {
         `;
         peersList.appendChild(peerEl);
     }
-    dashboardContent.appendChild(peersCard);
+    leftCol.appendChild(peersCard);
+    vpnLayout.appendChild(leftCol);
 
-    // --- Lista de clientes ---
+    // RIGHT COLUMN: Clients
+    const rightCol = document.createElement('div');
+    rightCol.className = 'vpn-col-right';
+
     const clientsCard = document.createElement('div');
-    clientsCard.className = 'glass-card vpn-full-width';
+    clientsCard.className = 'glass-card';
     clientsCard.innerHTML = `
         <div class="vpn-section-header">
             <h4>👥 Clientes VPN</h4>
@@ -8433,7 +8445,10 @@ async function renderVPNView() {
         </div>
         <div id="vpn-clients-grid" class="vpn-clients-grid"></div>
     `;
-    dashboardContent.appendChild(clientsCard);
+    rightCol.appendChild(clientsCard);
+    vpnLayout.appendChild(rightCol);
+
+    dashboardContent.appendChild(vpnLayout);
 
     // Renderizar clientes
     const clientsGrid = clientsCard.querySelector('#vpn-clients-grid');
