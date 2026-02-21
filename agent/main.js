@@ -19,7 +19,7 @@ const store = new Store({
   encryptionKey: 'homepinas-agent-store-v2',
   defaults: {
     nasAddress: '',
-    nasPort: 3001,
+    nasPort: 443,
     agentId: '',
     agentToken: '',
     status: 'disconnected', // disconnected | pending | approved
@@ -295,7 +295,7 @@ function setupIPC() {
   // Discover and register with NAS
   ipcMain.handle('connect-nas', async (_, { address, port }) => {
     try {
-      const parsedPort = port || 3001;
+      const parsedPort = port || 443;
       if (parsedPort < 1 || parsedPort > 65535) {
         return { success: false, error: 'Puerto inválido (debe ser entre 1 y 65535)' };
       }
@@ -355,6 +355,22 @@ function setupIPC() {
   ipcMain.handle('disconnect', () => {
     disconnect();
     return { success: true };
+  });
+
+  ipcMain.handle('get-version', () => {
+    const pkg = require('./package.json');
+    return pkg.version;
+  });
+
+  ipcMain.handle('resize-to-fit', () => {
+    if (mainWindow) {
+      mainWindow.setResizable(true);
+      mainWindow.webContents.executeJavaScript('document.body.scrollHeight').then((height) => {
+        const [width] = mainWindow.getSize();
+        mainWindow.setSize(width, Math.min(Math.max(height + 40, 300), 800));
+        mainWindow.setResizable(false);
+      }).catch(() => {});
+    }
   });
 }
 

@@ -46,7 +46,7 @@ class NASApi {
         path: `/api${reqPath}`,
         method,
         agent: this.agent,
-        timeout: 30000,
+        timeout: 120000,
         headers: {
           'Content-Type': 'application/json',
           ...headers,
@@ -93,6 +93,10 @@ class NASApi {
 
   async testConnection(address, port) {
     return this._request('GET', address, port, '/system/stats');
+  }
+
+  async authenticate(address, port, username, password) {
+    return this._request('POST', address, port, '/login', {}, { username, password });
   }
 
   async agentRegister(address, port, deviceInfo) {
