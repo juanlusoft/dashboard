@@ -183,6 +183,7 @@ async function runBackup(device) {
 
 /**
  * Run rsync backup from remote device
+ * Splits work path into separate function: buildRsyncArgs, executeRsyncCommand
  * @private
  */
 async function runRsyncBackup(device, dir, backupState) {
@@ -193,55 +194,78 @@ async function runRsyncBackup(device, dir, backupState) {
     ? path.join(dir, versions[versions.length - 1])
     : null;
 
-  const sshCmd = getSSHCommand(device.sshPort || 22);
-
+  // Run rsync for each path
   for (const srcPath of device.paths) {
-    const args = ['-az', '--delete', '--stats', '-e', sshCmd];
+    const args = buildRsyncArgs({
+      srcPath,
+      device,
+      vDir,
+      prevDir,
+      excludes: device.excludes || [],
+    });
 
-    // Hardlink to previous version for space efficiency
-    if (prevDir) {
-      args.push(`--link-dest=${prevDir}`);
-    }
-
-    // Add excludes
-    for (const exc of device.excludes || []) {
-      args.push(`--exclude=${exc}`);
-    }
-
-    const remoteSrc = `${device.sshUser}@${device.ip}:${srcPath}/`;
     const destSub = path.join(vDir, srcPath);
-
     if (!fs.existsSync(destSub)) {
       fs.mkdirSync(destSub, { recursive: true });
     }
 
-    args.push(remoteSrc, `${destSub}/`);
-
-    // Run rsync
-    await new Promise((resolve, reject) => {
-      const proc = spawn('rsync', args);
-
-      proc.stdout.on('data', (chunk) => {
-        backupState.output += chunk.toString();
-      });
-
-      proc.stderr.on('data', (chunk) => {
-        backupState.output += chunk.toString();
-      });
-
-      proc.on('close', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(
-            `rsync exited with code ${code}\n${backupState.output.slice(-500)}`,
-          ));
-        }
-      });
-
-      proc.on('error', reject);
-    });
+    await executeRsyncCommand(args, backupState);
   }
+}
+
+/**
+ * Build rsync command arguments
+ * @private
+ */
+function buildRsyncArgs({ srcPath, device, vDir, prevDir, excludes }) {
+  const sshCmd = getSSHCommand(device.sshPort || 22);
+  const args = ['-az', '--delete', '--stats', '-e', sshCmd];
+
+  // Hardlink to previous version for space efficiency
+  if (prevDir) {
+    args.push(`--link-dest=${prevDir}`);
+  }
+
+  // Add excludes
+  for (const exc of excludes) {
+    args.push(`--exclude=${exc}`);
+  }
+
+  const remoteSrc = `${device.sshUser}@${device.ip}:${srcPath}/`;
+  const destSub = path.join(vDir, srcPath);
+
+  args.push(remoteSrc, `${destSub}/`);
+  return args;
+}
+
+/**
+ * Execute rsync process and track output
+ * @private
+ */
+async function executeRsyncCommand(args, backupState) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('rsync', args);
+
+    proc.stdout.on('data', (chunk) => {
+      backupState.output += chunk.toString();
+    });
+
+    proc.stderr.on('data', (chunk) => {
+      backupState.output += chunk.toString();
+    });
+
+    proc.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(
+          `rsync exited with code ${code}\n${backupState.output.slice(-500)}`,
+        ));
+      }
+    });
+
+    proc.on('error', reject);
+  });
 }
 
 /**
