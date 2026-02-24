@@ -946,30 +946,31 @@ router.get('/devices/:id/versions', (req, res) => {
  * Browse files inside a specific backup version
  */
 router.get('/devices/:id/browse', (req, res) => {
-  const version = req.query.version || 'latest';
+  const data2 = getData();
+  const device2 = (data2.activeBackup || {devices:[]}).devices.find(d => d.id === req.params.id);
+  const devDir = device2 ? deviceBackupDir(device2) : path.join(BACKUP_BASE, req.params.id.replace(/[^a-zA-Z0-9_-]/g, ''));
+  
+  const version = req.query.version;
   const browsePath = req.query.path || '/';
 
-  const safe = (req.params.id).replace(/[^a-zA-Z0-9_-]/g, '');
-  const safeVersion = version.replace(/[^a-zA-Z0-9_.-]/g, '');
-
-  let basePath = path.join(BACKUP_BASE, safe, safeVersion);
-
-  // Resolve 'latest' symlink
-  if (safeVersion === 'latest') {
+  let basePath;
+  if (version && version !== 'latest') {
+    basePath = path.join(devDir, version.replace(/[^a-zA-Z0-9_.-]/g, ''));
+  } else if (version === 'latest') {
     try {
-      const target = fs.readlinkSync(basePath);
-      basePath = path.join(BACKUP_BASE, safe, target);
+      const target = fs.readlinkSync(path.join(devDir, 'latest'));
+      basePath = path.join(devDir, target);
     } catch(e) {
-      return res.status(404).json({ error: 'No backups available' });
+      basePath = devDir;
     }
+  } else {
+    basePath = devDir;
   }
 
-  // Navigate into the requested path
   const cleanPath = browsePath.replace(/\0/g, '').replace(/^\/+/, '');
   const fullPath = path.resolve(basePath, cleanPath);
 
-  // Security: ensure we're still inside the backup dir
-  if (!fullPath.startsWith(path.resolve(BACKUP_BASE, safe))) {
+  if (!fullPath.startsWith(path.resolve(devDir))) {
     return res.status(403).json({ error: 'Access denied' });
   }
 
@@ -1003,15 +1004,15 @@ router.get('/devices/:id/browse', (req, res) => {
     res.json({
       success: true,
       path: browsePath,
-      version: safeVersion,
-      items: items.sort((a, b) => {
+      version: version || null,
+      files: items.sort((a, b) => {
         if (a.type === 'directory' && b.type !== 'directory') return -1;
         if (a.type !== 'directory' && b.type === 'directory') return 1;
         return a.name.localeCompare(b.name);
       }),
     });
   } catch(err) {
-    res.status(500).json({ error: 'Failed to browse directory' });
+    console.error("Browse error:", err.message, "devDir:", typeof devDir !== "undefined" ? devDir : "N/A"); res.status(500).json({ error: err.message });
   }
 });
 
@@ -1427,46 +1428,5 @@ router.delete('/devices/:id/images/:name', (req, res) => {
   }
 });
 
-/**
- * GET /devices/:id/browse - Browse backup folder contents
- */
-router.get('/devices/:id/browse', (req, res) => {
-  const data = getData();
-  if (!data.activeBackup) return res.status(404).json({ error: 'Not configured' });
-
-  const device = data.activeBackup.devices.find(d => d.id === req.params.id);
-  if (!device) return res.status(404).json({ error: 'Device not found' });
-
-  const subPath = (req.query.path || '').replace(/\.\./g, '');
-  const dir = deviceBackupDir(device);
-  const targetPath = path.join(dir, subPath);
-
-  if (!targetPath.startsWith(dir)) {
-    return res.status(400).json({ error: 'Invalid path' });
-  }
-
-  if (!fs.existsSync(targetPath)) {
-    return res.status(404).json({ error: 'Path not found' });
-  }
-
-  try {
-    const files = fs.readdirSync(targetPath).map(f => {
-      const fPath = path.join(targetPath, f);
-      try {
-        const stat = fs.statSync(fPath);
-        return {
-          name: f,
-          size: stat.isDirectory() ? getDirSize(fPath) : stat.size,
-          type: stat.isDirectory() ? 'directory' : 'file',
-          modified: stat.mtime,
-        };
-      } catch(e) { return null; }
-    }).filter(Boolean);
-
-    res.json({ success: true, path: subPath, files });
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
 
 module.exports = router;
