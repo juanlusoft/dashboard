@@ -8780,62 +8780,100 @@ async function renderActiveBackupView() {
     const container = document.createElement('div');
     container.className = 'abk-container';
 
-    // Header card
-    const headerCard = document.createElement('div');
-    headerCard.className = 'glass-card abk-header-card';
+    // ── Stats summary card ────────────────────────────────────────────────
+    const statsCard = document.createElement('div');
+    statsCard.className = 'glass-card abk-stats-card';
+    statsCard.innerHTML = `
+        <div class="abk-stats-header">
+            <div class="abk-stats-title-group">
+                <h3 class="abk-stats-title">🖥️ Active Backup</h3>
+                <p class="abk-stats-subtitle">Backups automáticos de equipos remotos — el agente es invisible para el usuario</p>
+            </div>
+            <div class="abk-header-actions"><a href="/downloads/HomePiNAS-Agent-v2.tar.gz" class="btn-secondary btn-sm" download>⬇️ Descargar Agente</a> <a href="/docs/active-backup-agent-install.html" target="_blank" class="btn-secondary btn-sm">📖 Guía Instalación</a> <a href="/docs/active-backup-restore.html" target="_blank" class="btn-secondary btn-sm">🔧 Guía Restauración</a> <button class="btn-primary btn-sm" id="ab-add-btn">＋ Añadir Dispositivo</button></div>
+        </div>
+        <div class="abk-stats-grid">
+            <div class="abk-stat-item">
+                <span class="abk-stat-num" id="ab-stat-total">—</span>
+                <span class="abk-stat-label">Dispositivos</span>
+            </div>
+            <div class="abk-stat-item">
+                <span class="abk-stat-num abk-stat-ok" id="ab-stat-online">—</span>
+                <span class="abk-stat-label">En línea</span>
+            </div>
+            <div class="abk-stat-item">
+                <span class="abk-stat-num abk-stat-warn" id="ab-stat-pending-count">—</span>
+                <span class="abk-stat-label">Pendientes</span>
+            </div>
+            <div class="abk-stat-item">
+                <span class="abk-stat-num abk-stat-dim" id="ab-stat-last">—</span>
+                <span class="abk-stat-label">Último backup</span>
+            </div>
+        </div>
+    `;
+    container.appendChild(statsCard);
 
-    const header = document.createElement('div');
-    header.className = 'abk-header';
+    // ── Main card with tabs ───────────────────────────────────────────────
+    const mainCard = document.createElement('div');
+    mainCard.className = 'glass-card abk-main-card';
+    mainCard.innerHTML = `
+        <div class="abk-tab-bar">
+            <button class="abk-tab abk-tab-active" data-tab="devices">
+                <span class="abk-tab-icon">🖥️</span><span>Dispositivos</span>
+            </button>
+            <button class="abk-tab" data-tab="pending">
+                <span class="abk-tab-icon">🔔</span><span>Pendientes</span>
+                <span class="abk-tab-badge" id="ab-pending-badge" style="display:none">0</span>
+            </button>
+            <button class="abk-tab" data-tab="recovery">
+                <span class="abk-tab-icon">🔧</span><span>USB Recovery</span>
+            </button>
+        </div>
 
-    const title = document.createElement('h3');
-    title.textContent = '🖥️ Active Backup';
+        <div id="ab-tab-devices" class="abk-tab-pane">
+            <div id="ab-devices-grid" class="abk-devices-grid">
+                <div class="abk-loading-text">Cargando dispositivos...</div>
+            </div>
+        </div>
 
-    const addBtn = document.createElement('button');
-    addBtn.className = 'btn-primary btn-sm';
-    addBtn.textContent = '+ Añadir Dispositivo';
-    addBtn.addEventListener('click', () => showAddDeviceForm());
+        <div id="ab-tab-pending" class="abk-tab-pane" style="display:none">
+            <div id="ab-pending-agents" class="abk-pending-pane"></div>
+        </div>
 
-    header.appendChild(title);
-    header.appendChild(addBtn);
-    headerCard.appendChild(header);
+        <div id="ab-tab-recovery" class="abk-tab-pane" style="display:none">
+            <div class="abk-recovery-pane">
+                <div class="abk-recovery-pane-header">
+                    <h4 class="abk-recovery-title">🔧 USB de Recuperación</h4>
+                    <p class="abk-recovery-subtitle">Crea un USB bootable para restaurar backups sin necesitar sistema operativo</p>
+                </div>
+                <div id="ab-recovery-status" class="abk-recovery-status">
+                    <p class="vpn-loading-placeholder">Cargando...</p>
+                </div>
+            </div>
+        </div>
+    `;
+    container.appendChild(mainCard);
 
-    // Pending agents section
-    const pendingDiv = document.createElement('div');
-    pendingDiv.id = 'ab-pending-agents';
-    pendingDiv.className = 'abk-pending-section';
-    headerCard.appendChild(pendingDiv);
-
-    // Devices grid
-    const grid = document.createElement('div');
-    grid.id = 'ab-devices-grid';
-    grid.className = 'abk-devices-grid';
-    grid.innerHTML = '<div class="abk-loading-text">Cargando dispositivos...</div>';
-    headerCard.appendChild(grid);
-    container.appendChild(headerCard);
-
-    // Detail panel (shown when a device is selected)
+    // ── Detail panel (shown when a device row is opened) ─────────────────
     const detailCard = document.createElement('div');
     detailCard.className = 'glass-card abk-detail-panel';
     detailCard.id = 'ab-detail-panel';
     container.appendChild(detailCard);
 
-    // Recovery USB section
-    const recoveryCard = document.createElement('div');
-    recoveryCard.className = 'glass-card abk-recovery-card';
-    recoveryCard.innerHTML = `
-        <div class="abk-recovery-header">
-            <div>
-                <h3 class="abk-recovery-title">🔧 USB de Recuperación</h3>
-                <p class="abk-recovery-subtitle">Crea un USB bootable para restaurar backups sin necesitar sistema operativo</p>
-            </div>
-        </div>
-        <div id="ab-recovery-status" class="abk-recovery-status">
-            <p class="vpn-loading-placeholder">Cargando...</p>
-        </div>
-    `;
-    container.appendChild(recoveryCard);
-
     dashboardContent.appendChild(container);
+
+    // Tab switching
+    mainCard.querySelectorAll('.abk-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            mainCard.querySelectorAll('.abk-tab').forEach(t => t.classList.remove('abk-tab-active'));
+            mainCard.querySelectorAll('.abk-tab-pane').forEach(p => { p.style.display = 'none'; });
+            tab.classList.add('abk-tab-active');
+            const pane = document.getElementById('ab-tab-' + tab.dataset.tab);
+            if (pane) pane.style.display = '';
+        });
+    });
+
+    statsCard.querySelector('#ab-add-btn').addEventListener('click', () => showAddDeviceForm());
+
     await loadABPendingAgents();
     await loadABDevices();
     await loadRecoveryStatus();
@@ -8851,18 +8889,30 @@ async function loadABPendingAgents() {
         const data = await res.json();
         const pending = data.pending || [];
 
+        // Update badge on the Pendientes tab
+        const badge = document.getElementById('ab-pending-badge');
+        const pendingStat = document.getElementById('ab-stat-pending-count');
+        if (badge) {
+            badge.textContent = pending.length;
+            badge.style.display = pending.length > 0 ? '' : 'none';
+        }
+        if (pendingStat) pendingStat.textContent = pending.length;
+
         if (pending.length === 0) {
-            container.innerHTML = '';
-            container.style.display = 'none';
+            container.innerHTML = `
+                <div class="abk-pending-empty">
+                    <div class="abk-pending-empty-icon">✅</div>
+                    <p class="abk-pending-empty-title">Sin agentes pendientes</p>
+                    <p class="abk-pending-empty-sub">Los nuevos equipos que instalen el agente HomePiNAS aparecerán aquí para ser aprobados.</p>
+                </div>`;
             return;
         }
 
-        container.style.display = 'block';
         container.innerHTML = `
             <div class="abk-pending-banner">
                 <div class="abk-pending-header">
                     <span class="abk-pending-icon">🔔</span>
-                    <h4 class="abk-pending-title">Dispositivos pendientes de aprobación</h4>
+                    <h4 class="abk-pending-title">${pending.length} dispositivo${pending.length !== 1 ? 's' : ''} pendiente${pending.length !== 1 ? 's' : ''} de aprobación</h4>
                 </div>
                 <div id="ab-pending-list" class="abk-pending-list"></div>
             </div>`;
@@ -8877,8 +8927,8 @@ async function loadABPendingAgents() {
             row.className = 'abk-pending-row';
             row.innerHTML = `
                 <div class="abk-pending-device">
-                    <div class="abk-pending-name">${osIcon} ${agent.hostname}</div>
-                    <div class="abk-pending-info">${agent.ip} · ${osName} · Registrado: ${timeAgo}</div>
+                    <div class="abk-pending-name">${osIcon} ${escapeHtml(agent.hostname)}</div>
+                    <div class="abk-pending-info">${escapeHtml(agent.ip)} · ${osName} · Registrado: ${timeAgo}</div>
                 </div>
                 <div class="abk-pending-actions" id="ab-pending-actions-${agent.id}">
                     <button class="btn-primary btn-sm abk-approve-btn" id="ab-approve-${agent.id}">✓ Aprobar</button>
@@ -8891,7 +8941,6 @@ async function loadABPendingAgents() {
         }
     } catch (e) {
         container.innerHTML = '';
-        container.style.display = 'none';
     }
 }
 
@@ -9014,9 +9063,34 @@ async function rejectPendingAgent(agent) {
     }
 }
 
+// ─── Active Backup: Helpers ───────────────────────────────────────────────
+
+/**
+ * Returns colour, label and online flag based on when the agent last connected.
+ * Green = <5 min, Yellow = <1h, Red = >1h or no data.
+ */
+function getLastSeenStatus(lastSeen) {
+    if (!lastSeen) return { color: '#94a3b8', label: 'Sin datos', online: false };
+    const diffMin = (Date.now() - new Date(lastSeen).getTime()) / 60000;
+    if (diffMin < 5)  return { color: 'var(--success)', label: 'En línea',    online: true  };
+    if (diffMin < 60) return { color: 'var(--warning)', label: 'Reciente',    online: false };
+    return                   { color: 'var(--danger)',  label: 'Desconectado', online: false };
+}
+
+/** Creates a compact icon-only action button for the device table rows. */
+function makeAbkBtn(icon, title, extraClass = '') {
+    const btn = document.createElement('button');
+    btn.className = `abk-row-btn${extraClass ? ' ' + extraClass : ''}`;
+    btn.title = title;
+    btn.textContent = icon;
+    return btn;
+}
+
+// ─── Active Backup: Device table ─────────────────────────────────────────────
+
 async function loadABDevices() {
-    const grid = document.getElementById('ab-devices-grid');
-    if (!grid) return;
+    const container = document.getElementById('ab-devices-grid');
+    if (!container) return;
 
     try {
         const res = await authFetch(`${API_BASE}/active-backup/devices`);
@@ -9024,140 +9098,651 @@ async function loadABDevices() {
         const data = await res.json();
         abDevices = data.devices || [];
 
+        // ── Update stats bar ────────────────────────────────────────────
+        const onlineCount = abDevices.filter(d => getLastSeenStatus(d.lastSeen).online).length;
+        const lastBackups = abDevices.map(d => d.lastBackup).filter(Boolean).sort().reverse();
+        const lastBackupStr = lastBackups.length
+            ? new Date(lastBackups[0]).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+            : 'Nunca';
+        const totalEl   = document.getElementById('ab-stat-total');
+        const onlineEl  = document.getElementById('ab-stat-online');
+        const lastEl    = document.getElementById('ab-stat-last');
+        if (totalEl)  totalEl.textContent  = abDevices.length;
+        if (onlineEl) onlineEl.textContent = onlineCount;
+        if (lastEl)   lastEl.textContent   = lastBackupStr;
+
         if (abDevices.length === 0) {
-            grid.innerHTML = `
+            container.innerHTML = `
                 <div class="abk-empty-state">
                     <div class="abk-empty-icon">🖥️</div>
                     <p class="abk-empty-title">No hay dispositivos registrados</p>
-                    <p>Añade un PC o servidor para hacer backup automático al NAS</p>
+                    <p>Añade un PC o servidor para empezar a hacer backups automáticos</p>
                 </div>`;
             return;
         }
 
-        grid.innerHTML = '';
-        abDevices.forEach(device => {
-            const card = document.createElement('div');
-            card.className = 'abk-device-card';
-            card.addEventListener('mouseenter', () => card.style.borderColor = 'var(--accent)');
-            card.addEventListener('mouseleave', () => card.style.borderColor = 'var(--border)');
+        container.innerHTML = '';
 
-            const isOk = device.lastResult === 'success';
-            const isFail = device.lastResult === 'failed';
-            const isImage = device.backupType === 'image';
-            const statusColor = isOk ? '#10b981' : isFail ? '#ef4444' : '#94a3b8';
-            const statusText = isOk ? 'OK' : isFail ? 'Error' : 'Pendiente';
-            const typeIcon = isImage ? '💽' : '📁';
-            const typeLabel = isImage ? 'Imagen' : 'Archivos';
-            const osIcon = device.os === 'windows' ? '🪟' : '🐧';
-            const subtitle = isImage
-                ? `${escapeHtml(device.ip)} · ${osIcon} ${typeLabel}`
-                : `${escapeHtml(device.ip)} · ${escapeHtml(device.sshUser)}`;
+        const table = document.createElement('table');
+        table.className = 'abk-table';
 
-            const lastBackup = device.lastBackup ? new Date(device.lastBackup).toLocaleString('es-ES', {
-                day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
-            }) : 'Nunca';
+        const thead = document.createElement('thead');
+        thead.innerHTML = `
+            <tr class="abk-th-row">
+                <th class="abk-th abk-th-dot"></th>
+                <th class="abk-th">Dispositivo</th>
+                <th class="abk-th">IP</th>
+                <th class="abk-th abk-col-hide-sm">SO</th>
+                <th class="abk-th">Estado</th>
+                <th class="abk-th abk-col-hide-sm">Último Backup</th>
+                <th class="abk-th abk-col-hide-sm">Resultado</th>
+                <th class="abk-th abk-col-hide-sm">Tamaño</th>
+                <th class="abk-th abk-th-actions">Acciones</th>
+            </tr>`;
+        table.appendChild(thead);
 
-            const sizeStr = formatABSize(device.totalSize || 0);
-            const countLabel = isImage ? 'imágenes' : 'versiones';
+        const tbody = document.createElement('tbody');
+        abDevices.forEach(device => tbody.appendChild(buildDeviceTableRow(device)));
+        table.appendChild(tbody);
 
-            card.innerHTML = `
-                <div class="abk-device-header">
-                    <div>
-                        <div class="abk-device-name">${typeIcon} ${escapeHtml(device.name)}</div>
-                        <div class="abk-device-subtitle">${subtitle}</div>
-                    </div>
-                    <div class="abk-device-status">
-                        <span class="abk-device-status-dot" style="background: ${statusColor};"></span>
-                        <span class="abk-device-status-text" style="color: ${statusColor};">${statusText}</span>
-                    </div>
-                </div>
-                <div class="abk-device-info">
-                    <div>📅 ${lastBackup}</div>
-                    <div>📦 ${device.backupCount || 0} ${countLabel}</div>
-                    <div>💾 ${sizeStr}</div>
-                    <div>🔄 ${device.enabled ? escapeHtml(device.schedule) : 'Desactivado'}</div>
-                </div>
-            `;
-
-            // Action buttons
-            const actions = document.createElement('div');
-            actions.className = 'abk-device-actions';
-
-            if (device.agentToken) {
-                // Agent-managed device: trigger backup via agent
-                const triggerBtn = document.createElement('button');
-                triggerBtn.className = 'btn-primary btn-sm abk-action-btn';
-                triggerBtn.textContent = '▶ Backup';
-                triggerBtn.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    triggerBtn.textContent = '⏳ Enviado...';
-                    triggerBtn.disabled = true;
-                    try {
-                        const res = await authFetch(`${API_BASE}/active-backup/devices/${device.id}/trigger`, { method: 'POST' });
-                        const data = await res.json();
-                        if (data.success) {
-                            triggerBtn.textContent = '✓ Pendiente';
-                            setTimeout(() => { triggerBtn.textContent = '▶ Backup'; triggerBtn.disabled = false; }, 5000);
-                        } else {
-                            alert(data.error || 'Error');
-                            triggerBtn.textContent = '▶ Backup';
-                            triggerBtn.disabled = false;
-                        }
-                    } catch(err) {
-                        alert('Error de conexión');
-                        triggerBtn.textContent = '▶ Backup';
-                        triggerBtn.disabled = false;
-                    }
-                });
-                actions.appendChild(triggerBtn);
-            } else if (!isImage) {
-                const backupBtn = document.createElement('button');
-                backupBtn.className = 'btn-primary btn-sm abk-action-btn';
-                backupBtn.textContent = '▶ Backup';
-                backupBtn.addEventListener('click', (e) => { e.stopPropagation(); triggerABBackup(device.id, backupBtn); });
-                actions.appendChild(backupBtn);
-            } else {
-                const instrBtn = document.createElement('button');
-                instrBtn.className = 'btn-primary btn-sm abk-action-btn';
-                instrBtn.textContent = '📋 Instrucciones';
-                instrBtn.addEventListener('click', (e) => { e.stopPropagation(); showABInstructions(device); });
-                actions.appendChild(instrBtn);
-            }
-
-            const browseBtn = document.createElement('button');
-            browseBtn.className = 'btn-primary btn-sm abk-browse-btn';
-            browseBtn.textContent = '📂 Explorar';
-            browseBtn.addEventListener('click', (e) => { e.stopPropagation(); isImage ? openABImageBrowse(device) : openABBrowse(device); });
-
-            const renameBtn = document.createElement('button');
-            renameBtn.className = 'btn-primary btn-sm abk-rename-btn';
-            renameBtn.textContent = '✏️';
-            renameBtn.title = 'Renombrar';
-            renameBtn.addEventListener('click', (e) => { e.stopPropagation(); showRenameDialog(device); });
-
-            const editBtn = document.createElement('button');
-            editBtn.className = 'btn-primary btn-sm abk-edit-btn';
-            editBtn.textContent = '⚙️';
-            editBtn.title = 'Configurar';
-            editBtn.addEventListener('click', (e) => { e.stopPropagation(); showEditDeviceForm(device); });
-
-            const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'btn-primary btn-sm abk-delete-btn';
-            deleteBtn.textContent = '🗑️';
-            deleteBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteABDevice(device); });
-
-            actions.appendChild(browseBtn);
-            actions.appendChild(renameBtn);
-            actions.appendChild(editBtn);
-            actions.appendChild(deleteBtn);
-            card.appendChild(actions);
-
-            grid.appendChild(card);
-        });
+        container.appendChild(table);
     } catch (e) {
         console.error('Load AB devices error:', e);
-        grid.innerHTML = '<div class="abk-error-state">Error al cargar dispositivos</div>';
+        container.innerHTML = '<div class="abk-error-state">Error al cargar dispositivos</div>';
     }
+}
+
+/** Builds a single <tr> for the device list table. */
+function buildDeviceTableRow(device) {
+    const isWin  = device.os === 'windows' || device.os === 'win32';
+    const isMac  = device.os === 'darwin'  || device.os === 'mac';
+    const osIcon = isWin ? '🪟' : isMac ? '🍎' : '🐧';
+    const osName = isWin ? 'Windows' : isMac ? 'macOS' : 'Linux';
+    const typeIcon = device.backupType === 'image' ? '💽' : '📁';
+    const typeName = device.backupType === 'image' ? 'Imagen' : 'Archivos';
+
+    const lss = getLastSeenStatus(device.lastSeen);
+    const lsTitle = device.lastSeen
+        ? `Última conexión: ${new Date(device.lastSeen).toLocaleString('es-ES')}`
+        : 'Sin conexión registrada';
+
+    const isOk   = device.lastResult === 'success';
+    const isFail = device.lastResult === 'failed';
+    const resultHtml = isOk
+        ? `<span class="abk-result-ok">✓ OK</span>`
+        : isFail
+            ? `<span class="abk-result-fail">✗ Error</span>`
+            : `<span class="abk-result-none">—</span>`;
+
+    const lastBackup = device.lastBackup
+        ? new Date(device.lastBackup).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+        : 'Nunca';
+    const sizeStr = formatABSize(device.totalSize || 0);
+
+    const tr = document.createElement('tr');
+    tr.className = 'abk-tr';
+    tr.dataset.id = device.id;
+
+    tr.innerHTML = `
+        <td class="abk-td abk-td-dot">
+            <span class="abk-lastseen-dot${lss.online ? ' abk-dot-online' : ''}"
+                  style="background:${lss.color}"
+                  title="${lsTitle}"></span>
+        </td>
+        <td class="abk-td">
+            <div class="abk-td-name">${typeIcon} ${escapeHtml(device.name)}</div>
+            <div class="abk-td-sub">${typeName}${device.agentToken ? ' · Agente' : ''}</div>
+        </td>
+        <td class="abk-td abk-td-mono">${escapeHtml(device.ip)}</td>
+        <td class="abk-td abk-col-hide-sm">${osIcon} ${osName}</td>
+        <td class="abk-td">
+            <span class="abk-status-pill"
+                  style="color:${device.backupStatus === 'running' ? 'var(--primary)' : lss.color};border-color:${device.backupStatus === 'running' ? 'var(--primary)' : lss.color}44;background:${device.backupStatus === 'running' ? 'var(--primary)' : lss.color}18;">
+                ${device.backupStatus === 'running' ? '⏳ En proceso' : lss.label}
+            </span>
+        </td>
+        <td class="abk-td abk-col-hide-sm abk-td-dim">${lastBackup}</td>
+        <td class="abk-td abk-col-hide-sm">${resultHtml}</td>
+        <td class="abk-td abk-col-hide-sm abk-td-dim">${sizeStr}</td>
+        <td class="abk-td abk-td-actions"></td>
+    `;
+
+    // ── Action buttons ────────────────────────────────────────────────────
+    const actCell = tr.querySelector('.abk-td-actions');
+    const actWrap = document.createElement('div');
+    actWrap.className = 'abk-row-actions';
+
+    // ▶ Backup now
+    if (device.agentToken) {
+        const triggerBtn = makeAbkBtn('▶', 'Hacer backup ahora', 'abk-btn-backup');
+        triggerBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            triggerBtn.textContent = '⏳'; triggerBtn.disabled = true;
+            try {
+                const r = await authFetch(`${API_BASE}/active-backup/devices/${device.id}/trigger`, { method: 'POST' });
+                const d = await r.json();
+                if (d.success) {
+                    triggerBtn.textContent = '✓';
+                    setTimeout(() => { triggerBtn.textContent = '▶'; triggerBtn.disabled = false; }, 5000);
+                } else {
+                    showNotification(d.error || 'Error al disparar backup', 'error');
+                    triggerBtn.textContent = '▶'; triggerBtn.disabled = false;
+                }
+            } catch { showNotification('Error de conexión', 'error'); triggerBtn.textContent = '▶'; triggerBtn.disabled = false; }
+        });
+        actWrap.appendChild(triggerBtn);
+    } else if (device.backupType !== 'image') {
+        const backupBtn = makeAbkBtn('▶', 'Hacer backup ahora', 'abk-btn-backup');
+        backupBtn.addEventListener('click', (e) => { e.stopPropagation(); triggerABBackup(device.id, backupBtn); });
+        actWrap.appendChild(backupBtn);
+    }
+
+    // 📋 Logs
+    const logsBtn = makeAbkBtn('📋', 'Ver logs del backup', 'abk-btn-logs');
+    logsBtn.addEventListener('click', (e) => { e.stopPropagation(); showABLogs(device); });
+    actWrap.appendChild(logsBtn);
+
+    // 📂 Explorar
+    const browseBtn = makeAbkBtn('📂', 'Explorar backups', 'abk-btn-browse');
+    browseBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        device.backupType === 'image' ? openABImageBrowse(device) : openABBrowse(device);
+    });
+    actWrap.appendChild(browseBtn);
+
+    // ⚙️ Detalle / Configurar
+    const detailBtn = makeAbkBtn('⚙️', 'Ver detalle y configurar', 'abk-btn-detail');
+    detailBtn.addEventListener('click', (e) => { e.stopPropagation(); showDeviceDetail(device); });
+    actWrap.appendChild(detailBtn);
+
+    // 🗑️ Eliminar
+    const delBtn = makeAbkBtn('🗑️', 'Eliminar dispositivo', 'abk-btn-delete');
+    delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteABDevice(device); });
+    actWrap.appendChild(delBtn);
+
+    actCell.appendChild(actWrap);
+    return tr;
+}
+
+// ─── Active Backup: Device detail panel ──────────────────────────────────────
+
+/**
+ * Opens the detail panel for a device showing: info del equipo, historial de
+ * backups, configuración rápida y log del backup en curso.
+ */
+function showDeviceDetail(device) {
+    const panel = document.getElementById('ab-detail-panel');
+    if (!panel) return;
+    panel.style.display = 'block';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    const lss      = getLastSeenStatus(device.lastSeen);
+    const isWin    = device.os === 'windows' || device.os === 'win32';
+    const isMac    = device.os === 'darwin'  || device.os === 'mac';
+    const osIcon   = isWin ? '🪟' : isMac ? '🍎' : '🐧';
+    const osName   = isWin ? 'Windows' : isMac ? 'macOS' : 'Linux';
+    const typeIcon = device.backupType === 'image' ? '💽' : '📁';
+    const typeName = device.backupType === 'image' ? 'Imagen completa' : 'Solo archivos';
+
+    const canBackup = device.agentToken || (device.backupType !== 'image' && !device.agentToken);
+    const backupBtnHtml = canBackup
+        ? `<button class="btn-primary btn-sm" id="ab-detail-backup-btn">▶ Backup ahora</button>`
+        : '';
+
+    panel.innerHTML = `
+        <!-- ── Header ─────────────────────────────────────────────────── -->
+        <div class="abk-detail-topbar">
+            <div class="abk-detail-title-group">
+                <span class="abk-lastseen-dot${lss.online ? ' abk-dot-online' : ''}"
+                      style="background:${lss.color};width:12px;height:12px;flex-shrink:0;"></span>
+                <h3 class="abk-detail-title">${typeIcon} ${escapeHtml(device.name)}</h3>
+                <span class="abk-status-pill"
+                      style="color:${lss.color};border-color:${lss.color}44;background:${lss.color}18;">
+                    ${lss.label}
+                </span>
+            </div>
+            <div class="abk-detail-header-actions">
+                ${backupBtnHtml}
+                <button class="btn-close" id="ab-detail-close" title="Cerrar">&times;</button>
+            </div>
+        </div>
+
+        <!-- ── Inner tab bar ─────────────────────────────────────────── -->
+        <div class="abk-dp-tab-bar">
+            <button class="abk-dp-tab abk-dp-tab-active" data-dp-tab="info">ℹ️ Info</button>
+            <button class="abk-dp-tab" data-dp-tab="history">📅 Historial</button>
+            <button class="abk-dp-tab" data-dp-tab="config">⚙️ Configuración</button>
+            <button class="abk-dp-tab" data-dp-tab="log">
+                📋 Log
+                ${lss.online ? '<span class="abk-dp-live-dot"></span>' : ''}
+            </button>
+        </div>
+
+        <!-- ── Tab: Info ─────────────────────────────────────────────── -->
+        <div id="ab-dp-info" class="abk-dp-pane">
+            <div class="abk-info-grid">
+                <div class="abk-info-row"><span class="abk-info-label">Hostname</span>
+                    <span class="abk-info-val">${escapeHtml(device.name)}</span></div>
+                <div class="abk-info-row"><span class="abk-info-label">IP</span>
+                    <span class="abk-info-val abk-mono">${escapeHtml(device.ip)}</span></div>
+                <div class="abk-info-row"><span class="abk-info-label">Sistema operativo</span>
+                    <span class="abk-info-val">${osIcon} ${osName}</span></div>
+                <div class="abk-info-row"><span class="abk-info-label">Tipo de backup</span>
+                    <span class="abk-info-val">${typeIcon} ${typeName}</span></div>
+                ${device.mac
+                    ? `<div class="abk-info-row"><span class="abk-info-label">MAC</span>
+                           <span class="abk-info-val abk-mono">${escapeHtml(device.mac)}</span></div>`
+                    : ''}
+                ${device.agentToken
+                    ? `<div class="abk-info-row"><span class="abk-info-label">Agente</span>
+                           <span class="abk-info-val abk-info-ok">✓ Registrado</span></div>`
+                    : ''}
+                ${device.agentVersion
+                    ? `<div class="abk-info-row"><span class="abk-info-label">Versión agente</span>
+                           <span class="abk-info-val abk-mono">${escapeHtml(device.agentVersion)}</span></div>`
+                    : ''}
+                ${device.lastSeen
+                    ? `<div class="abk-info-row"><span class="abk-info-label">Última conexión</span>
+                           <span class="abk-info-val">${new Date(device.lastSeen).toLocaleString('es-ES')}</span></div>`
+                    : ''}
+                <div class="abk-info-row"><span class="abk-info-label">Último backup</span>
+                    <span class="abk-info-val">${device.lastBackup ? new Date(device.lastBackup).toLocaleString('es-ES') : 'Nunca'}</span></div>
+                <div class="abk-info-row"><span class="abk-info-label">Espacio total</span>
+                    <span class="abk-info-val">${formatABSize(device.totalSize || 0)}</span></div>
+                <div class="abk-info-row"><span class="abk-info-label">Versiones guardadas</span>
+                    <span class="abk-info-val">${device.backupCount || 0}</span></div>
+                ${(device.lastResult === 'failed' && device.lastError)
+                    ? `<div class="abk-info-row"><span class="abk-info-label">Último error</span>
+                           <span class="abk-info-val abk-info-error">${escapeHtml(device.lastError)}</span></div>`
+                    : ''}
+            </div>
+        </div>
+
+        <!-- ── Tab: Historial ────────────────────────────────────────── -->
+        <div id="ab-dp-history" class="abk-dp-pane" style="display:none">
+            <div id="ab-detail-history" class="abk-detail-history">
+                <div class="abk-detail-loading">Cargando historial...</div>
+            </div>
+        </div>
+
+        <!-- ── Tab: Configuración ────────────────────────────────────── -->
+        <div id="ab-dp-config" class="abk-dp-pane" style="display:none">
+            <div id="ab-detail-config">
+                <div class="abk-detail-loading">Cargando configuración...</div>
+            </div>
+        </div>
+
+        <!-- ── Tab: Log en vivo ──────────────────────────────────────── -->
+        <div id="ab-dp-log" class="abk-dp-pane" style="display:none">
+            <div class="abk-dp-log-toolbar">
+                <button class="btn-sm abk-section-refresh" id="ab-detail-refresh-status">🔄 Actualizar</button>
+            </div>
+            <div id="ab-detail-live-log" class="abk-live-log">
+                <div class="abk-detail-loading">Cargando estado...</div>
+            </div>
+        </div>
+    `;
+
+    // ── Wire up inner tab switching ────────────────────────────────────────
+    panel.querySelectorAll('.abk-dp-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            panel.querySelectorAll('.abk-dp-tab').forEach(t => t.classList.remove('abk-dp-tab-active'));
+            panel.querySelectorAll('.abk-dp-pane').forEach(p => { p.style.display = 'none'; });
+            tab.classList.add('abk-dp-tab-active');
+            const pane = document.getElementById('ab-dp-' + tab.dataset.dpTab);
+            if (pane) pane.style.display = '';
+
+            // Lazy-load tabs on first activation
+            if (tab.dataset.dpTab === 'history' && !tab.dataset.loaded) {
+                tab.dataset.loaded = '1';
+                loadABDetailHistory(device);
+            }
+            if (tab.dataset.dpTab === 'config' && !tab.dataset.loaded) {
+                tab.dataset.loaded = '1';
+                loadABDetailConfig(device);
+            }
+            if (tab.dataset.dpTab === 'log' && !tab.dataset.loaded) {
+                tab.dataset.loaded = '1';
+                loadABDetailStatus(device);
+            }
+        });
+    });
+
+    // ── Close ──────────────────────────────────────────────────────────────
+    document.getElementById('ab-detail-close')?.addEventListener('click', () => { panel.style.display = 'none'; });
+
+    // ── Backup now button ──────────────────────────────────────────────────
+    const detailBackupBtn = document.getElementById('ab-detail-backup-btn');
+    if (detailBackupBtn) {
+        if (device.agentToken) {
+            detailBackupBtn.addEventListener('click', async () => {
+                detailBackupBtn.textContent = '⏳ Enviando...'; detailBackupBtn.disabled = true;
+                try {
+                    const r = await authFetch(`${API_BASE}/active-backup/devices/${device.id}/trigger`, { method: 'POST' });
+                    const d = await r.json();
+                    if (d.success) {
+                        detailBackupBtn.textContent = '✓ Tarea enviada';
+                        setTimeout(() => { detailBackupBtn.textContent = '▶ Backup ahora'; detailBackupBtn.disabled = false; }, 5000);
+                    } else {
+                        showNotification(d.error || 'Error', 'error');
+                        detailBackupBtn.textContent = '▶ Backup ahora'; detailBackupBtn.disabled = false;
+                    }
+                } catch {
+                    showNotification('Error de conexión', 'error');
+                    detailBackupBtn.textContent = '▶ Backup ahora'; detailBackupBtn.disabled = false;
+                }
+            });
+        } else {
+            detailBackupBtn.addEventListener('click', () => triggerABBackup(device.id, detailBackupBtn));
+        }
+    }
+
+    // ── Status refresh ─────────────────────────────────────────────────────
+    document.getElementById('ab-detail-refresh-status')?.addEventListener('click', () => loadABDetailStatus(device));
+
+    // Pre-load first visible tab (Info is static, no async needed)
+    // Historial loads lazily. Status loads lazily.
+}
+
+/**
+ * Loads the Configuración tab content — shows current settings with
+ * inline editing (schedule, retention, paths/excludes for files type).
+ */
+async function loadABDetailConfig(device) {
+    const container = document.getElementById('ab-detail-config');
+    if (!container) return;
+
+    const isFiles = device.backupType !== 'image';
+
+    container.innerHTML = `
+        <form id="ab-config-form" class="abk-config-form">
+            <div class="abk-config-section">
+                <h4 class="abk-config-section-title">Backup</h4>
+                <div class="abk-config-row">
+                    <label class="abk-config-label">Tipo</label>
+                    <div class="abk-config-val-static">${device.backupType === 'image' ? '💽 Imagen completa' : '📁 Solo archivos (rsync)'}</div>
+                </div>
+                <div class="abk-config-row">
+                    <label class="abk-config-label" for="ab-cfg-schedule">Programación (cron)</label>
+                    <input class="abk-config-input" id="ab-cfg-schedule" type="text"
+                           value="${escapeHtml(device.schedule || '0 2 * * *')}"
+                           placeholder="0 2 * * *" title="Expresión cron estándar">
+                </div>
+                <div class="abk-config-row">
+                    <label class="abk-config-label" for="ab-cfg-retention">Versiones a conservar</label>
+                    <input class="abk-config-input abk-config-input-sm" id="ab-cfg-retention" type="number"
+                           min="1" max="100" value="${device.retention || 5}">
+                </div>
+            </div>
+            ${isFiles ? `
+            <div class="abk-config-section">
+                <h4 class="abk-config-section-title">Rutas</h4>
+                <div class="abk-config-row">
+                    <label class="abk-config-label" for="ab-cfg-paths">Rutas a copiar</label>
+                    <input class="abk-config-input" id="ab-cfg-paths" type="text"
+                           value="${escapeHtml((device.paths || ['/home']).join(', '))}"
+                           placeholder="/home, /etc">
+                </div>
+                <div class="abk-config-row">
+                    <label class="abk-config-label" for="ab-cfg-excludes">Excluir</label>
+                    <input class="abk-config-input" id="ab-cfg-excludes" type="text"
+                           value="${escapeHtml((device.excludes || ['.cache', '*.tmp', 'node_modules']).join(', '))}"
+                           placeholder=".cache, *.tmp, node_modules">
+                </div>
+            </div>
+            ` : ''}
+            <div class="abk-config-actions">
+                <button type="submit" class="btn-primary btn-sm" id="ab-cfg-save">💾 Guardar cambios</button>
+                <span class="abk-cfg-feedback" id="ab-cfg-feedback"></span>
+            </div>
+        </form>
+    `;
+
+    document.getElementById('ab-config-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const saveBtn  = document.getElementById('ab-cfg-save');
+        const feedback = document.getElementById('ab-cfg-feedback');
+        saveBtn.disabled = true;
+        saveBtn.textContent = '⏳ Guardando...';
+
+        const body = {
+            schedule:  document.getElementById('ab-cfg-schedule').value.trim(),
+            retention: parseInt(document.getElementById('ab-cfg-retention').value) || 5,
+        };
+        if (isFiles) {
+            body.paths    = document.getElementById('ab-cfg-paths').value.split(',').map(s => s.trim()).filter(Boolean);
+            body.excludes = document.getElementById('ab-cfg-excludes').value.split(',').map(s => s.trim()).filter(Boolean);
+        }
+
+        try {
+            const res  = await authFetch(`${API_BASE}/active-backup/devices/${device.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const data = await res.json();
+            if (data.success || res.ok) {
+                // Update local device object
+                Object.assign(device, body);
+                feedback.textContent = '✓ Guardado';
+                feedback.style.color = 'var(--success)';
+                saveBtn.textContent = '💾 Guardar cambios';
+                saveBtn.disabled = false;
+                setTimeout(() => { feedback.textContent = ''; }, 3000);
+                await loadABDevices();
+            } else {
+                throw new Error(data.error || 'Error al guardar');
+            }
+        } catch (err) {
+            feedback.textContent = '✗ ' + err.message;
+            feedback.style.color = 'var(--danger)';
+            saveBtn.textContent = '💾 Guardar cambios';
+            saveBtn.disabled = false;
+        }
+    });
+}
+
+/** Loads backup version history into the detail panel. */
+async function loadABDetailHistory(device) {
+    const container = document.getElementById('ab-detail-history');
+    if (!container) return;
+    try {
+        const res  = await authFetch(`${API_BASE}/active-backup/devices/${device.id}/versions`);
+        const data = await res.json();
+        const versions = (data.versions || []).slice().reverse(); // newest first
+
+        if (versions.length === 0) {
+            container.innerHTML = '<div class="abk-detail-empty">Sin backups registrados todavía</div>';
+            return;
+        }
+
+        const table = document.createElement('table');
+        table.className = 'abk-history-table';
+        table.innerHTML = `
+            <thead>
+                <tr>
+                    <th class="abk-hth">Versión / Fecha</th>
+                    <th class="abk-hth">Tamaño</th>
+                    <th class="abk-hth abk-col-hide-sm">Duración</th>
+                    <th class="abk-hth">Resultado</th>
+                </tr>
+            </thead>`;
+
+        const tbody = document.createElement('tbody');
+        versions.forEach(v => {
+            const tr  = document.createElement('tr');
+            tr.className = 'abk-htr';
+            const resultHtml = (v.result === 'failed')
+                ? `<span class="abk-result-fail">✗ Error</span>`
+                : `<span class="abk-result-ok">✓ OK</span>`;
+            const dateStr  = v.date ? new Date(v.date).toLocaleString('es-ES', {
+                day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+            }) : '—';
+            const duration = v.duration ? `${Math.round(v.duration / 60)} min` : '—';
+            tr.innerHTML = `
+                <td class="abk-htd">
+                    <span class="abk-mono">${escapeHtml(v.name)}</span>
+                    <div class="abk-td-dim-sm">${dateStr}</div>
+                </td>
+                <td class="abk-htd">${formatABSize(v.size || 0)}</td>
+                <td class="abk-htd abk-col-hide-sm">${duration}</td>
+                <td class="abk-htd">${resultHtml}</td>`;
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        container.innerHTML = '';
+        container.appendChild(table);
+    } catch(e) {
+        container.innerHTML = '<div class="abk-detail-empty">Error al cargar historial</div>';
+    }
+}
+
+/** Loads the current backup status/log into the detail panel. */
+async function loadABDetailStatus(device) {
+    const container = document.getElementById('ab-detail-live-log');
+    if (!container) return;
+    try {
+        const res  = await authFetch(`${API_BASE}/active-backup/devices/${device.id}/status`);
+        const data = await res.json();
+        const isRunning  = data.status === 'running';
+        const statusColor = isRunning
+            ? 'var(--warning)'
+            : (data.lastResult === 'failed' ? 'var(--danger)' : 'var(--success)');
+        const statusText  = isRunning
+            ? '🔄 Backup en progreso'
+            : (data.lastResult === 'failed' ? '❌ Último backup falló' : '✅ Sin backup en curso');
+
+        let html = `<div class="abk-live-log-status" style="color:${statusColor}">${statusText}</div>`;
+
+        const logContent = data.log || data.output || data.stdout || data.progress || '';
+        if (logContent) {
+            html += `<pre class="abk-live-log-output">${escapeHtml(logContent)}</pre>`;
+        } else {
+            html += `<div class="abk-live-log-hint">${isRunning
+                ? 'Backup en progreso — sin output disponible en tiempo real.<br>Pulsa 🔄 para actualizar.'
+                : 'El log aparecerá aquí cuando haya un backup activo.'}</div>`;
+        }
+        if (data.lastError && data.lastResult === 'failed') {
+            html += `<div class="abk-logs-error">Error: ${escapeHtml(data.lastError)}</div>`;
+        }
+
+        container.innerHTML = html;
+
+        // Auto-refresh while running
+        if (isRunning) {
+            setTimeout(() => {
+                if (document.getElementById('ab-detail-live-log')) loadABDetailStatus(device);
+            }, 5000);
+        }
+    } catch(e) {
+        container.innerHTML = '<div class="abk-detail-empty">No se pudo cargar el estado</div>';
+    }
+}
+
+// ─── Active Backup: Logs modal ────────────────────────────────────────────────
+
+/**
+ * Opens a dedicated log modal for a device.
+ * Auto-refreshes while a backup is running.
+ */
+async function showABLogs(device) {
+    const existing = document.getElementById('ab-logs-modal');
+    if (existing) existing.remove();
+
+    const typeIcon = device.backupType === 'image' ? '💽' : '📁';
+    const modal = document.createElement('div');
+    modal.id = 'ab-logs-modal';
+    modal.className = 'modal active';
+    modal.style.cssText = 'display:flex;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:rgba(0,0,0,0.65)';
+
+    modal.innerHTML = `
+        <div class="glass-card abk-logs-modal-content">
+            <header class="modal-header abk-logs-modal-header">
+                <h3>📋 Logs — ${typeIcon} ${escapeHtml(device.name)}</h3>
+                <div class="abk-logs-header-right">
+                    <button class="btn-sm abk-refresh-btn" id="ab-logs-refresh">🔄 Actualizar</button>
+                    <button class="btn-close" id="ab-logs-close">&times;</button>
+                </div>
+            </header>
+            <div id="ab-logs-status-bar" class="abk-logs-status-bar">Cargando...</div>
+            <div id="ab-logs-output" class="abk-logs-output">
+                <pre class="abk-logs-pre">Cargando...</pre>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    document.getElementById('ab-logs-close').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+    let autoRefreshTimer = null;
+
+    async function fetchLogs() {
+        try {
+            const res  = await authFetch(`${API_BASE}/active-backup/devices/${device.id}/status`);
+            const data = await res.json();
+            const statusBar = document.getElementById('ab-logs-status-bar');
+            const output    = document.getElementById('ab-logs-output');
+            if (!statusBar || !output) return;
+
+            const isRunning   = data.status === 'running';
+            const statusColor = isRunning
+                ? '#ffc107'
+                : (data.lastResult === 'failed' ? '#dc3545' : '#28a745');
+            const statusText  = isRunning
+                ? '🔄 Backup en progreso'
+                : (data.lastResult === 'failed' ? '❌ Último backup falló'
+                    : (data.lastResult === 'success' ? '✅ Completado' : '⏸ Sin backup reciente'));
+
+            statusBar.style.color = statusColor;
+            statusBar.textContent = statusText
+                + (data.lastBackup ? ` · ${new Date(data.lastBackup).toLocaleString('es-ES')}` : '');
+
+            const logContent = data.log || data.output || data.stdout || data.progress || '';
+            if (logContent) {
+                output.innerHTML = `<pre class="abk-logs-pre">${escapeHtml(logContent)}</pre>`;
+                const pre = output.querySelector('pre');
+                if (pre) pre.scrollTop = pre.scrollHeight;
+            } else {
+                output.innerHTML = `<div class="abk-logs-empty">${isRunning
+                    ? 'Backup en curso — output no disponible en tiempo real. Pulsa Actualizar para refrescar.'
+                    : 'No hay logs disponibles para este dispositivo.'
+                }</div>`;
+            }
+            if (data.lastError && data.lastResult === 'failed') {
+                output.innerHTML += `<div class="abk-logs-error">Último error: ${escapeHtml(data.lastError)}</div>`;
+            }
+
+            // Auto-refresh while running
+            if (isRunning && !autoRefreshTimer) {
+                autoRefreshTimer = setInterval(() => {
+                    if (!document.getElementById('ab-logs-modal')) {
+                        clearInterval(autoRefreshTimer); return;
+                    }
+                    fetchLogs();
+                }, 5000);
+            } else if (!isRunning && autoRefreshTimer) {
+                clearInterval(autoRefreshTimer);
+                autoRefreshTimer = null;
+            }
+        } catch(e) {
+            const output = document.getElementById('ab-logs-output');
+            if (output) output.innerHTML = `<div class="abk-logs-error">Error al cargar logs: ${escapeHtml(e.message)}</div>`;
+        }
+    }
+
+    document.getElementById('ab-logs-refresh').addEventListener('click', fetchLogs);
+
+    // Clean up timer when modal is removed
+    const observer = new MutationObserver(() => {
+        if (!document.getElementById('ab-logs-modal')) {
+            clearInterval(autoRefreshTimer);
+            observer.disconnect();
+        }
+    });
+    observer.observe(document.body, { childList: true });
+
+    fetchLogs();
 }
 
 function formatABSize(bytes) {
