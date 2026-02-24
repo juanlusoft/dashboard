@@ -16,6 +16,7 @@ const path = require('path');
 const { CheckpointManager } = require('./checkpoint');
 const { generateManifest, hashFile } = require('./integrity');
 const { retry, NETWORK_ERRORS } = require('./retry');
+const { WindowsIncrementalHelper } = require('./windows-incremental');
 
 const execFileAsync = promisify(execFile);
 
@@ -182,8 +183,15 @@ class BackupManager {
       this._setProgress('wimlib', 25, 'Checking wimlib');
       const wimlibExe = await this._ensureWimlib();
 
-      // Phase 6: Capture C: volume from VSS snapshot
-      this._setProgress('capture', 30, 'Capturing system image (this may take a while)');
+      // Phase 6: Determine backup strategy (full vs incremental)
+      const wiHelper = new WindowsIncrementalHelper(this, this._checkpoint);
+      const strategy = await wiHelper.determineBackupStrategy({
+        deviceId: config.deviceId || 'default',
+        backupType: 'image',
+        cpId: this._cpId,
+      });
+      wiHelper.logStrategy(strategy);
+
       const hostname = os.hostname();
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const destDir = path.join(sharePath, 'ImageBackup', hostname, timestamp);
@@ -194,7 +202,21 @@ class BackupManager {
       }
 
       const wimPath = path.join(destDir, 'disk.wim');
-      await this._wimCapture(wimlibExe, vss.devicePath, wimPath, `${hostname}-C`);
+
+      if (strategy.strategy === 'incremental') {
+        // Incremental: only changed files
+        this._setProgress('capture', 30, `Incremental: ${strategy.changedFiles.length} files, ~${strategy.estimateMinutes}min`);
+        await this._wimCaptureIncremental(wimlibExe, strategy.changedFiles, wimPath, hostname);
+        await wiHelper.updateCheckpointUSN(this._cpId);
+      } else {
+        // Full: capture entire volume
+        this._setProgress('capture', 30, 'Capturing system image (this may take a while)');
+        await this._wimCapture(wimlibExe, vss.devicePath, wimPath, `${hostname}-C`);
+        // Save USN state for next incremental
+        try { await wiHelper.updateCheckpointUSN(this._cpId); } catch (e) {
+          this._log(`NOTE: Could not save USN state (next backup will be full): ${e.message}`);
+        }
+      }
 
       // Phase 7: Capture EFI partition if present (live, no VSS — FAT32 doesn't support it)
       if (metadata.efiPartition && metadata.efiPartition.DriveLetter) {
@@ -454,6 +476,99 @@ class BackupManager {
         reject(new Error(`wimcapture spawn error: ${err.message}`));
       });
     });
+  }
+
+  async _wimCaptureIncremental(wimlibExe, changedFiles, destWimPath, hostname) {
+    const destDir = path.dirname(destWimPath);
+    if (!fs.existsSync(destDir)) {
+      try { fs.mkdirSync(destDir, { recursive: true }); } catch (e) {}
+    }
+
+    this._log(`wimcapture incremental: ${changedFiles.length} files -> ${destWimPath}`);
+
+    // Create temp directory with only changed files (symlinks for efficiency)
+    const tempDir = path.join(
+      process.env.LOCALAPPDATA || 'C:\\ProgramData',
+      'HomePiNAS', 'incremental-temp', `${Date.now()}`
+    );
+
+    try {
+      fs.mkdirSync(tempDir, { recursive: true });
+
+      let linked = 0;
+      for (const file of changedFiles) {
+        const src = file.path || file;
+        if (!fs.existsSync(src)) continue;
+
+        // Preserve relative path structure from C:\
+        const relPath = src.replace(/^[A-Z]:\\/i, '').replace(/\\/g, path.sep);
+        const dest = path.join(tempDir, relPath);
+        const destParent = path.dirname(dest);
+
+        try {
+          fs.mkdirSync(destParent, { recursive: true });
+          try {
+            fs.symlinkSync(src, dest, 'file');
+          } catch (e) {
+            fs.copyFileSync(src, dest);
+          }
+          linked++;
+        } catch (e) {
+          this._log(`WARNING: Could not stage ${src}: ${e.message}`);
+        }
+      }
+
+      this._log(`Staged ${linked}/${changedFiles.length} files for incremental capture`);
+
+      const cpuCount = os.cpus().length;
+      const imageName = `${hostname}-C-incremental-${new Date().toISOString().split('T')[0]}`;
+      const args = [
+        'capture', tempDir, destWimPath, imageName,
+        '--compress=LZX', `--threads=${cpuCount}`, '--no-acls',
+      ];
+
+      return new Promise((resolve, reject) => {
+        const proc = spawn(wimlibExe, args, {
+          timeout: 7200000,
+          windowsHide: true,
+          shell: false,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        proc.stdout.on('data', (data) => {
+          const text = data.toString();
+          stdout += text;
+          const lines = text.split(/\r?\n/).filter(Boolean);
+          for (const line of lines) {
+            if (line.includes('%')) {
+              const match = line.match(/(\d+)%/);
+              if (match) {
+                this._setProgress('capture', 30 + Math.round(parseInt(match[1]) * 0.5), `Incremental: ${line.trim()}`);
+              }
+            }
+          }
+        });
+
+        proc.stderr.on('data', (data) => { stderr += data.toString(); });
+
+        proc.on('close', (code) => {
+          if (code === 0 || code === 47) {
+            this._log(`wimcapture incremental completed (exit ${code})`);
+            resolve();
+          } else {
+            reject(new Error(`wimcapture incremental failed (exit ${code}): ${(stderr || stdout).substring(0, 500)}`));
+          }
+        });
+
+        proc.on('error', (err) => reject(new Error(`wimcapture spawn error: ${err.message}`)));
+      });
+    } finally {
+      // Cleanup temp directory
+      try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (e) {}
+    }
   }
 
   async _captureWindowsDiskMetadata() {
