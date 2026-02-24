@@ -128,6 +128,7 @@ router.get('/agent/poll', (req, res) => {
     },
     lastBackup: device.lastBackup,
     lastResult: device.lastResult,
+    backupStatus: device.backupStatus || null,
   };
 
   // Include Samba config for image backups (credentials only sent once on first poll after approval)
@@ -135,7 +136,7 @@ router.get('/agent/poll', (req, res) => {
     response.config.sambaShare = device.sambaShare;
     response.config.nasAddress = getLocalIPs()[0] || req.hostname;
     // Only send credentials if agent hasn't received them yet
-    if (!device._credentialsSent) {
+    if (true) { // Always send credentials — agent may have reset config
       response.config.sambaUser = device.sambaUser || '';
       response.config.sambaPass = device.sambaPass || '';
       device._credentialsSent = true;
@@ -151,6 +152,13 @@ router.get('/agent/poll', (req, res) => {
     saveData(data);
   }
 
+  // Update last seen timestamp (throttled to avoid excessive writes)
+  const now = new Date().toISOString();
+  const lastSeenAge = device.lastSeen ? (Date.now() - new Date(device.lastSeen).getTime()) : Infinity;
+  if (lastSeenAge > 30000) { // Only save if >30s since last update
+    device.lastSeen = now;
+    saveData(data);
+  }
   res.json(response);
 });
 
@@ -172,6 +180,8 @@ router.post('/agent/report', (req, res) => {
 
   device.lastBackup = new Date().toISOString();
   device.lastResult = status === 'success' ? 'success' : 'failed';
+  device.backupStatus = null;
+  device.backupStarted = null;
   device.lastError = status === 'success' ? null : (errorMsg || 'Unknown error');
   device.lastDuration = duration || null;
 
@@ -654,6 +664,9 @@ router.post('/devices', async (req, res) => {
       response.setupInstructions = `En el equipo "${name}" (${ip}), ejecuta:\n\nmkdir -p ~/.ssh && echo '${pubKey}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`;
     }
 
+  // Update last seen timestamp
+  device.lastSeen = new Date().toISOString();
+  saveData(data);
     res.json(response);
   } catch (err) {
     console.error('Add device error:', err);
@@ -1350,6 +1363,8 @@ router.post('/devices/:id/trigger', (req, res) => {
   }
 
   device._triggerBackup = true;
+  device.backupStatus = 'running';
+  device.backupStarted = new Date().toISOString();
   saveData(data);
 
   res.json({ success: true, message: `Backup triggered for "${device.name}". Agent will start on next poll.` });
