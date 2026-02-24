@@ -1,6 +1,10 @@
 /**
  * HomePiNAS Mobile - API Client
  * Comunicación con el backend del NAS
+ *
+ * SECURITY NOTE: Session tokens are stored in AsyncStorage.
+ * For production, consider migrating to expo-secure-store for
+ * encrypted storage of SESSION_ID and CSRF_TOKEN.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -23,7 +27,26 @@ class NASApi {
   }
 
   setNasUrl(url: string) {
-    this.baseUrl = url.replace(/\/$/, '');
+    let cleanUrl = url.replace(/\/$/, '');
+    // Enforce HTTPS: upgrade http:// to https://
+    if (cleanUrl.startsWith('http://')) {
+      cleanUrl = cleanUrl.replace('http://', 'https://');
+    }
+    // Add https:// if no protocol specified
+    if (!cleanUrl.startsWith('https://')) {
+      cleanUrl = 'https://' + cleanUrl;
+    }
+    // Validate URL format
+    try {
+      const parsed = new URL(cleanUrl);
+      if (parsed.protocol !== 'https:') {
+        throw new Error('Only HTTPS connections are allowed');
+      }
+    } catch (e) {
+      console.error('Invalid NAS URL:', e);
+      return;
+    }
+    this.baseUrl = cleanUrl;
     AsyncStorage.setItem(STORAGE_KEYS.NAS_URL, this.baseUrl);
   }
 
@@ -81,7 +104,7 @@ class NASApi {
   // ========== Auth ==========
 
   async login(username: string, password: string) {
-    const response = await this.fetch('/auth/login', {
+    const response = await this.fetch('/login', {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     });
@@ -97,7 +120,7 @@ class NASApi {
 
   async logout() {
     try {
-      await this.fetch('/auth/logout', { method: 'POST' });
+      await this.fetch('/logout', { method: 'POST' });
     } finally {
       this.clearCredentials();
     }
@@ -106,19 +129,19 @@ class NASApi {
   // ========== System ==========
 
   async getSystemInfo() {
-    const response = await this.fetch('/system/info');
+    const response = await this.fetch('/system/status');
     return response.json();
   }
 
   async getSystemResources() {
-    const response = await this.fetch('/system/resources');
+    const response = await this.fetch('/system/stats');
     return response.json();
   }
 
   // ========== Storage ==========
 
   async getDisks() {
-    const response = await this.fetch('/storage/disks');
+    const response = await this.fetch('/system/disks');
     return response.json();
   }
 
@@ -142,14 +165,14 @@ class NASApi {
   }
 
   async getPendingAgents() {
-    const response = await this.fetch('/active-backup/agent/pending');
+    const response = await this.fetch('/active-backup/pending');
     return response.json();
   }
 
-  async approveAgent(deviceId: string, name: string) {
-    const response = await this.fetch(`/active-backup/agent/${deviceId}/approve`, {
+  async approveAgent(deviceId: string, backupType: string, schedule: string, retention: number, paths: string[]) {
+    const response = await this.fetch(`/active-backup/pending/${deviceId}/approve`, {
       method: 'POST',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ backupType, schedule, retention, paths }),
     });
     return response.json();
   }

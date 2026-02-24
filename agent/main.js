@@ -9,15 +9,17 @@ const Store = require('electron-store');
 const { NASDiscovery } = require('./src/discovery');
 const { BackupManager } = require('./src/backup');
 const { NASApi } = require('./src/api');
+const { Scheduler } = require('./src/scheduler');
 
 // Single instance lock
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) { app.quit(); }
 
 const store = new Store({
+  encryptionKey: 'homepinas-agent-store-v2',
   defaults: {
     nasAddress: '',
-    nasPort: 3001,
+    nasPort: 443,
     agentId: '',
     agentToken: '',
     status: 'disconnected', // disconnected | pending | approved
@@ -41,6 +43,7 @@ let discovery = null;
 let backupManager = null;
 let api = null;
 let pollInterval = null;
+let scheduler = null;
 
 // ── Create main window ──
 function createWindow() {
@@ -60,6 +63,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
     },
     show: false,
   });
@@ -115,7 +119,17 @@ function updateTrayMenu(backupRunning = false) {
     { type: 'separator' },
     { label: 'Hacer backup ahora', click: () => runBackupNow(), enabled: status === 'approved' && !backupRunning },
     { label: 'Abrir configuración', click: () => createWindow() },
-    { label: 'Abrir dashboard NAS', click: () => { if (nasAddr) shell.openExternal(`https://${nasAddr}:${store.get('nasPort')}`); }, enabled: !!nasAddr },
+    { label: 'Abrir dashboard NAS', click: () => {
+      if (nasAddr) {
+        const url = `https://${nasAddr}:${store.get('nasPort')}`;
+        try {
+          const parsed = new URL(url);
+          if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+            shell.openExternal(url);
+          }
+        } catch (e) { console.error('Invalid NAS URL:', e.message); }
+      }
+    }, enabled: !!nasAddr },
     { type: 'separator' },
     { label: 'Iniciar con Windows', type: 'checkbox', checked: store.get('autoStart'), click: (item) => { store.set('autoStart', item.checked); app.setLoginItemSettings({ openAtLogin: item.checked }); } },
     { type: 'separator' },
@@ -186,31 +200,16 @@ async function pollNAS() {
         runBackupNow();
       }
 
-      // Check schedule
-      checkSchedule();
+      // Update scheduler with current schedule (skip if NAS just triggered a backup)
+      if (result.action !== 'backup' && result.config && result.config.schedule) {
+        scheduler.start(result.config.schedule);
+      }
 
       updateTrayMenu();
       sendToRenderer('status-update', { status: 'approved', config: result.config });
     }
   } catch (err) {
     // Silent fail — will retry on next poll
-  }
-}
-
-// ── Schedule check ──
-function checkSchedule() {
-  const schedule = store.get('schedule');
-  if (!schedule || store.get('status') !== 'approved') return;
-
-  const parts = schedule.trim().split(/\s+/);
-  if (parts.length < 5) return;
-
-  const minute = parseInt(parts[0]);
-  const hour = parseInt(parts[1]);
-  const now = new Date();
-
-  if (now.getHours() === hour && now.getMinutes() === minute && !backupManager.running) {
-    runBackupNow();
   }
 }
 
@@ -296,8 +295,13 @@ function setupIPC() {
   // Discover and register with NAS
   ipcMain.handle('connect-nas', async (_, { address, port }) => {
     try {
+      const parsedPort = port || 443;
+      if (parsedPort < 1 || parsedPort > 65535) {
+        return { success: false, error: 'Puerto inválido (debe ser entre 1 y 65535)' };
+      }
+
       // Test connection
-      await api.testConnection(address, port || 3001);
+      await api.testConnection(address, parsedPort);
 
       // Register agent
       const os = require('os');
@@ -313,7 +317,7 @@ function setupIPC() {
         if (mac) break;
       }
 
-      const result = await api.agentRegister(address, port || 3001, {
+      const result = await api.agentRegister(address, parsedPort, {
         hostname: os.hostname(),
         ip: getLocalIP(),
         os: process.platform,
@@ -321,7 +325,7 @@ function setupIPC() {
       });
 
       store.set('nasAddress', address);
-      store.set('nasPort', port || 3001);
+      store.set('nasPort', parsedPort);
       store.set('agentId', result.agentId);
       store.set('agentToken', result.agentToken);
       store.set('status', result.status);
@@ -352,6 +356,22 @@ function setupIPC() {
     disconnect();
     return { success: true };
   });
+
+  ipcMain.handle('get-version', () => {
+    const pkg = require('./package.json');
+    return pkg.version;
+  });
+
+  ipcMain.handle('resize-to-fit', () => {
+    if (mainWindow) {
+      mainWindow.setResizable(true);
+      mainWindow.webContents.executeJavaScript('document.body.scrollHeight').then((height) => {
+        const [width] = mainWindow.getSize();
+        mainWindow.setSize(width, Math.min(Math.max(height + 40, 300), 800));
+        mainWindow.setResizable(false);
+      }).catch(() => {});
+    }
+  });
 }
 
 function getLocalIP() {
@@ -370,6 +390,7 @@ app.on('ready', () => {
   discovery = new NASDiscovery();
   backupManager = new BackupManager();
   api = new NASApi();
+  scheduler = new Scheduler(() => runBackupNow());
 
   setupIPC();
   createTray();
@@ -388,6 +409,6 @@ app.on('ready', () => {
 });
 
 app.on('second-instance', () => createWindow());
-app.on('window-all-closed', (e) => { e?.preventDefault?.(); });
+app.on('window-all-closed', () => { /* Keep running in tray */ });
 app.on('before-quit', () => { app.isQuitting = true; });
 app.on('activate', () => createWindow());

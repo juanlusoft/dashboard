@@ -158,15 +158,10 @@ function showConfirmModal(title, message, confirmText = 'Confirmar', cancelText 
         `;
         
         modal.innerHTML = `
-            <div class="glass-card scale-in" style="
-                max-width: 400px;
-                width: 90%;
-                padding: 24px;
-                text-align: center;
-            ">
-                <h3 style="margin-bottom: 16px; color: var(--text-primary);">${escapeHtml(title)}</h3>
-                <p style="margin-bottom: 24px; color: var(--text-secondary); white-space: pre-wrap;">${escapeHtml(message)}</p>
-                <div style="display: flex; gap: 12px; justify-content: center;">
+            <div class="glass-card scale-in dash-confirm-card">
+                <h3 class="dash-confirm-title">${escapeHtml(title)}</h3>
+                <p class="dash-confirm-message">${escapeHtml(message)}</p>
+                <div class="dash-confirm-actions">
                     <button id="confirm-cancel" class="wizard-btn wizard-btn-back">${escapeHtml(cancelText)}</button>
                     <button id="confirm-ok" class="wizard-btn wizard-btn-next">${escapeHtml(confirmText)}</button>
                 </div>
@@ -334,7 +329,8 @@ const viewsMap = {
     'homestore': '🏪 HomeStore',
     'logs': 'Visor de Logs',
     'users': 'Gestión de Usuarios',
-    'system': 'Administración del Sistema'
+    'system': 'Administración del Sistema',
+    'vpn': 'Servidor VPN'
 };
 
 // =============================================================================
@@ -417,6 +413,11 @@ async function initAuth() {
         state.user = status.user;
         state.storageConfig = status.storageConfig;
         state.network = status.network;
+
+        // Store version for header display
+        if (status.version) {
+            state.appVersion = status.version;
+        }
 
         // If we have a session, try to validate it
         if (state.sessionId && state.user && state.storageConfig.length > 0) {
@@ -561,19 +562,7 @@ function showDiskNotification(disks) {
     
     const notification = document.createElement('div');
     notification.id = 'disk-notification';
-    notification.style.cssText = `
-        position: fixed;
-        top: 70px;
-        right: 20px;
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-        border: 1px solid #4ecdc4;
-        border-radius: 12px;
-        padding: 16px 20px;
-        z-index: 99999;
-        box-shadow: 0 8px 32px rgba(78, 205, 196, 0.3);
-        max-width: 400px;
-        animation: slideIn 0.3s ease-out;
-    `;
+    notification.className = 'dash-disk-notif';
     
     notification.innerHTML = `
         <style>
@@ -624,19 +613,19 @@ function showDiskNotification(disks) {
             .disk-notif-btn:hover { transform: scale(1.05); }
         </style>
         <button class="disk-notif-close">×</button>
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
-            <span style="font-size: 24px;">🆕</span>
+        <div class="dash-notif-header">
+            <span class="dash-notif-icon">🆕</span>
             <div>
-                <div style="color: #4ecdc4; font-weight: 600;">Nuevo disco detectado</div>
-                <div style="color: #888; font-size: 12px;">${disks.length} disco(s) disponible(s)</div>
+                <div class="dash-notif-title">Nuevo disco detectado</div>
+                <div class="dash-notif-subtitle">${disks.length} disco(s) disponible(s)</div>
             </div>
         </div>
         <div id="disk-notif-list">
             ${disks.map(d => `
                 <div class="disk-notif-item">
                     <div>
-                        <div style="color: #fff; font-weight: 500;">${d.model || d.id}</div>
-                        <div style="color: #888; font-size: 11px;">${d.sizeFormatted} • ${d.id}</div>
+                        <div class="dash-notif-disk-name">${d.model || d.id}</div>
+                        <div class="dash-notif-disk-info">${d.sizeFormatted} • ${d.id}</div>
                     </div>
                 </div>
             `).join('')}
@@ -698,126 +687,73 @@ function showDiskActionModal() {
     `;
     
     modal.innerHTML = `
-        <div style="
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            border: 1px solid rgba(78, 205, 196, 0.3);
-            border-radius: 16px;
-            padding: 24px;
-            width: 90%;
-            max-width: 500px;
-            max-height: 80vh;
-            overflow-y: auto;
-        ">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="color: #4ecdc4; margin: 0;">🆕 Configurar Nuevo Disco</h3>
-                <div style="display: flex; gap: 8px;">
-                    <button id="disk-modal-minimize" style="background: none; border: none; color: #888; font-size: 18px; cursor: pointer; display: none;" title="Minimizar">─</button>
-                    <button id="disk-modal-close" style="background: none; border: none; color: #888; font-size: 24px; cursor: pointer;">×</button>
+        <div class="dash-disk-modal">
+            <div class="dash-disk-modal-header">
+                <h3 class="dash-disk-modal-title">🆕 Configurar Nuevo Disco</h3>
+                <div class="dash-disk-modal-btns">
+                    <button id="disk-modal-minimize" class="dash-disk-modal-icon-btn dash-minimize-hidden" title="Minimizar">─</button>
+                    <button id="disk-modal-close" class="dash-disk-modal-icon-btn dash-disk-modal-icon-btn--close">×</button>
                 </div>
             </div>
-            
+
             <div id="disk-action-list">
                 ${detectedNewDisks.map((d, i) => `
-                    <div class="disk-config-card" style="
-                        background: rgba(255,255,255,0.05);
-                        border-radius: 12px;
-                        padding: 16px;
-                        margin-bottom: 16px;
-                    ">
-                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                    <div class="disk-config-card dash-disk-config-card">
+                        <div class="dash-disk-config-header">
                             <div>
-                                <div style="color: #fff; font-weight: 600; font-size: 16px;">${d.model || 'Disco'}</div>
-                                <div style="color: #888; font-size: 12px;">${d.sizeFormatted} • /dev/${d.id}</div>
-                                ${d.hasData ? '<div style="color: #f39c12; font-size: 11px; margin-top: 4px;">⚠️ Contiene datos</div>' : ''}
+                                <div class="dash-disk-config-name">${d.model || 'Disco'}</div>
+                                <div class="dash-disk-config-info">${d.sizeFormatted} • /dev/${d.id}</div>
+                                ${d.hasData ? '<div class="dash-disk-config-warning">⚠️ Contiene datos</div>' : ''}
                             </div>
-                            <div style="background: rgba(78,205,196,0.2); padding: 4px 8px; border-radius: 4px; font-size: 11px; color: #4ecdc4;">
+                            <div class="dash-disk-config-transport">
                                 ${d.transport?.toUpperCase() || 'N/A'}
                             </div>
                         </div>
-                        
-                        <div style="margin-bottom: 12px;">
-                            <label style="color: #888; font-size: 12px; display: block; margin-bottom: 6px;">¿Qué hacer con este disco?</label>
-                            <select id="disk-action-${d.id}" style="
-                                width: 100%;
-                                padding: 10px;
-                                border-radius: 8px;
-                                background: rgba(0,0,0,0.3);
-                                border: 1px solid rgba(255,255,255,0.1);
-                                color: #fff;
-                                font-size: 14px;
-                            ">
+
+                        <div class="dash-disk-config-field">
+                            <label class="dash-disk-config-label">¿Qué hacer con este disco?</label>
+                            <select id="disk-action-${d.id}" class="dash-disk-config-select">
                                 <option value="pool-data">📦 Añadir al pool (datos)</option>
                                 <option value="pool-cache">⚡ Añadir al pool (caché)</option>
                                 <option value="standalone">💾 Volumen independiente</option>
                                 <option value="ignore">🔕 Ignorar</option>
                             </select>
                         </div>
-                        
+
                         <div id="disk-options-${d.id}">
-                            <div style="margin-bottom: 8px;">
-                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                    <input type="checkbox" id="disk-format-${d.id}" ${d.hasData ? '' : 'checked'} style="accent-color: #4ecdc4;">
-                                    <span style="color: #ccc; font-size: 13px;">Formatear disco (ext4)</span>
+                            <div class="dash-disk-checkbox-row">
+                                <label class="dash-disk-checkbox-label">
+                                    <input type="checkbox" id="disk-format-${d.id}" ${d.hasData ? '' : 'checked'} class="dash-disk-checkbox">
+                                    <span class="dash-disk-checkbox-text">Formatear disco (ext4)</span>
                                 </label>
-                                ${d.hasData ? '<div style="color: #e74c3c; font-size: 11px; margin-left: 24px;">⚠️ Esto borrará todos los datos</div>' : ''}
+                                ${d.hasData ? '<div class="dash-disk-data-warning">⚠️ Esto borrará todos los datos</div>' : ''}
                             </div>
-                            
-                            <div id="standalone-name-${d.id}" style="display: none; margin-top: 8px;">
-                                <label style="color: #888; font-size: 12px; display: block; margin-bottom: 4px;">Nombre del volumen:</label>
-                                <input type="text" id="disk-name-${d.id}" placeholder="ej: backups" value="${d.id}" style="
-                                    width: 100%;
-                                    padding: 8px;
-                                    border-radius: 6px;
-                                    background: rgba(0,0,0,0.3);
-                                    border: 1px solid rgba(255,255,255,0.1);
-                                    color: #fff;
-                                ">
+
+                            <div id="standalone-name-${d.id}" class="dash-disk-standalone-name">
+                                <label class="dash-disk-name-label">Nombre del volumen:</label>
+                                <input type="text" id="disk-name-${d.id}" placeholder="ej: backups" value="${d.id}" class="dash-disk-name-input">
                             </div>
                         </div>
                     </div>
                 `).join('')}
             </div>
-            
+
             <!-- Progress Section (hidden initially) -->
-            <div id="disk-progress-section" style="display: none;">
-                <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px; margin-top: 16px;">
-                    <h4 style="color: #4ecdc4; margin: 0 0 12px 0; font-size: 14px;">📊 Progreso</h4>
+            <div id="disk-progress-section" class="dash-disk-progress-section">
+                <div class="dash-disk-progress-inner">
+                    <h4 class="dash-disk-progress-title">📊 Progreso</h4>
                     <div id="disk-progress-steps"></div>
                 </div>
             </div>
-            
-            <div id="disk-modal-buttons" style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
-                <button id="disk-modal-cancel" style="
-                    padding: 10px 20px;
-                    border-radius: 8px;
-                    background: rgba(255,255,255,0.1);
-                    border: none;
-                    color: #fff;
-                    cursor: pointer;
-                ">Cancelar</button>
-                <button id="disk-modal-apply" style="
-                    padding: 10px 20px;
-                    border-radius: 8px;
-                    background: #4ecdc4;
-                    border: none;
-                    color: #1a1a2e;
-                    font-weight: 600;
-                    cursor: pointer;
-                ">Aplicar</button>
+
+            <div id="disk-modal-buttons" class="dash-disk-modal-footer">
+                <button id="disk-modal-cancel" class="dash-disk-btn-cancel">Cancelar</button>
+                <button id="disk-modal-apply" class="dash-disk-btn-apply">Aplicar</button>
             </div>
-            
+
             <!-- Close button after completion (hidden initially) -->
-            <div id="disk-modal-done" style="display: none; margin-top: 20px; text-align: center;">
-                <button id="disk-modal-close-done" style="
-                    padding: 12px 32px;
-                    border-radius: 8px;
-                    background: #10b981;
-                    border: none;
-                    color: #fff;
-                    font-weight: 600;
-                    cursor: pointer;
-                    font-size: 14px;
-                ">✓ Cerrar</button>
+            <div id="disk-modal-done" class="dash-disk-done-section">
+                <button id="disk-modal-close-done" class="dash-disk-btn-done">✓ Cerrar</button>
             </div>
         </div>
     `;
@@ -899,33 +835,13 @@ function minimizeDiskModal() {
     if (!widget) {
         widget = document.createElement('div');
         widget.id = 'disk-progress-widget';
-        widget.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            border: 1px solid rgba(78, 205, 196, 0.3);
-            border-radius: 12px;
-            padding: 12px 16px;
-            min-width: 250px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-            z-index: 99998;
-            cursor: pointer;
-            transition: transform 0.2s;
-        `;
+        widget.className = 'dash-disk-widget';
         widget.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <div class="disk-widget-spinner" style="
-                    width: 20px;
-                    height: 20px;
-                    border: 2px solid rgba(78,205,196,0.3);
-                    border-top-color: #4ecdc4;
-                    border-radius: 50%;
-                    animation: spin 1s linear infinite;
-                "></div>
+            <div class="dash-disk-widget-inner">
+                <div class="disk-widget-spinner dash-disk-widget-spinner"></div>
                 <div>
-                    <div style="color: #fff; font-weight: 600; font-size: 13px;">Configurando disco...</div>
-                    <div id="disk-widget-status" style="color: #888; font-size: 11px;">En progreso</div>
+                    <div class="dash-disk-widget-title">Configurando disco...</div>
+                    <div id="disk-widget-status" class="dash-disk-widget-status">En progreso</div>
                 </div>
             </div>
         `;
@@ -942,13 +858,6 @@ function minimizeDiskModal() {
             widget.style.display = 'none';
             const modal = document.getElementById('disk-action-modal');
             if (modal) modal.style.display = 'flex';
-        });
-        
-        widget.addEventListener('mouseenter', () => {
-            widget.style.transform = 'scale(1.02)';
-        });
-        widget.addEventListener('mouseleave', () => {
-            widget.style.transform = 'scale(1)';
         });
         
         document.body.appendChild(widget);
@@ -993,7 +902,7 @@ function updateDiskProgressStep(diskId, step, status, message) {
     const colors = { pending: '#888', running: '#f59e0b', done: '#10b981', error: '#ef4444' };
     
     stepEl.innerHTML = `
-        <span style="margin-right: 8px;">${icons[status]}</span>
+        <span class="dash-progress-step-icon">${icons[status]}</span>
         <span style="color: ${colors[status]};">${message}</span>
     `;
 }
@@ -1036,22 +945,22 @@ async function applyDiskActions() {
         
         // Create progress steps for this disk
         const diskProgress = document.createElement('div');
-        diskProgress.style.cssText = 'background: rgba(0,0,0,0.2); border-radius: 8px; padding: 12px; margin-bottom: 12px;';
+        diskProgress.className = 'dash-progress-card';
         diskProgress.innerHTML = `
-            <div style="color: #fff; font-weight: 600; margin-bottom: 8px;">💾 ${disk.model || disk.id} (${disk.sizeFormatted})</div>
-            <div id="progress-${disk.id}-format" style="font-size: 13px; margin: 4px 0; display: ${format ? 'block' : 'none'};">
-                <span style="margin-right: 8px;">⏳</span>
-                <span style="color: #888;">Formatear disco...</span>
+            <div class="dash-progress-disk-title">💾 ${disk.model || disk.id} (${disk.sizeFormatted})</div>
+            <div id="progress-${disk.id}-format" class="dash-progress-step" style="display: ${format ? 'block' : 'none'};">
+                <span class="dash-progress-step-icon">⏳</span>
+                <span class="dash-progress-step-text">Formatear disco...</span>
             </div>
-            <div id="progress-${disk.id}-mount" style="font-size: 13px; margin: 4px 0;">
-                <span style="margin-right: 8px;">⏳</span>
-                <span style="color: #888;">Montar disco...</span>
+            <div id="progress-${disk.id}-mount" class="dash-progress-step">
+                <span class="dash-progress-step-icon">⏳</span>
+                <span class="dash-progress-step-text">Montar disco...</span>
             </div>
-            <div id="progress-${disk.id}-pool" style="font-size: 13px; margin: 4px 0; display: ${action.startsWith('pool') ? 'block' : 'none'};">
-                <span style="margin-right: 8px;">⏳</span>
-                <span style="color: #888;">Añadir al pool...</span>
+            <div id="progress-${disk.id}-pool" class="dash-progress-step" style="display: ${action.startsWith('pool') ? 'block' : 'none'};">
+                <span class="dash-progress-step-icon">⏳</span>
+                <span class="dash-progress-step-text">Añadir al pool...</span>
             </div>
-            <div id="progress-${disk.id}-result" style="font-size: 13px; margin: 8px 0 0 0; display: none;"></div>
+            <div id="progress-${disk.id}-result" class="dash-progress-step" style="display: none;"></div>
         `;
         progressSteps.appendChild(diskProgress);
     }
@@ -1123,7 +1032,7 @@ async function applyDiskActions() {
                 const resultEl = document.getElementById(`progress-${disk.id}-result`);
                 if (resultEl) {
                     resultEl.style.display = 'block';
-                    resultEl.innerHTML = `<span style="color: #10b981; font-weight: 600;">✅ ${data.message || 'Completado'}</span>`;
+                    resultEl.innerHTML = `<span class="dash-status-success">✅ ${data.message || 'Completado'}</span>`;
                 }
             } else if (res) {
                 const err = await res.json().catch(() => ({ error: 'Error desconocido' }));
@@ -1137,7 +1046,7 @@ async function applyDiskActions() {
                 const resultEl = document.getElementById(`progress-${disk.id}-result`);
                 if (resultEl) {
                     resultEl.style.display = 'block';
-                    resultEl.innerHTML = `<span style="color: #ef4444; font-weight: 600;">&#10060; ${escapeHtml(err.error)}</span>`;
+                    resultEl.innerHTML = `<span class="dash-status-error">&#10060; ${escapeHtml(err.error)}</span>`;
                 }
             }
         } catch (e) {
@@ -1154,7 +1063,7 @@ async function applyDiskActions() {
             const resultEl = document.getElementById(`progress-${disk.id}-result`);
             if (resultEl) {
                 resultEl.style.display = 'block';
-                resultEl.innerHTML = `<span style="color: #ef4444; font-weight: 600;">&#10060; ${escapeHtml(e.message)}</span>`;
+                resultEl.innerHTML = `<span class="dash-status-error">&#10060; ${escapeHtml(e.message)}</span>`;
             }
         }
     }
@@ -1231,6 +1140,11 @@ function switchView(viewName, skipRender = false) {
         }
         
         if (viewName === 'dashboard' && !skipRender) renderContent('dashboard');
+        // Show version in header when dashboard is visible
+        if (viewName === 'dashboard' && state.appVersion) {
+            const versionEl = document.getElementById('header-version');
+            if (versionEl) versionEl.textContent = 'v' + state.appVersion;
+        }
         // Update username display and avatar
         if (state.user) {
             state.username = state.user.username || "Admin";
@@ -1394,7 +1308,7 @@ async function detectDisksForWizard() {
     `;
     
     try {
-        const res = await fetch(`${API_BASE}/system/disks`);
+        const res = await authFetch(`${API_BASE}/system/disks`);
         if (!res.ok) throw new Error('Failed to fetch disks');
         
         wizardState.disks = await res.json();
@@ -1408,7 +1322,7 @@ async function detectDisksForWizard() {
                 <div class="wizard-no-disks">
                     <div class="wizard-no-disks-icon">💿</div>
                     <p>${t('wizard.noDisks', 'No se detectaron discos disponibles')}</p>
-                    <button class="wizard-btn wizard-btn-next" data-action="retry-detect" style="margin-top: 16px;">
+                    <button class="wizard-btn wizard-btn-next storage-retry-btn" data-action="retry-detect">
                         🔄 ${t('wizard.retry', 'Reintentar')}
                     </button>
                 </div>
@@ -1419,15 +1333,15 @@ async function detectDisksForWizard() {
         
         // Show detected disks summary
         detectionContainer.innerHTML = `
-            <div style="text-align: center; padding: 20px 0;">
-                <div style="font-size: 3rem; margin-bottom: 16px;">✅</div>
-                <p style="font-size: 1.1rem; color: var(--text-primary); margin-bottom: 8px;">
+            <div class="storage-detection-success">
+                <div class="storage-success-icon">✅</div>
+                <p class="storage-detection-summary">
                     <strong>${wizardState.disks.length}</strong> ${t('wizard.disksDetected', 'disco(s) detectado(s)')}
                 </p>
-                <div style="display: flex; justify-content: center; gap: 16px; margin-top: 16px; flex-wrap: wrap;">
+                <div class="storage-detected-disks">
                     ${wizardState.disks.map(d => `
-                        <div style="background: var(--hover-bg); padding: 8px 16px; border-radius: 8px; font-size: 0.9rem;">
-                            ${getDiskIcon(d.type)} ${escapeHtml(d.model || d.id)} <span style="color: var(--primary); font-weight: 600;">${escapeHtml(d.size)}</span>
+                        <div class="storage-disk-badge">
+                            ${getDiskIcon(d.type)} ${escapeHtml(d.model || d.id)} <span class="storage-disk-size-highlight">${escapeHtml(d.size)}</span>
                         </div>
                     `).join('')}
                 </div>
@@ -1452,7 +1366,7 @@ async function detectDisksForWizard() {
             <div class="wizard-no-disks">
                 <div class="wizard-no-disks-icon">❌</div>
                 <p>${t('wizard.detectionError', 'Error al detectar discos')}</p>
-                <button class="wizard-btn wizard-btn-next" data-action="retry-detect" style="margin-top: 16px;">
+                <button class="wizard-btn wizard-btn-next storage-retry-btn" data-action="retry-detect">
                     🔄 ${t('wizard.retry', 'Reintentar')}
                 </button>
             </div>
@@ -2093,7 +2007,7 @@ async function pollSyncProgress() {
         const pollInterval = setInterval(async () => {
             pollCount++;
             try {
-                const res = await fetch(`${API_BASE}/storage/snapraid/sync/progress`);
+                const res = await authFetch(`${API_BASE}/storage/snapraid/sync/progress`);
                 const data = await res.json();
 
                 // Always update the progress display
@@ -2482,6 +2396,7 @@ async function renderContent(view) {
     else if (view === 'active-directory') await renderActiveDirectoryView();
     else if (view === 'cloud-sync') await renderCloudSyncView();
     else if (view === 'cloud-backup') await renderCloudBackupView();
+    else if (view === 'vpn') await renderVPNView();
     else if (view === 'homestore') await renderHomeStoreView();
     else if (view === 'logs') await renderLogsView();
     else if (view === 'users') await renderUsersView();
@@ -2506,7 +2421,7 @@ async function renderDashboard() {
     // Fetch real LAN IP if not already loaded
     if (!state.network.interfaces || state.network.interfaces.length === 0 || state.network.interfaces[0]?.ip === '192.168.1.100') {
         try {
-            const res = await fetch(`${API_BASE}/network/interfaces`);
+            const res = await authFetch(`${API_BASE}/network/interfaces`);
             if (res.ok) {
                 state.network.interfaces = await res.json();
             }
@@ -2585,7 +2500,7 @@ async function renderDashboard() {
     // Fetch disks for storage section
     let disksHtml = '';
     try {
-        const disksRes = await fetch(`${API_BASE}/system/disks`);
+        const disksRes = await authFetch(`${API_BASE}/system/disks`);
         if (disksRes.ok) {
             const disks = await disksRes.json();
 
@@ -2609,7 +2524,7 @@ async function renderDashboard() {
                 if (roleDisks.length > 0) {
                     disksHtml += `
                         <div class="disk-role-section">
-                            <div class="disk-role-header" style="border-left: 3px solid ${roleColors[role]}">
+                            <div class="disk-role-header dash-role-border--${role}">
                                 <span>${roleLabels[role]}</span>
                                 <span class="disk-count">${roleDisks.length} ${t('wizard.disksDetected', 'disco(s)')}</span>
                             </div>
@@ -2637,7 +2552,7 @@ async function renderDashboard() {
     }
 
     dashboardContent.innerHTML = `
-        <div class="glass-card overview-card" style="grid-column: 1 / -1;">
+        <div class="glass-card overview-card dash-overview-full">
             <div class="overview-header">
                 <h3>${t('dashboard.systemOverview', 'Resumen del Sistema')}</h3>
                 <div class="system-info-badge">
@@ -2710,7 +2625,7 @@ async function renderDashboard() {
             </div>
         </div>
 
-        <div class="glass-card storage-overview" style="grid-column: 1 / -1;">
+        <div class="glass-card storage-overview dash-storage-full">
             <h3>💿 ${t('storage.connectedDisks', 'Discos Conectados')}</h3>
             <div class="disks-by-role">
                 ${disksHtml || `<div class="no-disks">${t('storage.noDisksDetected', 'No se detectaron discos')}</div>`}
@@ -2828,8 +2743,7 @@ async function renderStorageDashboard() {
 
         // Storage Array Header (Cockpit style)
         const arrayCard = document.createElement('div');
-        arrayCard.className = 'glass-card storage-array-view';
-        arrayCard.style.gridColumn = '1 / -1';
+        arrayCard.className = 'glass-card storage-array-view dash-overview-full';
 
         const arrayHeader = document.createElement('div');
         arrayHeader.className = 'storage-array-header';
@@ -2846,7 +2760,7 @@ async function renderStorageDashboard() {
                 </div>
                 <div class="storage-total-stat">
                     <span class="label">${t('storage.available', 'Disponible')}</span>
-                    <span class="value" style="color: #10b981;">${escapeHtml(poolStatus.poolFree || 'N/A')}</span>
+                    <span class="value dash-pool-free-value">${escapeHtml(poolStatus.poolFree || 'N/A')}</span>
                 </div>
             </div>
         `;
@@ -2933,8 +2847,7 @@ async function renderStorageDashboard() {
 
         // Disk cards grid (detailed view)
         const grid = document.createElement('div');
-        grid.className = 'telemetry-grid';
-        grid.style.marginTop = '20px';
+        grid.className = 'telemetry-grid dash-telemetry-grid';
 
         state.disks.forEach(disk => {
             const config = state.storageConfig.find(s => s.id === disk.id);
@@ -2954,10 +2867,10 @@ async function renderStorageDashboard() {
             const h4 = document.createElement('h4');
             h4.textContent = disk.model || t('common.unknown', 'Desconocido');
             const infoSpan = document.createElement('span');
-            infoSpan.style.cssText = 'font-size: 0.8rem; color: var(--text-dim); display: block;';
+            infoSpan.className = 'dash-disk-info-detail';
             infoSpan.textContent = `${disk.id || 'N/A'} • ${disk.type || t('common.unknown', 'Desconocido')} • ${disk.size || 'N/A'}`;
             const serialSpan2 = document.createElement('span');
-            serialSpan2.style.cssText = 'font-size: 0.75rem; color: var(--primary); display: block; margin-top: 4px; font-family: monospace;';
+            serialSpan2.className = 'dash-disk-serial';
             serialSpan2.textContent = `SN: ${disk.serial || 'N/A'}`;
             headerInfo.appendChild(h4);
             headerInfo.appendChild(infoSpan);
@@ -2975,7 +2888,7 @@ async function renderStorageDashboard() {
             const progressContainer = document.createElement('div');
             progressContainer.className = 'disk-progress-container';
             progressContainer.innerHTML = `
-                <div class="telemetry-stats-row"><span>${t('storage.healthStatus', 'Estado de Salud')}</span><span style="color:#10b981">${t('storage.optimal', 'Óptimo')}</span></div>
+                <div class="telemetry-stats-row"><span>${t('storage.healthStatus', 'Estado de Salud')}</span><span class="dash-health-ok">${t('storage.optimal', 'Óptimo')}</span></div>
                 <div class="disk-usage-bar"><div class="disk-usage-fill" style="width: ${usage}%; background: ${getRoleColor(role)}"></div></div>
             `;
 
@@ -2992,27 +2905,8 @@ async function renderStorageDashboard() {
             // Add configure button for unconfigured disks
             if (role === 'none') {
                 const configBtn = document.createElement('button');
-                configBtn.style.cssText = `
-                    margin-left: auto;
-                    padding: 6px 12px;
-                    background: transparent;
-                    border: 1px solid var(--primary, #0078d4);
-                    color: var(--primary, #0078d4);
-                    border-radius: 6px;
-                    font-size: 12px;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                    white-space: nowrap;
-                `;
+                configBtn.className = 'dash-disk-configure-btn';
                 configBtn.textContent = '⚙️ Configurar';
-                configBtn.addEventListener('mouseenter', () => {
-                    configBtn.style.background = 'var(--primary, #0078d4)';
-                    configBtn.style.color = '#fff';
-                });
-                configBtn.addEventListener('mouseleave', () => {
-                    configBtn.style.background = 'transparent';
-                    configBtn.style.color = 'var(--primary, #0078d4)';
-                });
                 configBtn.addEventListener('click', () => {
                     // Normalize disk object for showDiskActionModal (same format as /disks/detect)
                     detectedNewDisks = [{
@@ -3033,27 +2927,8 @@ async function renderStorageDashboard() {
             // Add "Remove from pool" button for disks in pool
             if (role !== 'none') {
                 const removeBtn = document.createElement('button');
-                removeBtn.style.cssText = `
-                    margin-left: auto;
-                    padding: 6px 12px;
-                    background: transparent;
-                    border: 1px solid var(--danger, #dc3545);
-                    color: var(--danger, #dc3545);
-                    border-radius: 6px;
-                    font-size: 12px;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                    white-space: nowrap;
-                `;
+                removeBtn.className = 'dash-disk-remove-btn';
                 removeBtn.textContent = '🗑️ Quitar del pool';
-                removeBtn.addEventListener('mouseenter', () => {
-                    removeBtn.style.background = 'var(--danger, #dc3545)';
-                    removeBtn.style.color = '#fff';
-                });
-                removeBtn.addEventListener('mouseleave', () => {
-                    removeBtn.style.background = 'transparent';
-                    removeBtn.style.color = 'var(--danger, #dc3545)';
-                });
                 removeBtn.addEventListener('click', async () => {
                     if (!confirm(`¿Seguro que quieres quitar ${disk.model || disk.id} del pool?\n\nEl disco seguirá montado pero no formará parte del almacenamiento compartido.`)) {
                         return;
@@ -3191,8 +3066,8 @@ async function renderDockerManager() {
         emptyCard.className = 'glass-card';
         emptyCard.style.cssText = 'grid-column: 1/-1; text-align:center; padding: 40px;';
         emptyCard.innerHTML = `
-            <h4 style="color: var(--text-dim);">${t("docker.noContainers", "No Containers Detected")}</h4>
-            <p style="color: var(--text-dim); font-size: 0.9rem;">Import a docker-compose file or run containers manually.</p>
+            <h4 class="docker-empty-title">${t("docker.noContainers", "No Containers Detected")}</h4>
+            <p class="docker-empty-subtitle">Import a docker-compose file or run containers manually.</p>
         `;
         dashboardContent.appendChild(emptyCard);
     } else {
@@ -3256,13 +3131,13 @@ async function renderDockerManager() {
                 const statsRow = document.createElement('div');
                 statsRow.style.cssText = 'display: flex; gap: 20px; margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 8px;';
                 statsRow.innerHTML = `
-                    <div style="flex: 1; text-align: center;">
-                        <div style="font-size: 0.7rem; color: var(--text-dim);">CPU</div>
-                        <div style="font-size: 1rem; font-weight: 600; color: ${cpuNum > 50 ? '#f59e0b' : '#10b981'}">${escapeHtml(cpuVal)}</div>
+                    <div class="docker-stat-cell">
+                        <div class="docker-stat-label">CPU</div>
+                        <div class="docker-stat-value ${cpuNum > 50 ? 'docker-stat-value-cpu-warn' : 'docker-stat-value-cpu-ok'}">${escapeHtml(cpuVal)}</div>
                     </div>
-                    <div style="flex: 1; text-align: center;">
-                        <div style="font-size: 0.7rem; color: var(--text-dim);">RAM</div>
-                        <div style="font-size: 1rem; font-weight: 600; color: #6366f1;">${escapeHtml(ramVal)}</div>
+                    <div class="docker-stat-cell">
+                        <div class="docker-stat-label">RAM</div>
+                        <div class="docker-stat-value docker-stat-value-ram">${escapeHtml(ramVal)}</div>
                     </div>
                 `;
                 card.appendChild(statsRow);
@@ -3522,42 +3397,33 @@ function openComposeModal() {
     `;
 
     modal.innerHTML = `
-        <div style="background: var(--card-bg); padding: 30px; border-radius: 16px; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="margin: 0;">${t('docker.importCompose', 'Importar Docker Compose')}</h3>
-                <button id="close-compose-modal" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer;">&times;</button>
+        <div class="docker-compose-modal">
+            <div class="docker-compose-header">
+                <h3 class="docker-compose-title">${t('docker.importCompose', 'Importar Docker Compose')}</h3>
+                <button id="close-compose-modal" class="docker-compose-close">&times;</button>
             </div>
-            <div class="input-group" style="margin-bottom: 15px;">
+            <div class="input-group docker-compose-input-group">
                 <input type="text" id="compose-name" placeholder=" " required>
                 <label>${t('docker.stackName', 'Nombre del Stack')}</label>
             </div>
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 8px; color: var(--text-dim);">docker-compose.yml content:</label>
-                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                    <label style="
-                        flex: 1; padding: 12px; background: rgba(99, 102, 241, 0.2);
-                        border: 2px dashed rgba(99, 102, 241, 0.5); border-radius: 8px;
-                        color: #6366f1; text-align: center; cursor: pointer;
-                        transition: all 0.2s ease;
-                    ">
+            <div class="docker-compose-label-wrap">
+                <label class="docker-compose-label">docker-compose.yml content:</label>
+                <div class="docker-compose-file-row">
+                    <label class="docker-compose-file-label">
                         📁 ${t('docker.uploadYml', 'Subir archivo .yml')}
-                        <input type="file" id="compose-file-input" accept=".yml,.yaml" style="display: none;">
+                        <input type="file" id="compose-file-input" accept=".yml,.yaml" class="docker-compose-file-input">
                     </label>
                 </div>
-                <textarea id="compose-content" style="
-                    width: 100%; height: 300px; background: rgba(0,0,0,0.3);
-                    border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
-                    color: white; font-family: monospace; padding: 15px; resize: vertical;
-                " placeholder="version: '3'
+                <textarea id="compose-content" class="docker-compose-textarea" placeholder="version: '3'
 services:
   myapp:
     image: nginx:latest
     ports:
       - '8080:80'"></textarea>
             </div>
-            <div style="display: flex; gap: 10px;">
-                <button id="save-compose-btn" class="btn-primary" style="flex: 1; padding: 12px;">${t('docker.saveCompose', 'Guardar Compose')}</button>
-                <button id="save-run-compose-btn" class="btn-primary" style="flex: 1; padding: 12px; background: #10b981;">${t('docker.saveAndRun', 'Guardar y Ejecutar')}</button>
+            <div class="cloudbackup-sync-input-group">
+                <button id="save-compose-btn" class="btn-primary docker-compose-save-btn">${t('docker.saveCompose', 'Guardar Compose')}</button>
+                <button id="save-run-compose-btn" class="btn-primary docker-compose-save-run-btn">${t('docker.saveAndRun', 'Guardar y Ejecutar')}</button>
             </div>
         </div>
     `;
@@ -3606,7 +3472,7 @@ async function saveCompose(andRun) {
     const modal = document.getElementById("compose-modal");
     const modalContent = modal.querySelector("div");
     modalContent.innerHTML = `
-        <h3 style="margin: 0 0 20px 0;">Desplegando Stack: ${escapeHtml(name)}</h3>
+        <h3 class="docker-deploy-title">Desplegando Stack: ${escapeHtml(name)}</h3>
         <div id="deploy-steps">
             <div class="deploy-step" id="step-save">
                 <span class="step-icon">⏳</span>
@@ -3621,15 +3487,15 @@ async function saveCompose(andRun) {
                 <span class="step-text">Iniciando contenedores...</span>
             </div>` : ""}
         </div>
-        <div style="margin: 20px 0;">
-            <div style="background: rgba(255,255,255,0.1); border-radius: 8px; height: 8px; overflow: hidden;">
-                <div id="deploy-progress" style="height: 100%; background: linear-gradient(90deg, #6366f1, #10b981); width: 0%; transition: width 0.3s ease;"></div>
+        <div class="docker-deploy-progress-wrap">
+            <div class="docker-deploy-progress-bg">
+                <div id="deploy-progress" class="docker-deploy-progress-bar"></div>
             </div>
-            <div id="deploy-status" style="margin-top: 10px; font-size: 0.9rem; color: var(--text-dim); text-align: center;">Inicializando...</div>
+            <div id="deploy-status" class="docker-deploy-status">Inicializando...</div>
         </div>
-        <div id="deploy-log" style="display: none; margin: 15px 0; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px; font-family: monospace; font-size: 0.8rem; max-height: 200px; overflow-y: auto; white-space: pre-wrap;"></div>
-        <div id="deploy-actions" style="display: none; text-align: center;">
-            <button id="deploy-close-btn" class="btn-primary" style="padding: 12px 30px;">Accept</button>
+        <div id="deploy-log" class="docker-deploy-log"></div>
+        <div id="deploy-actions" class="docker-deploy-actions">
+            <button id="deploy-close-btn" class="btn-primary docker-deploy-close">Accept</button>
         </div>
     `;
 
@@ -3803,26 +3669,22 @@ async function openEditComposeModal(composeName) {
     const modal = document.createElement('div');
     modal.className = 'modal active';
     modal.innerHTML = `
-        <div class="glass-card modal-content" style="max-width: 700px; max-height: 80vh; overflow-y: auto;">
+        <div class="glass-card modal-content docker-edit-modal">
             <header class="modal-header">
                 <h3>✏️ ${t('docker.editCompose', 'Editar Compose')}: ${escapeHtml(composeName)}</h3>
                 <button id="close-edit-compose" class="btn-close">&times;</button>
             </header>
-            <div style="padding: 20px;">
-                <textarea id="edit-compose-content" style="
-                    width: 100%; height: 400px; background: rgba(0,0,0,0.3);
-                    border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
-                    color: white; font-family: monospace; padding: 15px; resize: vertical;
-                ">${escapeHtml(content)}</textarea>
+            <div class="docker-edit-padding">
+                <textarea id="edit-compose-content" class="docker-edit-textarea">${escapeHtml(content)}</textarea>
             </div>
-            <div class="modal-footer" style="display: flex; gap: 10px; padding: 15px;">
-                <button id="cancel-edit-compose" class="btn-primary" style="background: var(--text-dim);">
+            <div class="modal-footer docker-edit-footer">
+                <button id="cancel-edit-compose" class="btn-primary docker-edit-cancel">
                     ${t('common.cancel', 'Cancelar')}
                 </button>
                 <button id="save-edit-compose" class="btn-primary">
                     ${t('common.save', 'Guardar')}
                 </button>
-                <button id="save-run-edit-compose" class="btn-primary" style="background: #10b981;">
+                <button id="save-run-edit-compose" class="btn-primary docker-edit-save-run">
                     ${t('docker.saveAndRun', 'Guardar y Ejecutar')}
                 </button>
             </div>
@@ -3914,7 +3776,7 @@ window.handleDockerAction = handleDockerAction;
 // Network Manager (Refined)
 async function renderNetworkManager() {
     try {
-        const res = await fetch(`${API_BASE}/network/interfaces`);
+        const res = await authFetch(`${API_BASE}/network/interfaces`);
         if (!res.ok) throw new Error('Failed to fetch interfaces');
         state.network.interfaces = await res.json();
     } catch (e) {
@@ -4335,24 +4197,24 @@ function renderSystemView() {
     infoCard.appendChild(uptimeRow);
     infoCard.appendChild(hostnameRow);
 
-    // Update card
-    const updateCard = document.createElement('div');
-    updateCard.className = 'glass-card';
+    // Dashboard Update card
+    const dashUpdateCard = document.createElement('div');
+    dashUpdateCard.className = 'glass-card';
 
-    const updateTitle = document.createElement('h3');
-    updateTitle.textContent = t('system.softwareUpdates', 'Actualizaciones de Software');
+    const dashUpdateTitle = document.createElement('h3');
+    dashUpdateTitle.textContent = t('system.dashboardUpdate', 'Actualización HomePiNAS');
 
-    const updateDesc = document.createElement('p');
-    updateDesc.style.cssText = 'color: var(--text-dim); margin-top: 10px;';
-    updateDesc.textContent = t('system.checkUpdatesDesc', 'Buscar e instalar actualizaciones de HomePiNAS desde GitHub.');
+    const dashUpdateDesc = document.createElement('p');
+    dashUpdateDesc.style.cssText = 'color: var(--text-dim); margin-top: 10px;';
+    dashUpdateDesc.textContent = t('system.dashboardUpdateDesc', 'Buscar e instalar actualizaciones del dashboard desde GitHub.');
 
     const updateStatus = document.createElement('div');
     updateStatus.id = 'update-status';
     updateStatus.style.cssText = 'margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px;';
-    updateStatus.innerHTML = `<span style="color: var(--text-dim);">${t('system.clickToCheck', 'Haz clic en "Buscar Actualizaciones" para verificar...')}</span>`;
+    updateStatus.innerHTML = `<span class="misc-status-placeholder">${t('system.clickToCheck', 'Haz clic en "Buscar" para verificar...')}</span>`;
 
-    const updateBtnContainer = document.createElement('div');
-    updateBtnContainer.style.cssText = 'display: flex; gap: 15px; margin-top: 20px;';
+    const dashBtnContainer = document.createElement('div');
+    dashBtnContainer.style.cssText = 'display: flex; gap: 15px; margin-top: 20px;';
 
     const checkUpdateBtn = document.createElement('button');
     checkUpdateBtn.className = 'btn-primary';
@@ -4367,17 +4229,65 @@ function renderSystemView() {
     applyUpdateBtn.textContent = t('system.installUpdate', 'Instalar Actualización');
     applyUpdateBtn.addEventListener('click', applyUpdate);
 
-    updateBtnContainer.appendChild(checkUpdateBtn);
-    updateBtnContainer.appendChild(applyUpdateBtn);
+    dashBtnContainer.appendChild(checkUpdateBtn);
+    dashBtnContainer.appendChild(applyUpdateBtn);
 
-    updateCard.appendChild(updateTitle);
-    updateCard.appendChild(updateDesc);
-    updateCard.appendChild(updateStatus);
-    updateCard.appendChild(updateBtnContainer);
+    dashUpdateCard.appendChild(dashUpdateTitle);
+    dashUpdateCard.appendChild(dashUpdateDesc);
+    dashUpdateCard.appendChild(updateStatus);
+    dashUpdateCard.appendChild(dashBtnContainer);
+
+    // OS Update card
+    const osUpdateCard = document.createElement('div');
+    osUpdateCard.className = 'glass-card';
+
+    const osUpdateTitle = document.createElement('h3');
+    osUpdateTitle.textContent = t('system.osUpdate', 'Actualización del Sistema');
+
+    const osUpdateDesc = document.createElement('p');
+    osUpdateDesc.style.cssText = 'color: var(--text-dim); margin-top: 10px;';
+    osUpdateDesc.textContent = t('system.osUpdateDesc', 'Buscar e instalar actualizaciones de paquetes del sistema operativo.');
+
+    const osStatus = document.createElement('div');
+    osStatus.id = 'os-update-status';
+    osStatus.style.cssText = 'margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px;';
+    osStatus.innerHTML = `<span class="misc-status-placeholder">${t('system.clickToCheck', 'Haz clic en "Buscar" para verificar...')}</span>`;
+
+    const osBtnContainer = document.createElement('div');
+    osBtnContainer.style.cssText = 'display: flex; gap: 15px; margin-top: 20px;';
+
+    const checkOsBtn = document.createElement('button');
+    checkOsBtn.className = 'btn-primary';
+    checkOsBtn.style.cssText = 'background: #6366f1; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);';
+    checkOsBtn.textContent = t('system.checkOsUpdates', 'Buscar Actualizaciones');
+    checkOsBtn.addEventListener('click', checkOsUpdates);
+
+    const applyOsBtn = document.createElement('button');
+    applyOsBtn.className = 'btn-primary';
+    applyOsBtn.id = 'apply-os-update-btn';
+    applyOsBtn.style.cssText = 'background: #f59e0b; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4); display: none;';
+    applyOsBtn.textContent = t('system.installOsUpdate', 'Instalar Actualizaciones');
+    applyOsBtn.addEventListener('click', applyOsUpdate);
+
+    osBtnContainer.appendChild(checkOsBtn);
+    osBtnContainer.appendChild(applyOsBtn);
+
+    osUpdateCard.appendChild(osUpdateTitle);
+    osUpdateCard.appendChild(osUpdateDesc);
+    osUpdateCard.appendChild(osStatus);
+    osUpdateCard.appendChild(osBtnContainer);
+
+    // Update grid (2 columns)
+    const updateGrid = document.createElement('div');
+    updateGrid.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 20px;';
+    dashUpdateCard.style.width = 'auto';
+    osUpdateCard.style.width = 'auto';
+    updateGrid.appendChild(dashUpdateCard);
+    updateGrid.appendChild(osUpdateCard);
 
     dashboardContent.appendChild(mgmtCard);
     dashboardContent.appendChild(infoCard);
-    dashboardContent.appendChild(updateCard);
+    dashboardContent.appendChild(updateGrid);
 }
 
 async function systemAction(action) {
@@ -4386,7 +4296,7 @@ async function systemAction(action) {
     if (!confirmed) return;
 
     try {
-        const res = await authFetch(`${API_BASE}/system/${action}`, { method: 'POST' });
+        const res = await authFetch(`${API_BASE}/power/${action}`, { method: 'POST' });
 
         if (!res.ok) {
             const data = await res.json();
@@ -4409,7 +4319,7 @@ async function checkForUpdates() {
 
     if (!statusEl) return;
 
-    statusEl.innerHTML = `<span style="color: #f59e0b;">${t('system.checkingUpdates', 'Buscando actualizaciones...')}</span>`;
+    statusEl.innerHTML = `<span class="misc-status-checking">${t('system.checkingUpdates', 'Buscando actualizaciones...')}</span>`;
     if (applyBtn) applyBtn.style.display = 'none';
 
     try {
@@ -4422,33 +4332,33 @@ async function checkForUpdates() {
 
         // Warning for local changes
         const localChangesWarning = data.localChanges ? `
-            <div style="margin-top: 12px; padding: 10px; background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; border-radius: 8px;">
-                <div style="color: #f59e0b; font-weight: 600;">⚠️ Cambios locales detectados</div>
-                <div style="margin-top: 4px; font-size: 0.85rem; color: var(--text-dim);">
+            <div class="misc-update-warning-box">
+                <div class="misc-update-warning-title">⚠️ Cambios locales detectados</div>
+                <div class="misc-update-warning-text">
                     Hay archivos modificados localmente. La actualización hará <code>git reset --hard</code> y perderás estos cambios:
                 </div>
-                <code style="display: block; margin-top: 5px; padding: 6px; background: rgba(0,0,0,0.2); border-radius: 4px; font-size: 0.8rem;">${escapeHtml((data.localChangesFiles || []).join('\n'))}</code>
+                <code class="misc-update-code">${escapeHtml((data.localChangesFiles || []).join('\n'))}</code>
             </div>
         ` : '';
 
         if (data.updateAvailable) {
             statusEl.innerHTML = `
-                <div style="color: #10b981; font-weight: 600;">${t('system.updateAvailable', '¡Actualización Disponible!')}</div>
-                <div style="margin-top: 8px; color: var(--text-dim);">
+                <div class="misc-update-available-title">${t('system.updateAvailable', '¡Actualización Disponible!')}</div>
+                <div class="misc-update-version-info">
                     ${t('system.current', 'Actual')}: <strong>v${escapeHtml(data.currentVersion)}</strong> →
-                    ${t('system.latest', 'Última')}: <strong style="color: #10b981;">v${escapeHtml(data.latestVersion)}</strong>
+                    ${t('system.latest', 'Última')}: <strong class="misc-update-version-highlight">v${escapeHtml(data.latestVersion)}</strong>
                 </div>
-                <div style="margin-top: 10px; font-size: 0.85rem; color: var(--text-dim);">
+                <div class="misc-update-changelog-wrap">
                     <strong>${t('system.changes', 'Cambios')}:</strong><br>
-                    <code style="display: block; margin-top: 5px; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 4px; white-space: pre-wrap;">${escapeHtml(data.changelog || t('common.info', 'Ver GitHub para detalles'))}</code>
+                    <code class="misc-update-changelog-code">${escapeHtml(data.changelog || t('common.info', 'Ver GitHub para detalles'))}</code>
                 </div>
                 ${localChangesWarning}
             `;
             if (applyBtn) applyBtn.style.display = 'inline-block';
         } else {
             statusEl.innerHTML = `
-                <div style="color: #6366f1;">${t('system.upToDate', '¡Estás al día!')}</div>
-                <div style="margin-top: 8px; color: var(--text-dim);">
+                <div class="misc-update-uptodate-title">${t('system.upToDate', '¡Estás al día!')}</div>
+                <div class="misc-update-uptodate-text">
                     ${t('system.version', 'Versión')}: <strong>v${escapeHtml(data.currentVersion)}</strong>
                 </div>
                 ${localChangesWarning}
@@ -4456,7 +4366,7 @@ async function checkForUpdates() {
         }
     } catch (e) {
         console.error('Update check error:', e);
-        statusEl.innerHTML = `<span style="color: #ef4444;">Error: ${escapeHtml(e.message)}</span>`;
+        statusEl.innerHTML = `<span class="dash-status-error">Error: ${escapeHtml(e.message)}</span>`;
     }
 }
 
@@ -4468,7 +4378,7 @@ async function applyUpdate() {
     const applyBtn = document.getElementById('apply-update-btn');
 
     if (statusEl) {
-        statusEl.innerHTML = `<span style="color: #f59e0b;">${t('system.installingUpdate', 'Instalando actualización... Por favor espera.')}</span>`;
+        statusEl.innerHTML = `<span class="misc-status-checking">${t('system.installingUpdate', 'Instalando actualización... Por favor espera.')}</span>`;
     }
     if (applyBtn) {
         applyBtn.disabled = true;
@@ -4485,13 +4395,13 @@ async function applyUpdate() {
 
         if (statusEl) {
             statusEl.innerHTML = `
-                <div style="color: #10b981; font-weight: 600;">Update started!</div>
-                <div style="margin-top: 8px; color: var(--text-dim);">
+                <div class="misc-update-progress-info">Update started!</div>
+                <div class="misc-update-progress-text">
                     The service is restarting. This page will refresh automatically in 30 seconds...
                 </div>
-                <div style="margin-top: 10px;">
-                    <div class="progress-bar" style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
-                        <div id="update-progress" style="height: 100%; background: #10b981; width: 0%; transition: width 0.5s;"></div>
+                <div class="misc-update-progress-wrap">
+                    <div class="misc-update-progress-bar-bg">
+                        <div id="update-progress" class="misc-update-progress-bar"></div>
                     </div>
                 </div>
             `;
@@ -4512,7 +4422,7 @@ async function applyUpdate() {
     } catch (e) {
         console.error('Update apply error:', e);
         if (statusEl) {
-            statusEl.innerHTML = `<span style="color: #ef4444;">${t('system.updateFailed', 'Actualización fallida')}: ${escapeHtml(e.message)}</span>`;
+            statusEl.innerHTML = `<span class="dash-status-error">${t('system.updateFailed', 'Actualización fallida')}: ${escapeHtml(e.message)}</span>`;
         }
         if (applyBtn) {
             applyBtn.disabled = false;
@@ -4524,6 +4434,132 @@ async function applyUpdate() {
 
 window.checkForUpdates = checkForUpdates;
 window.applyUpdate = applyUpdate;
+
+// OS Update Functions
+async function checkOsUpdates() {
+    const statusEl = document.getElementById('os-update-status');
+    const applyBtn = document.getElementById('apply-os-update-btn');
+    if (!statusEl) return;
+
+    statusEl.innerHTML = `<span class="misc-status-checking">${t('system.checkingOsUpdates', 'Buscando actualizaciones del sistema... (puede tardar)')}</span>`;
+    if (applyBtn) applyBtn.style.display = 'none';
+
+    try {
+        const res = await authFetch(`${API_BASE}/update/check-os`);
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'Error');
+
+        if (data.updatesAvailable > 0) {
+            const secBadge = data.securityUpdates > 0
+                ? `<span class="misc-os-update-security-badge"> (${data.securityUpdates} de seguridad)</span>` : '';
+            const pkgList = (data.packages || []).slice(0, 15).map(p =>
+                `${escapeHtml(p.name)} ${p.currentVersion ? escapeHtml(p.currentVersion) + ' → ' : ''}${escapeHtml(p.newVersion)}`
+            ).join('\n');
+            const moreCount = data.updatesAvailable > 15 ? `\n... y ${data.updatesAvailable - 15} más` : '';
+
+            statusEl.innerHTML = `
+                <div class="misc-os-update-available-title">${data.updatesAvailable} ${t('system.osUpdatesAvailable', 'actualizaciones disponibles')}${secBadge}</div>
+                <code class="misc-os-update-code">${escapeHtml(pkgList + moreCount)}</code>
+            `;
+            if (applyBtn) applyBtn.style.display = 'inline-block';
+        } else {
+            statusEl.innerHTML = `
+                <div class="misc-os-uptodate-title">${t('system.osUpToDate', '¡Sistema operativo al día!')}</div>
+                <div class="misc-os-uptodate-text">${t('system.noOsUpdates', 'No hay paquetes pendientes de actualización.')}</div>
+            `;
+        }
+    } catch (e) {
+        statusEl.innerHTML = `<span class="dash-status-error">Error: ${escapeHtml(e.message)}</span>`;
+    }
+}
+
+async function applyOsUpdate() {
+    const confirmed = await showConfirmModal(
+        t('system.osUpdateConfirmTitle', 'Actualizar sistema operativo'),
+        t('system.osUpdateConfirmMsg', '¿Instalar todas las actualizaciones del sistema? Esto puede tardar varios minutos.')
+    );
+    if (!confirmed) return;
+
+    const statusEl = document.getElementById('os-update-status');
+    const applyBtn = document.getElementById('apply-os-update-btn');
+
+    if (statusEl) statusEl.innerHTML = `<span class="misc-status-checking">${t('system.installingOsUpdate', 'Instalando actualizaciones del SO... Esto puede tardar varios minutos.')}</span>`;
+    if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = t('system.installing', 'Instalando...'); }
+
+    try {
+        const res = await authFetch(`${API_BASE}/update/apply-os`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error');
+
+        if (statusEl) {
+            statusEl.innerHTML = `
+                <div class="misc-os-install-started-title">${t('system.osUpdateStarted', '¡Actualización del SO iniciada!')}</div>
+                <div class="misc-os-install-started-text">${t('system.osUpdateRunning', 'Las actualizaciones se están instalando en segundo plano. Puedes seguir usando el dashboard.')}</div>
+            `;
+        }
+        if (applyBtn) applyBtn.style.display = 'none';
+    } catch (e) {
+        if (statusEl) statusEl.innerHTML = `<span class="dash-status-error">Error: ${escapeHtml(e.message)}</span>`;
+        if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = t('system.retryUpdate', 'Reintentar'); }
+    }
+}
+
+// Auto-check for dashboard updates once per day and show banner
+(function initDashboardUpdateCheck() {
+    const CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+    const STORAGE_KEY = 'homepinas_last_update_check';
+
+    async function silentUpdateCheck() {
+        try {
+            const res = await authFetch(`${API_BASE}/update/check`);
+            if (!res.ok) return;
+            const data = await res.json();
+
+            localStorage.setItem(STORAGE_KEY, Date.now().toString());
+
+            if (data.updateAvailable) {
+                showUpdateBanner(data.currentVersion, data.latestVersion);
+            } else {
+                // Remove banner if no update
+                const existing = document.getElementById('update-banner');
+                if (existing) existing.remove();
+            }
+        } catch (e) {
+            // Silent fail - don't bother user
+        }
+    }
+
+    function showUpdateBanner(currentVersion, latestVersion) {
+        // Don't show duplicate banner
+        if (document.getElementById('update-banner')) return;
+
+        const banner = document.createElement('div');
+        banner.id = 'update-banner';
+        banner.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 9998; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 16px 20px; border-radius: 12px; box-shadow: 0 8px 24px rgba(99,102,241,0.4); display: flex; align-items: center; gap: 12px; max-width: 400px; animation: slideInRight 0.4s ease;';
+        banner.innerHTML = `
+            <div class="misc-update-banner-icon">🆕</div>
+            <div class="misc-update-banner-content">
+                <div class="misc-update-banner-title">${t('system.updateAvailableBanner', '¡Actualización disponible!')}</div>
+                <div class="misc-update-banner-version">v${escapeHtml(currentVersion)} → v${escapeHtml(latestVersion)}</div>
+            </div>
+            <button onclick="document.getElementById('update-banner').remove(); document.querySelector('[data-view=system]')?.click();" class="misc-update-banner-view-btn">${t('system.viewUpdate', 'Ver')}</button>
+            <button onclick="document.getElementById('update-banner').remove();" class="misc-update-banner-close-btn">&times;</button>
+        `;
+        document.body.appendChild(banner);
+    }
+
+    // Check on page load (after small delay) if enough time has passed
+    setTimeout(() => {
+        const lastCheck = parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10);
+        if (Date.now() - lastCheck > CHECK_INTERVAL) {
+            silentUpdateCheck();
+        }
+    }, 10000); // Wait 10s after page load
+
+    // Also set interval for long sessions
+    setInterval(silentUpdateCheck, CHECK_INTERVAL);
+})();
 
 // Helper Colors
 function getRoleColor(role) {
@@ -4572,22 +4608,21 @@ if (resetBtn) {
 const powerBtn = document.getElementById("power-btn");
 const powerDropdown = document.getElementById("power-dropdown");
 if (powerBtn && powerDropdown) {
-    // Toggle dropdown
+    // Toggle dropdown via CSS class
     powerBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        const isOpen = powerDropdown.style.display !== 'none';
-        powerDropdown.style.display = isOpen ? 'none' : 'block';
+        powerDropdown.classList.toggle('open');
     });
 
     // Close dropdown when clicking outside
     document.addEventListener("click", () => {
-        powerDropdown.style.display = 'none';
+        powerDropdown.classList.remove('open');
     });
     powerDropdown.addEventListener("click", (e) => e.stopPropagation());
 
     // Logout
     document.getElementById("power-logout").addEventListener("click", async () => {
-        powerDropdown.style.display = 'none';
+        powerDropdown.classList.remove('open');
         const confirmed = await showConfirmModal('Cerrar sesión', '¿Seguro que quieres cerrar sesión?');
         if (confirmed) {
             clearSession();
@@ -4599,7 +4634,7 @@ if (powerBtn && powerDropdown) {
 
     // Reboot
     document.getElementById("power-reboot").addEventListener("click", async () => {
-        powerDropdown.style.display = 'none';
+        powerDropdown.classList.remove('open');
         const confirmed = await showConfirmModal('Reiniciar sistema', '¿Seguro que quieres reiniciar el sistema? Se perderán todas las conexiones activas.');
         if (confirmed) {
             try {
@@ -4619,7 +4654,7 @@ if (powerBtn && powerDropdown) {
 
     // Shutdown
     document.getElementById("power-shutdown").addEventListener("click", async () => {
-        powerDropdown.style.display = 'none';
+        powerDropdown.classList.remove('open');
         const confirmed = await showConfirmModal('Apagar sistema', '⚠️ ¿Seguro que quieres APAGAR el sistema? Necesitarás acceso físico para volver a encenderlo.');
         if (confirmed) {
             try {
@@ -4663,7 +4698,7 @@ async function renderTerminalView() {
     header.style.cssText = 'grid-column: 1 / -1; margin-bottom: 20px;';
     header.innerHTML = `
         <h3>${t('terminal.title', 'Terminal y Herramientas')}</h3>
-        <p style="color: var(--text-dim); margin-top: 10px;">
+        <p class="misc-about-text">
             ${t('shortcuts.defaultShortcuts', 'Accesos rápidos a herramientas del sistema')}
         </p>
     `;
@@ -4876,7 +4911,7 @@ function openTerminal(command = 'bash', title = 'Terminal') {
         });
 
     } else {
-        containerEl.innerHTML = '<p style="color: #ef4444; padding: 20px;">Error: xterm.js no disponible</p>';
+        containerEl.innerHTML = '<p class="misc-terminal-error">Error: xterm.js no disponible</p>';
     }
 }
 
@@ -4938,7 +4973,7 @@ function openAddShortcutModal() {
     modal.id = 'shortcut-modal';
     modal.className = 'modal active';
     modal.innerHTML = `
-        <div class="glass-card modal-content" style="max-width: 500px;">
+        <div class="glass-card modal-content misc-shortcut-modal">
             <header class="modal-header">
                 <h3>${t('shortcuts.addShortcut', 'Añadir Acceso Directo')}</h3>
                 <button id="close-shortcut-modal" class="btn-close">&times;</button>
@@ -4956,13 +4991,13 @@ function openAddShortcutModal() {
                     <input type="text" id="shortcut-description" placeholder=" ">
                     <label>${t('shortcuts.description', 'Descripción')}</label>
                 </div>
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 10px; color: var(--text-dim);">${t('shortcuts.icon', 'Icono')}</label>
-                    <div id="icon-picker" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+                <div class="cloudbackup-sync-field">
+                    <label class="misc-shortcut-icon-label">${t('shortcuts.icon', 'Icono')}</label>
+                    <div id="icon-picker" class="misc-shortcut-icon-picker"></div>
                 </div>
                 <input type="hidden" id="shortcut-icon" value="💻">
-                <div class="modal-footer" style="display: flex; gap: 10px;">
-                    <button type="button" id="cancel-shortcut-modal" class="btn-primary" style="background: var(--text-dim);">
+                <div class="modal-footer misc-shortcut-modal-footer">
+                    <button type="button" id="cancel-shortcut-modal" class="btn-primary misc-shortcut-cancel-btn">
                         ${t('common.cancel', 'Cancelar')}
                     </button>
                     <button type="submit" class="btn-primary">${t('common.save', 'Guardar')}</button>
@@ -5031,12 +5066,12 @@ async function openContainerLogs(containerId, containerName) {
     modal.className = 'modal active';
     modal.innerHTML = `
         <div class="glass-card logs-modal-content">
-            <header class="modal-header" style="padding: 15px 20px; border-bottom: 1px solid var(--card-border);">
+            <header class="modal-header logview-modal-header">
                 <h3>📜 Logs: ${escapeHtml(containerName)}</h3>
                 <button id="close-logs-modal" class="btn-close">&times;</button>
             </header>
             <div class="logs-container" id="logs-content">
-                <span style="color: var(--text-dim);">${t('common.loading', 'Cargando...')}</span>
+                <span class="logview-loading">${t('common.loading', 'Cargando...')}</span>
             </div>
         </div>
     `;
@@ -5058,10 +5093,10 @@ async function openContainerLogs(containerId, containerName) {
             logsEl.textContent = data.logs;
             logsEl.scrollTop = logsEl.scrollHeight;
         } else {
-            logsEl.innerHTML = `<span style="color: var(--text-dim);">${t('logs.noLogs', 'No hay logs disponibles')}</span>`;
+            logsEl.innerHTML = `<span class="logview-empty">${t('logs.noLogs', 'No hay logs disponibles')}</span>`;
         }
     } catch (e) {
-        document.getElementById('logs-content').innerHTML = `<span style="color: #ef4444;">Error: ${escapeHtml(e.message)}</span>`;
+        document.getElementById('logs-content').innerHTML = `<span class="logview-error">Error: ${escapeHtml(e.message)}</span>`;
     }
 }
 
@@ -5324,8 +5359,8 @@ async function renderFilesView() {
                 <polyline points="17 8 12 3 7 8"/>
                 <line x1="12" y1="3" x2="12" y2="15"/>
             </svg>
-            <p style="margin-top: 12px; font-size: 1.1rem; font-weight: 600;">Suelta los archivos aquí</p>
-            <p style="font-size: 0.85rem; color: var(--text-dim);">Se subirán a <strong>${escapeHtml(currentFilePath)}</strong></p>
+            <p class="fm-dropzone-title">Suelta los archivos aquí</p>
+            <p class="fm-dropzone-path">Se subirán a <strong>${escapeHtml(currentFilePath)}</strong></p>
         </div>
     `;
     content.appendChild(dropZone);
@@ -5389,7 +5424,7 @@ async function loadFolderTree() {
     const treeContainer = document.getElementById('fm-tree');
     if (!treeContainer) return;
     
-    treeContainer.innerHTML = '<div style="padding: 12px; color: var(--text-dim);">Cargando...</div>';
+    treeContainer.innerHTML = '<div class="fm-tree-loading">Cargando...</div>';
     
     try {
         // Build tree starting from root
@@ -5398,7 +5433,7 @@ async function loadFolderTree() {
         renderFolderTree(treeContainer, tree, 0);
     } catch (e) {
         console.error('loadFolderTree error:', e);
-        treeContainer.innerHTML = '<div style="padding: 12px; color: #ef4444;">Error al cargar</div>';
+        treeContainer.innerHTML = '<div class="fm-tree-error">Error al cargar</div>';
     }
 }
 
@@ -5588,8 +5623,8 @@ async function loadFiles(filePath) {
                 <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" stroke-width="1" opacity="0.4">
                     <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
                 </svg>
-                <p style="margin-top:12px">Carpeta vacía</p>
-                <p style="font-size:0.8rem;color:var(--text-dim)">Arrastra archivos aquí o usa el botón Subir</p>
+                <p class="fm-empty-title">Carpeta vacía</p>
+                <p class="fm-empty-subtitle">Arrastra archivos aquí o usa el botón Subir</p>
             </div>`;
             return;
         }
@@ -5610,7 +5645,7 @@ async function loadFiles(filePath) {
         }
     } catch (e) {
         console.error('Load files error:', e);
-        filesList.innerHTML = '<div class="fm-empty-state" style="color:#ef4444"><p>❌ Error al cargar archivos</p></div>';
+        filesList.innerHTML = '<div class="fm-empty-state fm-error-state"><p>❌ Error al cargar archivos</p></div>';
     }
 }
 
@@ -5622,7 +5657,7 @@ function renderFilteredFiles(files, highlightQuery = '') {
     if (files.length === 0) {
         filesList.innerHTML = `<div class="fm-empty-state">
             <p>🔍 Sin resultados${highlightQuery ? ' para "' + highlightQuery + '"' : ''}</p>
-            <p style="font-size:0.8rem;color:var(--text-dim)">Presiona Enter para buscar en subcarpetas</p>
+            <p class="fm-search-hint">Presiona Enter para buscar en subcarpetas</p>
         </div>`;
         return;
     }
@@ -6144,7 +6179,7 @@ function fmPreviewFile(file, basePath) {
                 callback(_previewBlobUrl);
             })
             .catch(() => {
-                body.innerHTML = '<p style="color:#ef4444;text-align:center">Error al cargar el archivo</p>';
+                body.innerHTML = '<p class="fm-preview-error">Error al cargar el archivo</p>';
             });
     }
 
@@ -6163,7 +6198,7 @@ function fmPreviewFile(file, basePath) {
         });
     } else if (audioExts.includes(ext)) {
         loadPreviewBlob(url => {
-            body.innerHTML = `<div class="fm-preview-audio-wrap">${getFileIconSVG(file.name, 80)}<audio controls autoplay style="width:100%;margin-top:20px"><source src="${url}"></audio></div>`;
+            body.innerHTML = `<div class="fm-preview-audio-wrap">${getFileIconSVG(file.name, 80)}<audio controls autoplay class="fm-preview-audio"><source src="${url}"></audio></div>`;
         });
     } else if (ext === 'pdf') {
         loadPreviewBlob(url => {
@@ -6178,15 +6213,15 @@ function fmPreviewFile(file, basePath) {
             body.innerHTML = '';
             body.appendChild(pre);
         }).catch(() => {
-            body.innerHTML = '<p style="color:#ef4444;text-align:center">Error al cargar el archivo</p>';
+            body.innerHTML = '<p class="fm-preview-error">Error al cargar el archivo</p>';
         });
     } else {
         body.innerHTML = `
             <div class="fm-preview-nopreview">
                 ${getFileIconSVG(file.name, 80)}
-                <p style="margin-top:16px;font-size:1rem">${escapeHtml(file.name)}</p>
-                <p style="color:var(--text-dim);font-size:0.85rem">${formatFileSize(file.size)} · ${ext.toUpperCase()}</p>
-                <button class="btn-primary btn-sm fm-nopreview-download" style="margin-top:16px">Descargar archivo</button>
+                <p class="fm-preview-file-name">${escapeHtml(file.name)}</p>
+                <p class="fm-preview-file-meta">${formatFileSize(file.size)} · ${ext.toUpperCase()}</p>
+                <button class="btn-primary btn-sm fm-nopreview-download" style="margin-top: 16px;">Descargar archivo</button>
             </div>
         `;
         body.querySelector('.fm-nopreview-download').addEventListener('click', () => downloadFile(fullPath));
@@ -6425,7 +6460,7 @@ async function searchFiles(query) {
             row.innerHTML = `
                 <span></span>
                 <span class="fm-file-icon">${file.type === 'directory' ? getFolderSVG() : getFileIconSVG(file.name || file.path.split('/').pop())}</span>
-                <span class="fm-file-name" style="grid-column: span 2">${file.path || file.name}</span>
+                <span class="fm-file-name" style="grid-column: span 2;">${file.path || file.name}</span>
                 <span class="fm-file-meta">${file.type === 'directory' ? '—' : formatFileSize(file.size)}</span>
                 <span></span><span></span>
             `;
@@ -6439,7 +6474,7 @@ async function searchFiles(query) {
             filesList.appendChild(row);
         });
     } catch (e) {
-        filesList.innerHTML = '<div class="fm-empty-state" style="color:#ef4444">Error en la búsqueda</div>';
+        filesList.innerHTML = '<div class="fm-empty-state" style="color: #ef4444;">Error en la búsqueda</div>';
     }
 }
 
@@ -6509,24 +6544,23 @@ function showFileContextMenu(e, filePath, file) {
 
 async function renderUsersView() {
     const container = document.createElement('div');
-    container.style.cssText = 'display: contents;';
+    container.className = 'users-layout';
 
-    // Users card
+    // LEFT COLUMN: Users card
     const usersCard = document.createElement('div');
     usersCard.className = 'glass-card';
-    usersCard.style.cssText = 'grid-column: 1 / -1;';
 
     const header = document.createElement('div');
-    header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;';
-    
+    header.className = 'users-card-header';
+
     const title = document.createElement('h3');
     title.textContent = '👥 Gestión de Usuarios';
-    
+
     const addBtn = document.createElement('button');
     addBtn.className = 'btn-primary btn-sm';
     addBtn.textContent = '+ Añadir Usuario';
     addBtn.addEventListener('click', () => showUserForm());
-    
+
     header.appendChild(title);
     header.appendChild(addBtn);
     usersCard.appendChild(header);
@@ -6534,36 +6568,125 @@ async function renderUsersView() {
     // Users table
     const table = document.createElement('div');
     table.id = 'users-table';
-    table.style.cssText = 'border: 1px solid var(--border); border-radius: 8px; overflow: hidden;';
-    
+    table.className = 'users-table';
+
     const tableHeader = document.createElement('div');
-    tableHeader.style.cssText = 'display: grid; grid-template-columns: 1fr 120px 160px 160px 80px; padding: 12px 20px; background: var(--bg-hover); font-weight: 600; font-size: 0.85rem; color: var(--text-dim);';
-    tableHeader.innerHTML = '<span>Usuario</span><span>Rol</span><span>Creado</span><span>Último Acceso</span><span></span>';
+    tableHeader.className = 'users-table-header';
+    tableHeader.innerHTML = '<span>Usuario</span><span>Rol</span><span>Creado</span><span>Último Acceso</span><span>Acciones</span>';
     table.appendChild(tableHeader);
-    
+
     const usersList = document.createElement('div');
     usersList.id = 'users-list';
     table.appendChild(usersList);
     usersCard.appendChild(table);
     container.appendChild(usersCard);
 
+    // RIGHT COLUMN: My Account + 2FA
+    const rightCol = document.createElement('div');
+    rightCol.className = 'users-right-col';
+
+    // My Account Card
+    const accountCard = document.createElement('div');
+    accountCard.className = 'glass-card';
+
+    const accountTitle = document.createElement('h3');
+    accountTitle.textContent = '👤 Mi Cuenta';
+    accountTitle.style.marginBottom = '15px';
+    accountCard.appendChild(accountTitle);
+
+    const accountContent = document.createElement('div');
+    accountContent.id = 'my-account-content';
+    accountContent.innerHTML = `
+        <div class="users-account-info">
+            <div class="users-account-row">
+                <span class="users-account-label">Usuario</span>
+                <span class="users-account-value">${escapeHtml(state.user?.username || 'admin')}</span>
+            </div>
+            <div class="users-account-row">
+                <span class="users-account-label">Rol</span>
+                <span class="users-account-value">Administrador</span>
+            </div>
+        </div>
+        <hr style="border: none; border-top: 1px solid var(--border); margin: 16px 0;">
+        <h4 style="margin-bottom: 12px; font-size: 0.9rem;">🔑 Cambiar Contraseña</h4>
+        <form id="change-password-form" class="users-password-form">
+            <div class="input-group">
+                <input type="password" id="cp-current" required placeholder=" ">
+                <label>Contraseña actual</label>
+            </div>
+            <div class="input-group">
+                <input type="password" id="cp-new" required placeholder=" " minlength="6">
+                <label>Nueva contraseña</label>
+            </div>
+            <div class="input-group">
+                <input type="password" id="cp-confirm" required placeholder=" " minlength="6">
+                <label>Confirmar nueva contraseña</label>
+            </div>
+            <div id="cp-message" class="users-password-message"></div>
+            <button type="submit" class="btn-primary" style="width: 100%;">Cambiar Contraseña</button>
+        </form>
+    `;
+    accountCard.appendChild(accountContent);
+    rightCol.appendChild(accountCard);
+
     // 2FA Card
     const tfaCard = document.createElement('div');
     tfaCard.className = 'glass-card';
-    tfaCard.style.cssText = 'grid-column: 1 / -1;';
-    
+
     const tfaTitle = document.createElement('h3');
     tfaTitle.textContent = '🔐 Autenticación de Dos Factores (2FA)';
     tfaTitle.style.marginBottom = '15px';
     tfaCard.appendChild(tfaTitle);
-    
+
     const tfaContent = document.createElement('div');
     tfaContent.id = 'tfa-content';
-    tfaContent.innerHTML = '<p style="color: var(--text-dim);">Cargando...</p>';
+    tfaContent.innerHTML = '<p class="users-loading-text">Cargando...</p>';
     tfaCard.appendChild(tfaContent);
-    container.appendChild(tfaCard);
+    rightCol.appendChild(tfaCard);
+
+    container.appendChild(rightCol);
 
     dashboardContent.appendChild(container);
+
+    // Setup change password form handler
+    document.getElementById('change-password-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msgEl = document.getElementById('cp-message');
+        const currentPassword = document.getElementById('cp-current').value;
+        const newPassword = document.getElementById('cp-new').value;
+        const confirmPassword = document.getElementById('cp-confirm').value;
+
+        if (newPassword !== confirmPassword) {
+            msgEl.textContent = 'Las contraseñas no coinciden';
+            msgEl.className = 'users-password-message users-password-error';
+            return;
+        }
+        if (newPassword.length < 6) {
+            msgEl.textContent = 'La contraseña debe tener al menos 6 caracteres';
+            msgEl.className = 'users-password-message users-password-error';
+            return;
+        }
+
+        try {
+            const res = await authFetch(`${API_BASE}/users/me/password`, {
+                method: 'PUT',
+                body: JSON.stringify({ currentPassword, newPassword })
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.error || 'Error al cambiar contraseña');
+            }
+            msgEl.textContent = '✅ Contraseña cambiada correctamente';
+            msgEl.className = 'users-password-message users-password-success';
+            document.getElementById('cp-current').value = '';
+            document.getElementById('cp-new').value = '';
+            document.getElementById('cp-confirm').value = '';
+        } catch (err) {
+            msgEl.textContent = err.message;
+            msgEl.className = 'users-password-message users-password-error';
+        }
+    });
+
     await loadUsers();
     await load2FAStatus();
 }
@@ -6586,44 +6709,50 @@ async function loadUsers() {
         usersList.innerHTML = '';
         users.forEach(user => {
             const row = document.createElement('div');
-            row.style.cssText = 'display: grid; grid-template-columns: 1fr 120px 160px 160px 80px; padding: 12px 20px; align-items: center; border-top: 1px solid var(--border);';
-            
+            row.className = 'users-table-row';
+
             const nameSpan = document.createElement('span');
-            nameSpan.style.fontWeight = '500';
+            nameSpan.className = 'users-name';
             nameSpan.textContent = user.username;
             if (user.username === state.user?.username) {
                 const badge = document.createElement('span');
                 badge.textContent = ' (tú)';
-                badge.style.cssText = 'color: var(--accent); font-size: 0.8rem;';
+                badge.className = 'users-you-badge';
                 nameSpan.appendChild(badge);
             }
 
             const roleSpan = document.createElement('span');
             const roleBadge = document.createElement('span');
-            roleBadge.style.cssText = `padding: 3px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 500; ${
-                user.role === 'admin' ? 'background: rgba(239,68,68,0.15); color: #ef4444;' :
-                user.role === 'user' ? 'background: rgba(99,102,241,0.15); color: #6366f1;' :
-                'background: rgba(148,163,184,0.15); color: #94a3b8;'
-            }`;
+            const roleClass = user.role === 'admin' ? 'users-role-admin' :
+                user.role === 'user' ? 'users-role-user' : 'users-role-readonly';
+            roleBadge.className = `users-role-badge ${roleClass}`;
             roleBadge.textContent = user.role === 'admin' ? 'Admin' : user.role === 'user' ? 'Usuario' : 'Solo lectura';
             roleSpan.appendChild(roleBadge);
 
             const createdSpan = document.createElement('span');
-            createdSpan.style.cssText = 'font-size: 0.85rem; color: var(--text-dim);';
+            createdSpan.className = 'users-date-text';
             createdSpan.textContent = user.createdAt ? new Date(user.createdAt).toLocaleDateString('es-ES') : '—';
 
             const lastLoginSpan = document.createElement('span');
-            lastLoginSpan.style.cssText = 'font-size: 0.85rem; color: var(--text-dim);';
+            lastLoginSpan.className = 'users-date-text';
             lastLoginSpan.textContent = user.lastLogin ? new Date(user.lastLogin).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 
             const actionsDiv = document.createElement('div');
-            actionsDiv.style.cssText = 'display: flex; gap: 6px;';
+            actionsDiv.className = 'users-actions';
+
+            // Edit button (for all users except self — admin can change role/password)
             if (user.username !== state.user?.username) {
+                const editBtn = document.createElement('button');
+                editBtn.textContent = '✏️';
+                editBtn.title = 'Editar usuario';
+                editBtn.className = 'users-action-btn';
+                editBtn.addEventListener('click', () => showUserForm(user));
+                actionsDiv.appendChild(editBtn);
+
                 const delBtn = document.createElement('button');
                 delBtn.textContent = '🗑';
-                delBtn.style.cssText = 'background: none; border: none; cursor: pointer; font-size: 1rem; opacity: 0.5;';
-                delBtn.addEventListener('mouseenter', () => delBtn.style.opacity = '1');
-                delBtn.addEventListener('mouseleave', () => delBtn.style.opacity = '0.5');
+                delBtn.title = 'Eliminar usuario';
+                delBtn.className = 'users-action-btn users-action-btn-danger';
                 delBtn.addEventListener('click', () => deleteUser(user.username));
                 actionsDiv.appendChild(delBtn);
             }
@@ -6636,7 +6765,7 @@ async function loadUsers() {
             usersList.appendChild(row);
         });
     } catch (e) {
-        usersList.innerHTML = '<div style="padding: 20px; color: var(--text-dim);">Error cargando usuarios</div>';
+        usersList.innerHTML = '<div class="users-error-text">Error cargando usuarios</div>';
     }
 }
 
@@ -6650,12 +6779,12 @@ function showUserForm(editUser = null) {
     modal.style.cssText = 'display: flex; position: fixed; inset: 0; z-index: 1000; align-items: center; justify-content: center; background: rgba(0,0,0,0.5);';
 
     modal.innerHTML = `
-        <div class="glass-card modal-content" style="max-width: 450px; width: 90%;">
-            <header class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="glass-card modal-content users-modal-content">
+            <header class="modal-header users-modal-header">
                 <h3>${editUser ? 'Editar Usuario' : 'Nuevo Usuario'}</h3>
                 <button class="btn-close" id="close-user-form">&times;</button>
             </header>
-            <form id="user-create-form" style="display: flex; flex-direction: column; gap: 15px; margin-top: 15px;">
+            <form id="user-create-form" class="users-create-form">
                 <div class="input-group">
                     <input type="text" id="uf-username" required placeholder=" " value="${editUser?.username || ''}" ${editUser ? 'readonly' : ''}>
                     <label>Usuario</label>
@@ -6665,7 +6794,7 @@ function showUserForm(editUser = null) {
                     <label>${editUser ? 'Nueva contraseña (dejar vacía para mantener)' : 'Contraseña'}</label>
                 </div>
                 <div class="input-group">
-                    <select id="uf-role" style="padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); width: 100%;">
+                    <select id="uf-role" class="users-role-select">
                         <option value="admin" ${editUser?.role === 'admin' ? 'selected' : ''}>Administrador</option>
                         <option value="user" ${(!editUser || editUser?.role === 'user') ? 'selected' : ''}>Usuario</option>
                         <option value="readonly" ${editUser?.role === 'readonly' ? 'selected' : ''}>Solo Lectura</option>
@@ -6727,23 +6856,23 @@ async function load2FAStatus() {
 
         if (data.enabled) {
             content.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 15px;">
+                <div class="users-2fa-container">
                     <span style="font-size: 2rem;">✅</span>
                     <div>
-                        <p style="font-weight: 600; color: #10b981;">2FA Activado</p>
-                        <p style="color: var(--text-dim); font-size: 0.9rem;">Tu cuenta está protegida con autenticación de dos factores.</p>
+                        <p class="users-2fa-active-title">2FA Activado</p>
+                        <p class="users-2fa-description">Tu cuenta está protegida con autenticación de dos factores.</p>
                     </div>
-                    <button class="btn-primary btn-sm" style="margin-left: auto; background: #ef4444;" id="disable-2fa-btn">Desactivar</button>
+                    <button class="btn-primary btn-sm users-2fa-disable-btn" id="disable-2fa-btn">Desactivar</button>
                 </div>
             `;
             document.getElementById('disable-2fa-btn').addEventListener('click', disable2FA);
         } else {
             content.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 15px;">
+                <div class="users-2fa-container">
                     <span style="font-size: 2rem;">🔓</span>
                     <div>
                         <p style="font-weight: 600;">2FA Desactivado</p>
-                        <p style="color: var(--text-dim); font-size: 0.9rem;">Protege tu cuenta con una app de autenticación (Google Authenticator, Authy, etc.)</p>
+                        <p class="users-2fa-description">Protege tu cuenta con una app de autenticación (Google Authenticator, Authy, etc.)</p>
                     </div>
                     <button class="btn-primary btn-sm" id="enable-2fa-btn" style="margin-left: auto;">Activar 2FA</button>
                 </div>
@@ -6751,7 +6880,7 @@ async function load2FAStatus() {
             document.getElementById('enable-2fa-btn').addEventListener('click', setup2FA);
         }
     } catch (e) {
-        content.innerHTML = '<p style="color: var(--text-dim);">No se pudo cargar el estado de 2FA</p>';
+        content.innerHTML = '<p class="users-2fa-error">No se pudo cargar el estado de 2FA</p>';
     }
 }
 
@@ -6765,16 +6894,16 @@ async function setup2FA() {
         const data = await res.json();
 
         content.innerHTML = `
-            <div style="text-align: center; max-width: 400px; margin: 0 auto;">
-                <p style="margin-bottom: 15px;">Escanea este código QR con tu app de autenticación:</p>
-                <div style="background: var(--bg-card); padding: 20px; border-radius: 12px; display: inline-block; margin-bottom: 15px; border: 1px solid var(--border);">
-                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 10px;">Introduce esta clave manualmente en tu app de autenticaci\u00f3n:</p>
-                    <code id="totp-secret-display" style="display: block; background: var(--bg-hover); padding: 12px 16px; border-radius: 8px; font-size: 1.1rem; letter-spacing: 2px; word-break: break-all; user-select: all; cursor: text; color: var(--primary); font-weight: 600;">${escapeHtml(data.secret)}</code>
-                    <button id="totp-copy-btn" style="margin-top: 10px; padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-hover); color: var(--text); cursor: pointer; font-size: 0.85rem;">Copiar clave</button>
+            <div class="users-2fa-setup-container">
+                <p class="users-2fa-setup-instruction">Escanea este código QR con tu app de autenticación:</p>
+                <div class="users-2fa-qr-wrapper">
+                    <p class="users-2fa-secret-label">Introduce esta clave manualmente en tu app de autenticaci\u00f3n:</p>
+                    <code id="totp-secret-display" class="users-2fa-secret-code">${escapeHtml(data.secret)}</code>
+                    <button id="totp-copy-btn" class="users-2fa-copy-btn">Copiar clave</button>
                 </div>
-                <p style="font-size: 0.8rem; color: var(--text-dim); word-break: break-all; margin-bottom: 20px;">Account: ${escapeHtml(data.uri ? new URL(data.uri).pathname.replace(/^\/\/totp\//, '') : '')}</p>
-                <div style="display: flex; gap: 10px; justify-content: center; align-items: center;">
-                    <input type="text" id="totp-verify-code" placeholder="Código de 6 dígitos" maxlength="6" style="padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); width: 160px; text-align: center; font-size: 1.2rem; letter-spacing: 4px;">
+                <p class="users-2fa-account-info">Account: ${escapeHtml(data.uri ? new URL(data.uri).pathname.replace(/^\/\/totp\//, '') : '')}</p>
+                <div class="users-2fa-verify-container">
+                    <input type="text" id="totp-verify-code" placeholder="Código de 6 dígitos" maxlength="6" class="users-2fa-verify-input">
                     <button class="btn-primary" id="verify-totp-btn">Verificar</button>
                 </div>
             </div>
@@ -6880,7 +7009,7 @@ async function renderBackupView() {
 async function loadBackupJobs() {
     const list = document.getElementById('backup-jobs-list');
     if (!list) return;
-    list.innerHTML = '<div style="padding: 20px; color: var(--text-dim);">Cargando...</div>';
+    list.innerHTML = '<div class="misc-backup-loading">Cargando...</div>';
 
     try {
         const res = await authFetch(`${API_BASE}/backup/jobs`);
@@ -6889,7 +7018,7 @@ async function loadBackupJobs() {
         const jobs = data.jobs || data || [];
 
         if (!jobs || jobs.length === 0) {
-            list.innerHTML = '<div style="padding: 30px; text-align: center; color: var(--text-dim);">No hay trabajos de backup configurados</div>';
+            list.innerHTML = '<div class="misc-backup-empty">No hay trabajos de backup configurados</div>';
             return;
         }
 
@@ -6906,9 +7035,9 @@ async function loadBackupJobs() {
             const info = document.createElement('div');
             info.style.cssText = 'flex: 1; min-width: 0;';
             info.innerHTML = `
-                <div style="font-weight: 600;">${escapeHtml(job.name)}</div>
-                <div style="font-size: 0.85rem; color: var(--text-dim);">${escapeHtml(job.type)} • ${escapeHtml(job.source)} → ${escapeHtml(job.destination)}</div>
-                <div style="font-size: 0.8rem; color: var(--text-dim);">${job.schedule?.enabled ? '⏰ ' + escapeHtml(job.schedule.cron) : 'Manual'}${job.lastRun ? ' • Última: ' + new Date(job.lastRun).toLocaleString('es-ES') : ''}</div>
+                <div class="misc-backup-type">${escapeHtml(job.name)}</div>
+                <div class="misc-backup-type">${escapeHtml(job.type)} • ${escapeHtml(job.source)} → ${escapeHtml(job.destination)}</div>
+                <div class="misc-backup-schedule">${job.schedule?.enabled ? '⏰ ' + escapeHtml(job.schedule.cron) : 'Manual'}${job.lastRun ? ' • Última: ' + new Date(job.lastRun).toLocaleString('es-ES') : ''}</div>
             `;
 
             const actions = document.createElement('div');
@@ -6935,7 +7064,7 @@ async function loadBackupJobs() {
             list.appendChild(card);
         });
     } catch (e) {
-        list.innerHTML = '<div style="padding: 20px; color: #ef4444;">Error cargando backups</div>';
+        list.innerHTML = '<div class="misc-backup-error">Error cargando backups</div>';
     }
 }
 
@@ -6949,12 +7078,12 @@ function showBackupJobForm(editJob = null) {
     modal.style.cssText = 'display: flex; position: fixed; inset: 0; z-index: 1000; align-items: center; justify-content: center; background: rgba(0,0,0,0.5);';
 
     modal.innerHTML = `
-        <div class="glass-card modal-content" style="max-width: 500px; width: 90%;">
-            <header class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="glass-card modal-content misc-backup-modal-content">
+            <header class="modal-header misc-backup-modal-header">
                 <h3>${editJob ? 'Editar Backup' : 'Nuevo Backup'}</h3>
                 <button class="btn-close" id="close-backup-form">&times;</button>
             </header>
-            <form id="backup-create-form" style="display: flex; flex-direction: column; gap: 12px; margin-top: 15px;">
+            <form id="backup-create-form" class="misc-backup-form">
                 <div class="input-group">
                     <input type="text" id="bj-name" required placeholder=" " value="${editJob?.name || ''}">
                     <label>Nombre</label>
@@ -6967,14 +7096,14 @@ function showBackupJobForm(editJob = null) {
                     <input type="text" id="bj-dest" required placeholder=" " value="${editJob?.destination || '/mnt/backup'}">
                     <label>Destino</label>
                 </div>
-                <select id="bj-type" style="padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
+                <select id="bj-type" class="misc-backup-type-select">
                     <option value="rsync" ${editJob?.type === 'rsync' ? 'selected' : ''}>Rsync (incremental)</option>
                     <option value="tar" ${editJob?.type === 'tar' ? 'selected' : ''}>Tar (comprimido)</option>
                 </select>
-                <div style="display: flex; gap: 10px; align-items: center;">
+                <div class="misc-backup-cron-row">
                     <input type="checkbox" id="bj-scheduled" ${editJob?.schedule?.enabled ? 'checked' : ''}>
                     <label for="bj-scheduled" style="margin: 0;">Programar</label>
-                    <input type="text" id="bj-cron" placeholder="0 2 * * *" value="${editJob?.schedule?.cron || '0 2 * * *'}" style="flex: 1; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
+                    <input type="text" id="bj-cron" placeholder="0 2 * * *" value="${editJob?.schedule?.cron || '0 2 * * *'}" class="misc-backup-cron-input">
                 </div>
                 <div class="input-group">
                     <input type="text" id="bj-excludes" placeholder=" " value="${editJob?.excludes?.join(', ') || ''}">
@@ -7043,7 +7172,7 @@ async function deleteBackupJob(id) {
 async function loadSchedulerTasks() {
     const list = document.getElementById('scheduler-tasks-list');
     if (!list) return;
-    list.innerHTML = '<div style="padding: 20px; color: var(--text-dim);">Cargando...</div>';
+    list.innerHTML = '<div class="misc-backup-loading">Cargando...</div>';
 
     try {
         const res = await authFetch(`${API_BASE}/scheduler/tasks`);
@@ -7052,7 +7181,7 @@ async function loadSchedulerTasks() {
         const tasks = data.tasks || data || [];
 
         if (!tasks || tasks.length === 0) {
-            list.innerHTML = '<div style="padding: 30px; text-align: center; color: var(--text-dim);">No hay tareas programadas</div>';
+            list.innerHTML = '<div class="misc-task-empty">No hay tareas programadas</div>';
             return;
         }
 
@@ -7071,8 +7200,8 @@ async function loadSchedulerTasks() {
             info.style.cssText = 'flex: 1; min-width: 0;';
             info.innerHTML = `
                 <div style="font-weight: 600;">${escapeHtml(task.name)}</div>
-                <div style="font-size: 0.85rem; color: var(--text-dim); font-family: monospace;">${escapeHtml(task.command)}</div>
-                <div style="font-size: 0.8rem; color: var(--text-dim);">⏰ ${escapeHtml(task.schedule)}</div>
+                <div class="misc-task-command">${escapeHtml(task.command)}</div>
+                <div class="misc-backup-schedule">⏰ ${escapeHtml(task.schedule)}</div>
             `;
 
             const actions = document.createElement('div');
@@ -7098,7 +7227,7 @@ async function loadSchedulerTasks() {
             list.appendChild(row);
         });
     } catch (e) {
-        list.innerHTML = '<div style="padding: 20px; color: #ef4444;">Error cargando tareas</div>';
+        list.innerHTML = '<div class="misc-task-error">Error cargando tareas</div>';
     }
 }
 
@@ -7112,12 +7241,12 @@ function showTaskForm() {
     modal.style.cssText = 'display: flex; position: fixed; inset: 0; z-index: 1000; align-items: center; justify-content: center; background: rgba(0,0,0,0.5);';
 
     modal.innerHTML = `
-        <div class="glass-card modal-content" style="max-width: 450px; width: 90%;">
-            <header class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="glass-card modal-content misc-task-modal-content">
+            <header class="modal-header misc-task-modal-header">
                 <h3>Nueva Tarea Programada</h3>
                 <button class="btn-close" id="close-task-form">&times;</button>
             </header>
-            <form id="task-create-form" style="display: flex; flex-direction: column; gap: 12px; margin-top: 15px;">
+            <form id="task-create-form" class="misc-task-form">
                 <div class="input-group">
                     <input type="text" id="tf-name" required placeholder=" ">
                     <label>Nombre</label>
@@ -7130,7 +7259,7 @@ function showTaskForm() {
                     <input type="text" id="tf-schedule" required placeholder=" " value="0 * * * *">
                     <label>Expresión Cron</label>
                 </div>
-                <div style="font-size: 0.8rem; color: var(--text-dim); padding: 0 4px;">
+                <div class="misc-task-help">
                     Formato: minuto hora día mes día-semana (ej: <code>0 2 * * *</code> = cada día a las 2:00)
                 </div>
                 <button type="submit" class="btn-primary">Crear Tarea</button>
@@ -7374,7 +7503,7 @@ async function loadSambaShares() {
         const shares = data.shares || data || [];
 
         if (!shares || shares.length === 0) {
-            grid.innerHTML = '<div style="padding: 20px; color: var(--text-dim); grid-column: 1 / -1; text-align: center;">No hay comparticiones configuradas</div>';
+            grid.innerHTML = '<div class="samba-empty-state">No hay comparticiones configuradas</div>';
             return;
         }
 
@@ -7384,17 +7513,17 @@ async function loadSambaShares() {
             card.style.cssText = 'padding: 15px;';
 
             card.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                <div class="samba-card-header">
                     <div>
                         <h4 style="margin: 0;">📂 ${escapeHtml(share.name)}</h4>
-                        <span style="font-size: 0.8rem; color: var(--text-dim);">${escapeHtml(share.path)}</span>
+                        <span class="samba-path-text">${escapeHtml(share.path)}</span>
                     </div>
                 </div>
-                <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">
-                    ${share.readOnly ? '<span style="font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; background: rgba(245,158,11,0.15); color: #f59e0b;">Solo lectura</span>' : '<span style="font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; background: rgba(16,185,129,0.15); color: #10b981;">Lectura/Escritura</span>'}
-                    ${share.guestOk ? '<span style="font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; background: rgba(148,163,184,0.15); color: #94a3b8;">Invitados</span>' : ''}
+                <div class="samba-badges-container">
+                    ${share.readOnly ? '<span class="samba-badge-readonly">Solo lectura</span>' : '<span class="samba-badge-readwrite">Lectura/Escritura</span>'}
+                    ${share.guestOk ? '<span class="samba-badge-guest">Invitados</span>' : ''}
                 </div>
-                ${share.comment ? `<p style="font-size: 0.85rem; color: var(--text-dim); margin-top: 8px;">${escapeHtml(share.comment)}</p>` : ''}
+                ${share.comment ? `<p class="samba-comment-text">${escapeHtml(share.comment)}</p>` : ''}
             `;
 
             const delBtn = document.createElement('button');
@@ -7409,7 +7538,7 @@ async function loadSambaShares() {
             grid.appendChild(card);
         });
     } catch (e) {
-        grid.innerHTML = '<div style="padding: 20px; color: #ef4444; grid-column: 1 / -1;">Error cargando comparticiones</div>';
+        grid.innerHTML = '<div class="samba-error-state">Error cargando comparticiones</div>';
     }
 }
 
@@ -7423,12 +7552,12 @@ function showSambaForm() {
     modal.style.cssText = 'display: flex; position: fixed; inset: 0; z-index: 1000; align-items: center; justify-content: center; background: rgba(0,0,0,0.5);';
 
     modal.innerHTML = `
-        <div class="glass-card modal-content" style="max-width: 450px; width: 90%;">
-            <header class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="glass-card modal-content samba-modal-content">
+            <header class="modal-header samba-modal-header">
                 <h3>Nueva Compartición Samba</h3>
                 <button class="btn-close" id="close-samba-form">&times;</button>
             </header>
-            <form id="samba-create-form" style="display: flex; flex-direction: column; gap: 12px; margin-top: 15px;">
+            <form id="samba-create-form" class="samba-create-form">
                 <div class="input-group">
                     <input type="text" id="sf-name" required placeholder=" ">
                     <label>Nombre</label>
@@ -7441,11 +7570,11 @@ function showSambaForm() {
                     <input type="text" id="sf-comment" placeholder=" ">
                     <label>Comentario</label>
                 </div>
-                <div style="display: flex; gap: 20px;">
-                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <div class="samba-checkbox-row">
+                    <label class="samba-checkbox-label">
                         <input type="checkbox" id="sf-readonly"> Solo lectura
                     </label>
-                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                    <label class="samba-checkbox-label">
                         <input type="checkbox" id="sf-guest"> Acceso invitados
                     </label>
                 </div>
@@ -7507,7 +7636,7 @@ async function renderUPSSection(container) {
 
     const content = document.createElement('div');
     content.id = 'ups-content';
-    content.innerHTML = '<p style="color: var(--text-dim);">Cargando estado del UPS...</p>';
+    content.innerHTML = '<p class="ups-loading-text">Cargando estado del UPS...</p>';
     card.appendChild(content);
     container.appendChild(card);
 
@@ -7518,11 +7647,11 @@ async function renderUPSSection(container) {
 
         if (!data.available) {
             content.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 12px; padding: 15px; background: var(--bg-hover); border-radius: 8px;">
+                <div class="ups-not-detected">
                     <span style="font-size: 2rem;">🔌</span>
                     <div>
                         <p style="font-weight: 500;">No se detectó UPS</p>
-                        <p style="color: var(--text-dim); font-size: 0.9rem;">Instala <code>apcupsd</code> o <code>nut</code> para monitorizar tu UPS.</p>
+                        <p class="ups-not-detected-description">Instala <code>apcupsd</code> o <code>nut</code> para monitorizar tu UPS.</p>
                     </div>
                 </div>
             `;
@@ -7531,29 +7660,29 @@ async function renderUPSSection(container) {
 
         const batteryColor = data.batteryCharge > 50 ? '#10b981' : data.batteryCharge > 20 ? '#f59e0b' : '#ef4444';
         content.innerHTML = `
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
-                <div style="padding: 15px; background: var(--bg-hover); border-radius: 10px; text-align: center;">
-                    <div style="font-size: 2rem; margin-bottom: 5px;">🔋</div>
-                    <div style="font-size: 1.5rem; font-weight: 700; color: ${batteryColor};">${data.batteryCharge || '—'}%</div>
-                    <div style="font-size: 0.8rem; color: var(--text-dim);">Batería</div>
+            <div class="ups-stats-grid">
+                <div class="ups-stat-card">
+                    <div class="ups-stat-icon">🔋</div>
+                    <div class="ups-stat-value" style="color: ${batteryColor};">${data.batteryCharge || '—'}%</div>
+                    <div class="ups-stat-label">Batería</div>
                 </div>
-                <div style="padding: 15px; background: var(--bg-hover); border-radius: 10px; text-align: center;">
-                    <div style="font-size: 2rem; margin-bottom: 5px;">⏱️</div>
-                    <div style="font-size: 1.5rem; font-weight: 700;">${data.runtime || '—'}</div>
-                    <div style="font-size: 0.8rem; color: var(--text-dim);">Autonomía</div>
+                <div class="ups-stat-card">
+                    <div class="ups-stat-icon">⏱️</div>
+                    <div class="ups-stat-value">${data.runtime || '—'}</div>
+                    <div class="ups-stat-label">Autonomía</div>
                 </div>
-                <div style="padding: 15px; background: var(--bg-hover); border-radius: 10px; text-align: center;">
-                    <div style="font-size: 2rem; margin-bottom: 5px;">⚡</div>
-                    <div style="font-size: 1.5rem; font-weight: 700;">${data.load || '—'}%</div>
-                    <div style="font-size: 0.8rem; color: var(--text-dim);">Carga</div>
+                <div class="ups-stat-card">
+                    <div class="ups-stat-icon">⚡</div>
+                    <div class="ups-stat-value">${data.load || '—'}%</div>
+                    <div class="ups-stat-label">Carga</div>
                 </div>
-                <div style="padding: 15px; background: var(--bg-hover); border-radius: 10px; text-align: center;">
-                    <div style="font-size: 2rem; margin-bottom: 5px;">🔌</div>
-                    <div style="font-size: 1.5rem; font-weight: 700;">${data.inputVoltage || '—'}V</div>
-                    <div style="font-size: 0.8rem; color: var(--text-dim);">Voltaje</div>
+                <div class="ups-stat-card">
+                    <div class="ups-stat-icon">🔌</div>
+                    <div class="ups-stat-value">${data.inputVoltage || '—'}V</div>
+                    <div class="ups-stat-label">Voltaje</div>
                 </div>
             </div>
-            <div style="margin-top: 15px; padding: 12px; background: var(--bg-hover); border-radius: 8px; display: flex; gap: 20px; flex-wrap: wrap; font-size: 0.9rem;">
+            <div class="ups-details-container">
                 <span><strong>Estado:</strong> ${escapeHtml(data.status || t('common.unknown', 'Desconocido'))}</span>
                 <span><strong>Modelo:</strong> ${escapeHtml(data.model || t('common.unknown', 'Desconocido'))}</span>
                 <span><strong>Driver:</strong> ${escapeHtml(data.driver || t('common.unknown', 'Desconocido'))}</span>
@@ -7584,20 +7713,20 @@ async function renderNotificationsSection(container) {
     // Email config
     const emailSection = document.createElement('div');
     emailSection.innerHTML = `
-        <h4 style="margin-bottom: 12px;">📧 Email (SMTP)</h4>
-        <form id="notif-email-form" style="display: flex; flex-direction: column; gap: 10px;">
-            <input type="text" id="ne-host" placeholder="Servidor SMTP" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
-            <div style="display: flex; gap: 8px;">
-                <input type="number" id="ne-port" placeholder="Puerto" value="587" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); width: 100px;">
-                <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="ne-secure"> SSL</label>
+        <h4 class="notif-section-title">📧 Email (SMTP)</h4>
+        <form id="notif-email-form" class="notif-email-form">
+            <input type="text" id="ne-host" placeholder="Servidor SMTP" class="notif-input">
+            <div class="notif-input-row">
+                <input type="number" id="ne-port" placeholder="Puerto" value="587" class="notif-port-input">
+                <label class="notif-checkbox-label"><input type="checkbox" id="ne-secure"> SSL</label>
             </div>
-            <input type="text" id="ne-user" placeholder="Usuario" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
-            <input type="password" id="ne-pass" placeholder="Contraseña" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
-            <input type="email" id="ne-from" placeholder="Remitente" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
-            <input type="email" id="ne-to" placeholder="Destinatario" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
-            <div style="display: flex; gap: 8px;">
+            <input type="text" id="ne-user" placeholder="Usuario" class="notif-input">
+            <input type="password" id="ne-pass" placeholder="Contraseña" class="notif-input">
+            <input type="email" id="ne-from" placeholder="Remitente" class="notif-input">
+            <input type="email" id="ne-to" placeholder="Destinatario" class="notif-input">
+            <div class="notif-button-row">
                 <button type="submit" class="btn-primary btn-sm">Guardar</button>
-                <button type="button" class="btn-primary btn-sm" id="test-email-btn" style="background: #6366f1;">Probar</button>
+                <button type="button" class="btn-primary btn-sm notif-test-btn" id="test-email-btn">Probar</button>
             </div>
         </form>
     `;
@@ -7605,14 +7734,14 @@ async function renderNotificationsSection(container) {
     // Telegram config
     const telegramSection = document.createElement('div');
     telegramSection.innerHTML = `
-        <h4 style="margin-bottom: 12px;">📱 Telegram</h4>
-        <form id="notif-telegram-form" style="display: flex; flex-direction: column; gap: 10px;">
-            <input type="text" id="nt-token" placeholder="Bot Token" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
-            <input type="text" id="nt-chatid" placeholder="Chat ID" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
-            <label style="display: flex; align-items: center; gap: 6px;"><input type="checkbox" id="nt-enabled"> Activado</label>
-            <div style="display: flex; gap: 8px;">
+        <h4 class="notif-section-title">📱 Telegram</h4>
+        <form id="notif-telegram-form" class="notif-telegram-form">
+            <input type="text" id="nt-token" placeholder="Bot Token" class="notif-input">
+            <input type="text" id="nt-chatid" placeholder="Chat ID" class="notif-input">
+            <label class="notif-checkbox-label-lg"><input type="checkbox" id="nt-enabled"> Activado</label>
+            <div class="notif-button-row">
                 <button type="submit" class="btn-primary btn-sm">Guardar</button>
-                <button type="button" class="btn-primary btn-sm" id="test-telegram-btn" style="background: #6366f1;">Probar</button>
+                <button type="button" class="btn-primary btn-sm notif-test-btn" id="test-telegram-btn">Probar</button>
             </div>
         </form>
     `;
@@ -7620,13 +7749,95 @@ async function renderNotificationsSection(container) {
     content.appendChild(emailSection);
     content.appendChild(telegramSection);
     card.appendChild(content);
+
+    // Error Reporting section (full width)
+    const errorReportSection = document.createElement('div');
+    errorReportSection.style.cssText = 'margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--card-border);';
+    errorReportSection.innerHTML = `
+        <h4 style="margin-bottom: 8px;">🚨 ${t('notifications.errorReporting', 'Reporte de Errores')}</h4>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 15px;">
+            ${t('notifications.errorReportingDesc', 'Monitorear automáticamente los logs del sistema en busca de errores y recibir notificaciones.')}
+        </p>
+        <form id="error-report-form" style="display: flex; flex-direction: column; gap: 12px; max-width: 500px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="er-enabled">
+                <span>${t('notifications.errorReportingEnabled', 'Activar Reporte de Errores')}</span>
+            </label>
+
+            <div id="er-options" style="display: none; flex-direction: column; gap: 12px;">
+                <div>
+                    <label style="display: block; margin-bottom: 4px; font-size: 0.85rem; color: var(--text-secondary);">
+                        ${t('notifications.frequency', 'Frecuencia de Revisión')}
+                    </label>
+                    <select id="er-frequency" style="padding: 10px; border-radius: 8px; border: 1px solid var(--card-border); background: var(--input-bg); color: var(--text-primary); width: 100%;">
+                        <option value="immediate">${t('notifications.freqImmediate', 'Inmediato (cada 5 min)')}</option>
+                        <option value="hourly">${t('notifications.freqHourly', 'Resumen cada hora')}</option>
+                        <option value="daily">${t('notifications.freqDaily', 'Resumen diario')}</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label style="display: block; margin-bottom: 4px; font-size: 0.85rem; color: var(--text-secondary);">
+                        ${t('notifications.channels', 'Canales de Notificación')}
+                    </label>
+                    <div style="display: flex; gap: 15px;">
+                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                            <input type="checkbox" id="er-ch-email" checked> Email
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                            <input type="checkbox" id="er-ch-telegram"> Telegram
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <label style="display: block; margin-bottom: 4px; font-size: 0.85rem; color: var(--text-secondary);">
+                        ${t('notifications.logSources', 'Fuentes de Logs a Monitorear')}
+                    </label>
+                    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                            <input type="checkbox" id="er-src-system" checked> ${t('logs.system', 'Sistema')}
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                            <input type="checkbox" id="er-src-app" checked> ${t('logs.application', 'Aplicación')}
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                            <input type="checkbox" id="er-src-auth"> ${t('logs.auth', 'Auth')}
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                            <input type="checkbox" id="er-src-docker" checked> Docker
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <label style="display: block; margin-bottom: 4px; font-size: 0.85rem; color: var(--text-secondary);">
+                        ${t('notifications.cooldown', 'Enfriamiento (min entre alertas duplicadas)')}
+                    </label>
+                    <input type="number" id="er-cooldown" value="30" min="5" max="1440"
+                        style="padding: 10px; border-radius: 8px; border: 1px solid var(--card-border); background: var(--input-bg); color: var(--text-primary); width: 100px;">
+                </div>
+
+                <div id="er-last-check" style="font-size: 0.8rem; color: var(--text-secondary);"></div>
+            </div>
+
+            <div class="abk-iso-buttons">
+                <button type="submit" class="btn-primary btn-sm">${t('common.save', 'Guardar')}</button>
+                <button type="button" class="btn-primary btn-sm" id="test-error-report-btn" style="background: #6366f1;">
+                    ${t('notifications.testErrorReport', 'Probar Escaneo')}
+                </button>
+            </div>
+        </form>
+    `;
+    card.appendChild(errorReportSection);
+
     container.appendChild(card);
 
     // Load existing config
     try {
         const res = await authFetch(`${API_BASE}/notifications/config`);
         if (res.ok) {
-            const config = await res.json();
+            const { config } = await res.json();
             if (config.email) {
                 if (config.email.host) document.getElementById('ne-host').value = config.email.host;
                 if (config.email.port) document.getElementById('ne-port').value = config.email.port;
@@ -7639,6 +7850,22 @@ async function renderNotificationsSection(container) {
                 if (config.telegram.botToken) document.getElementById('nt-token').value = config.telegram.botToken;
                 if (config.telegram.chatId) document.getElementById('nt-chatid').value = config.telegram.chatId;
                 document.getElementById('nt-enabled').checked = config.telegram.enabled || false;
+            }
+            if (config.errorReporting) {
+                document.getElementById('er-enabled').checked = config.errorReporting.enabled || false;
+                document.getElementById('er-options').style.display = config.errorReporting.enabled ? 'flex' : 'none';
+                document.getElementById('er-frequency').value = config.errorReporting.frequency || 'immediate';
+                document.getElementById('er-ch-email').checked = (config.errorReporting.channels || []).includes('email');
+                document.getElementById('er-ch-telegram').checked = (config.errorReporting.channels || []).includes('telegram');
+                document.getElementById('er-src-system').checked = (config.errorReporting.logSources || []).includes('system');
+                document.getElementById('er-src-app').checked = (config.errorReporting.logSources || []).includes('app');
+                document.getElementById('er-src-auth').checked = (config.errorReporting.logSources || []).includes('auth');
+                document.getElementById('er-src-docker').checked = (config.errorReporting.logSources || []).includes('docker');
+                document.getElementById('er-cooldown').value = config.errorReporting.cooldownMinutes || 30;
+                if (config.errorReporting.lastCheck) {
+                    document.getElementById('er-last-check').textContent =
+                        `${t('notifications.lastScan', 'Último escaneo')}: ${new Date(config.errorReporting.lastCheck).toLocaleString()}`;
+                }
             }
         }
     } catch (e) {}
@@ -7690,6 +7917,65 @@ async function renderNotificationsSection(container) {
             const res = await authFetch(`${API_BASE}/notifications/test/telegram`, { method: 'POST' });
             alert(res.ok ? '¡Mensaje de prueba enviado!' : 'Error al enviar');
         } catch (e) { alert('Error'); }
+    });
+
+    // Error Reporting - toggle options visibility
+    document.getElementById('er-enabled').addEventListener('change', (e) => {
+        document.getElementById('er-options').style.display = e.target.checked ? 'flex' : 'none';
+    });
+
+    // Error Reporting - save config
+    document.getElementById('error-report-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const channels = [];
+        if (document.getElementById('er-ch-email').checked) channels.push('email');
+        if (document.getElementById('er-ch-telegram').checked) channels.push('telegram');
+        const logSources = [];
+        if (document.getElementById('er-src-system').checked) logSources.push('system');
+        if (document.getElementById('er-src-app').checked) logSources.push('app');
+        if (document.getElementById('er-src-auth').checked) logSources.push('auth');
+        if (document.getElementById('er-src-docker').checked) logSources.push('docker');
+
+        if (channels.length === 0) { showNotification(t('notifications.channelRequired', 'Selecciona al menos un canal'), 'error'); return; }
+        if (logSources.length === 0) { showNotification(t('notifications.sourceRequired', 'Selecciona al menos una fuente'), 'error'); return; }
+
+        try {
+            const res = await authFetch(`${API_BASE}/notifications/config/error-reporting`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    enabled: document.getElementById('er-enabled').checked,
+                    frequency: document.getElementById('er-frequency').value,
+                    channels,
+                    logSources,
+                    cooldownMinutes: parseInt(document.getElementById('er-cooldown').value) || 30
+                })
+            });
+            if (res.ok) {
+                showNotification(t('notifications.errorReportingSaved', 'Configuración de reporte de errores guardada'), 'success');
+            } else {
+                const data = await res.json();
+                showNotification(data.error || 'Error', 'error');
+            }
+        } catch (err) { showNotification('Error: ' + err.message, 'error'); }
+    });
+
+    // Error Reporting - test scan
+    document.getElementById('test-error-report-btn').addEventListener('click', async () => {
+        try {
+            showNotification(t('notifications.scanning', 'Escaneando logs...'), 'info', 3000);
+            const res = await authFetch(`${API_BASE}/notifications/test/error-reporting`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                showNotification(
+                    data.errorsFound > 0
+                        ? t('notifications.errorsFound', `${data.errorsFound} error(es) encontrados y reporte enviado`)
+                        : t('notifications.noErrorsFound', 'No se encontraron errores. Notificación de prueba enviada.'),
+                    data.errorsFound > 0 ? 'warning' : 'success'
+                );
+            } else {
+                showNotification(data.error || 'Error', 'error');
+            }
+        } catch (err) { showNotification('Error: ' + err.message, 'error'); }
     });
 }
 
@@ -7754,7 +8040,7 @@ async function loadDDNSServices() {
         const services = data.services || data || [];
 
         if (!services || services.length === 0) {
-            grid.innerHTML = '<div style="padding: 20px; color: var(--text-dim); grid-column: 1 / -1; text-align: center;">No hay servicios DDNS configurados</div>';
+            grid.innerHTML = '<div class="ddns-empty-state">No hay servicios DDNS configurados</div>';
             return;
         }
 
@@ -7765,18 +8051,18 @@ async function loadDDNSServices() {
 
             const providerLogos = { duckdns: '🦆', cloudflare: '☁️', noip: '🔗', dynu: '🌐' };
             card.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <div class="ddns-card-header">
                     <span style="font-size: 1.5rem;">${providerLogos[svc.provider] || '🌐'}</span>
                     <div>
                         <h4 style="margin: 0;">${escapeHtml(svc.domain || svc.hostname || t('common.unknown', 'Desconocido'))}</h4>
-                        <span style="font-size: 0.8rem; color: var(--text-dim);">${escapeHtml(svc.provider)}</span>
+                        <span class="misc-task-schedule">${escapeHtml(svc.provider)}</span>
                     </div>
                     <span style="margin-left: auto; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; ${
                         svc.enabled ? 'background: rgba(16,185,129,0.15); color: #10b981;' : 'background: rgba(148,163,184,0.15); color: #94a3b8;'
                     }">${svc.enabled ? 'Activo' : 'Inactivo'}</span>
                 </div>
-                ${svc.lastUpdate ? `<div style="font-size: 0.8rem; color: var(--text-dim);">Última actualización: ${new Date(svc.lastUpdate).toLocaleString('es-ES')}</div>` : ''}
-                ${svc.lastIP ? `<div style="font-size: 0.8rem; color: var(--text-dim);">IP: ${escapeHtml(svc.lastIP)}</div>` : ''}
+                ${svc.lastUpdate ? `<div class="misc-backup-schedule">Última actualización: ${new Date(svc.lastUpdate).toLocaleString('es-ES')}</div>` : ''}
+                ${svc.lastIP ? `<div class="misc-backup-schedule">IP: ${escapeHtml(svc.lastIP)}</div>` : ''}
             `;
 
             const btnGroup = document.createElement('div');
@@ -7812,7 +8098,7 @@ async function loadDDNSServices() {
             grid.appendChild(card);
         });
     } catch (e) {
-        grid.innerHTML = '<div style="padding: 20px; color: #ef4444; grid-column: 1 / -1;">Error cargando servicios DDNS</div>';
+        grid.innerHTML = '<div class="ddns-error-state">Error cargando servicios DDNS</div>';
     }
 }
 
@@ -7826,20 +8112,20 @@ function showDDNSForm() {
     modal.style.cssText = 'display: flex; position: fixed; inset: 0; z-index: 1000; align-items: center; justify-content: center; background: rgba(0,0,0,0.5);';
 
     modal.innerHTML = `
-        <div class="glass-card modal-content" style="max-width: 450px; width: 90%;">
-            <header class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="glass-card modal-content ddns-modal-content">
+            <header class="modal-header ddns-modal-header">
                 <h3>Añadir Servicio DDNS</h3>
                 <button class="btn-close" id="close-ddns-form">&times;</button>
             </header>
-            <form id="ddns-create-form" style="display: flex; flex-direction: column; gap: 12px; margin-top: 15px;">
-                <select id="df-provider" style="padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
+            <form id="ddns-create-form" class="ddns-create-form">
+                <select id="df-provider" class="ddns-provider-select">
                     <option value="duckdns">🦆 DuckDNS</option>
                     <option value="cloudflare">☁️ Cloudflare</option>
                     <option value="noip">🔗 No-IP</option>
                     <option value="dynu">🌐 Dynu</option>
                 </select>
                 <div id="ddns-provider-fields"></div>
-                <label style="display: flex; align-items: center; gap: 6px;"><input type="checkbox" id="df-enabled" checked> Activado</label>
+                <label class="ddns-enabled-checkbox"><input type="checkbox" id="df-enabled" checked> Activado</label>
                 <button type="submit" class="btn-primary">Guardar Servicio</button>
             </form>
         </div>
@@ -7901,6 +8187,564 @@ function showDDNSForm() {
 }
 
 // =============================================================================
+// VPN SERVER (WireGuard)
+// =============================================================================
+
+async function renderVPNView() {
+    dashboardContent.innerHTML = '<div class="vpn-loading">Cargando estado VPN...</div>';
+
+    let vpnStatus;
+    try {
+        const res = await authFetch(`${API_BASE}/vpn/status`);
+        if (!res.ok) throw new Error('Error');
+        vpnStatus = await res.json();
+    } catch (e) {
+        dashboardContent.innerHTML = '<div class="glass-card vpn-full-width vpn-error">Error al conectar con el servicio VPN</div>';
+        return;
+    }
+
+    dashboardContent.innerHTML = '';
+
+    // --- Tarjeta de estado principal ---
+    const statusCard = document.createElement('div');
+    statusCard.className = 'glass-card vpn-full-width';
+
+    const isRunning = vpnStatus.running;
+    const isInstalled = vpnStatus.installed;
+
+    statusCard.innerHTML = `
+        <div class="vpn-status-header">
+            <div class="vpn-status-info">
+                <div class="vpn-status-icon ${isRunning ? 'vpn-status-icon--active' : 'vpn-status-icon--inactive'}">🔒</div>
+                <div>
+                    <h3 style="margin: 0;">Servidor VPN WireGuard</h3>
+                    <div class="vpn-status-text">
+                        <span class="status-dot ${isRunning ? 'status-check-online' : isInstalled ? '' : ''}"></span>
+                        <span>${isRunning ? 'Activo' : isInstalled ? 'Instalado - Detenido' : 'No instalado'}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="vpn-action-btns" id="vpn-action-btns">
+                ${!isInstalled ? `
+                    <button class="btn-primary" id="vpn-install-btn">📦 Instalar WireGuard</button>
+                ` : `
+                    ${isRunning ? `
+                        <button class="btn-primary vpn-btn-warning" id="vpn-stop-btn">⏹ Detener</button>
+                        <button class="btn-primary" id="vpn-restart-btn">🔄 Reiniciar</button>
+                    ` : `
+                        <button class="btn-primary" id="vpn-start-btn">▶ Activar</button>
+                    `}
+                    <button class="vpn-btn-danger" id="vpn-uninstall-btn">🗑 Desinstalar</button>
+                `}
+            </div>
+        </div>
+    `;
+    dashboardContent.appendChild(statusCard);
+
+    // Event listeners para botones de estado
+    const installBtn = document.getElementById('vpn-install-btn');
+    if (installBtn) {
+        installBtn.addEventListener('click', async () => {
+            installBtn.disabled = true;
+            installBtn.textContent = '⏳ Iniciando instalación...';
+            try {
+                const r = await authFetch(`${API_BASE}/vpn/install`, { method: 'POST' });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.error || 'Error');
+
+                // Polling de progreso
+                const pollProgress = async () => {
+                    try {
+                        const pr = await authFetch(`${API_BASE}/vpn/install/progress`);
+                        const pd = await pr.json();
+
+                        if (pd.error) {
+                            showNotification(`Error instalando: ${pd.error}`, 'error');
+                            installBtn.disabled = false;
+                            installBtn.textContent = '📦 Instalar WireGuard';
+                            return;
+                        }
+
+                        installBtn.textContent = `⏳ ${pd.step || 'Instalando...'} (${pd.progress || 0}%)`;
+
+                        if (pd.completed) {
+                            showNotification('WireGuard instalado correctamente', 'success');
+                            await renderVPNView();
+                            return;
+                        }
+
+                        if (pd.running) {
+                            setTimeout(pollProgress, 2000);
+                        }
+                    } catch {
+                        setTimeout(pollProgress, 3000);
+                    }
+                };
+
+                if (d.installing) {
+                    setTimeout(pollProgress, 1500);
+                } else {
+                    showNotification('WireGuard instalado correctamente', 'success');
+                    await renderVPNView();
+                }
+            } catch (e) {
+                showNotification(`Error: ${e.message}`, 'error');
+                installBtn.disabled = false;
+                installBtn.textContent = '📦 Instalar WireGuard';
+            }
+        });
+    }
+
+    const startBtn = document.getElementById('vpn-start-btn');
+    if (startBtn) {
+        startBtn.addEventListener('click', async () => {
+            startBtn.disabled = true;
+            try {
+                const r = await authFetch(`${API_BASE}/vpn/start`, { method: 'POST' });
+                if (!r.ok) throw new Error('Error');
+                showNotification('VPN activada', 'success');
+                await renderVPNView();
+            } catch (e) {
+                showNotification('Error al activar VPN', 'error');
+                startBtn.disabled = false;
+            }
+        });
+    }
+
+    const stopBtn = document.getElementById('vpn-stop-btn');
+    if (stopBtn) {
+        stopBtn.addEventListener('click', async () => {
+            stopBtn.disabled = true;
+            try {
+                const r = await authFetch(`${API_BASE}/vpn/stop`, { method: 'POST' });
+                if (!r.ok) throw new Error('Error');
+                showNotification('VPN detenida', 'success');
+                await renderVPNView();
+            } catch (e) {
+                showNotification('Error al detener VPN', 'error');
+                stopBtn.disabled = false;
+            }
+        });
+    }
+
+    const restartBtn = document.getElementById('vpn-restart-btn');
+    if (restartBtn) {
+        restartBtn.addEventListener('click', async () => {
+            restartBtn.disabled = true;
+            try {
+                const r = await authFetch(`${API_BASE}/vpn/restart`, { method: 'POST' });
+                if (!r.ok) throw new Error('Error');
+                showNotification('VPN reiniciada', 'success');
+                await renderVPNView();
+            } catch (e) {
+                showNotification('Error al reiniciar VPN', 'error');
+                restartBtn.disabled = false;
+            }
+        });
+    }
+
+    const uninstallBtn = document.getElementById('vpn-uninstall-btn');
+    if (uninstallBtn) {
+        uninstallBtn.addEventListener('click', async () => {
+            const confirmed = await showConfirmModal('Desinstalar VPN', '¿Seguro que quieres desinstalar WireGuard? Se eliminarán todos los clientes y la configuración.');
+            if (!confirmed) return;
+            uninstallBtn.disabled = true;
+            try {
+                const r = await authFetch(`${API_BASE}/vpn/uninstall`, { method: 'POST' });
+                if (!r.ok) throw new Error('Error');
+                showNotification('WireGuard desinstalado', 'success');
+                await renderVPNView();
+            } catch (e) {
+                showNotification('Error al desinstalar', 'error');
+                uninstallBtn.disabled = false;
+            }
+        });
+    }
+
+    // Si no está instalado, no mostrar más
+    if (!isInstalled) return;
+
+    // --- 2-column layout container ---
+    const vpnLayout = document.createElement('div');
+    vpnLayout.className = 'vpn-layout';
+
+    // LEFT COLUMN: Config + Peers
+    const leftCol = document.createElement('div');
+    leftCol.className = 'vpn-col-left';
+
+    // --- Info del servidor ---
+    const infoCard = document.createElement('div');
+    infoCard.className = 'glass-card';
+    const endpointWarning = vpnStatus.endpointIsLocal ? `
+        <div class="vpn-endpoint-warning">
+            ⚠️ <strong>Atención:</strong> El endpoint configurado (${escapeHtml(vpnStatus.endpoint || vpnStatus.publicIP || '')}) es una IP local.
+            Los clientes externos no podrán conectarse. Configura un dominio DDNS o tu IP pública.
+        </div>
+    ` : '';
+    infoCard.innerHTML = `
+        <h4>⚙️ Configuración del Servidor</h4>
+        ${endpointWarning}
+        <div class="vpn-config-grid">
+            <div><strong>Endpoint:</strong> ${escapeHtml(vpnStatus.endpoint || vpnStatus.publicIP || 'No configurado')}</div>
+            <div><strong>Puerto:</strong> ${vpnStatus.port}</div>
+            <div><strong>DNS:</strong> ${escapeHtml(vpnStatus.dns)}</div>
+            <div><strong>Subred:</strong> ${escapeHtml(vpnStatus.subnet)}</div>
+            <div><strong>IP Pública:</strong> ${escapeHtml(vpnStatus.publicIP || 'Desconocida')}</div>
+            <div><strong>Clientes:</strong> ${vpnStatus.clientCount}</div>
+        </div>
+        <div class="vpn-config-actions">
+            <button class="btn-primary btn-sm" id="vpn-edit-config-btn">✏️ Editar Configuración</button>
+        </div>
+    `;
+    leftCol.appendChild(infoCard);
+
+    // Stats de peers conectados
+    const peersCard = document.createElement('div');
+    peersCard.className = 'glass-card';
+    const connectedCount = (vpnStatus.connectedPeers || []).filter(p => p.connected).length;
+    peersCard.innerHTML = `
+        <h4>📡 Peers Conectados (${connectedCount})</h4>
+        <div id="vpn-peers-list">
+            ${(vpnStatus.connectedPeers || []).length === 0 ? '<div class="vpn-empty-state">No hay peers conectados actualmente</div>' : ''}
+        </div>
+    `;
+
+    const peersList = peersCard.querySelector('#vpn-peers-list');
+    for (const peer of (vpnStatus.connectedPeers || [])) {
+        const peerEl = document.createElement('div');
+        peerEl.className = 'vpn-peer-item';
+        const rxMB = (peer.transferRx / 1024 / 1024).toFixed(1);
+        const txMB = (peer.transferTx / 1024 / 1024).toFixed(1);
+        const handshakeTime = peer.latestHandshake ? new Date(peer.latestHandshake).toLocaleString('es-ES') : 'Nunca';
+        peerEl.innerHTML = `
+            <span class="status-dot ${peer.connected ? 'status-check-online' : 'status-check-offline'}"></span>
+            <div class="vpn-peer-info">
+                <div class="vpn-peer-name">${escapeHtml(peer.name)}</div>
+                <div class="vpn-peer-details">
+                    ${peer.endpoint ? escapeHtml(peer.endpoint) : 'Sin conexión'}
+                    · ↓${rxMB} MB · ↑${txMB} MB
+                </div>
+                <div class="vpn-peer-handshake">Último handshake: ${handshakeTime}</div>
+            </div>
+        `;
+        peersList.appendChild(peerEl);
+    }
+    leftCol.appendChild(peersCard);
+    vpnLayout.appendChild(leftCol);
+
+    // RIGHT COLUMN: Clients
+    const rightCol = document.createElement('div');
+    rightCol.className = 'vpn-col-right';
+
+    const clientsCard = document.createElement('div');
+    clientsCard.className = 'glass-card';
+    clientsCard.innerHTML = `
+        <div class="vpn-section-header">
+            <h4>👥 Clientes VPN</h4>
+            <button class="btn-primary btn-sm" id="vpn-add-client-btn">+ Nuevo Cliente</button>
+        </div>
+        <div id="vpn-clients-grid" class="vpn-clients-grid"></div>
+    `;
+    rightCol.appendChild(clientsCard);
+    vpnLayout.appendChild(rightCol);
+
+    dashboardContent.appendChild(vpnLayout);
+
+    // Renderizar clientes
+    const clientsGrid = clientsCard.querySelector('#vpn-clients-grid');
+    const clients = vpnStatus.clients || [];
+    const activeClients = clients.filter(c => !c.revoked);
+    const revokedClients = clients.filter(c => c.revoked);
+
+    if (activeClients.length === 0) {
+        clientsGrid.innerHTML = '<div class="vpn-empty-state">No hay clientes configurados. Crea uno para conectarte por VPN.</div>';
+    }
+
+    for (const client of activeClients) {
+        const clientEl = document.createElement('div');
+        clientEl.className = 'vpn-client-card';
+        clientEl.innerHTML = `
+            <div>
+                <div class="vpn-client-name">📱 ${escapeHtml(client.name)}</div>
+                <div class="vpn-client-meta">IP: ${escapeHtml(client.address)}</div>
+                <div class="vpn-client-date">Creado: ${new Date(client.createdAt).toLocaleDateString('es-ES')}</div>
+            </div>
+            <div class="vpn-client-actions">
+                <button class="btn-primary btn-sm vpn-qr-btn" data-id="${client.id}">📱 QR Code</button>
+                <button class="vpn-btn-secondary vpn-download-btn" data-id="${client.id}" data-name="${escapeHtml(client.name)}">⬇ Descargar</button>
+                <button class="vpn-btn-danger vpn-revoke-btn" data-id="${client.id}" data-name="${escapeHtml(client.name)}">✕ Revocar</button>
+            </div>
+        `;
+        clientsGrid.appendChild(clientEl);
+    }
+
+    // Mostrar revocados colapsados
+    if (revokedClients.length > 0) {
+        const revokedSection = document.createElement('div');
+        revokedSection.className = 'vpn-revoked-section';
+        revokedSection.innerHTML = `
+            <details>
+                <summary class="vpn-revoked-summary">Clientes revocados (${revokedClients.length})</summary>
+                <div class="vpn-revoked-grid">
+                    ${revokedClients.map(c => `
+                        <div class="vpn-revoked-item">
+                            <span class="vpn-revoked-name">${escapeHtml(c.name)}</span>
+                            <span class="vpn-revoked-badge">Revocado</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </details>
+        `;
+        clientsGrid.appendChild(revokedSection);
+    }
+
+    // --- Event Listeners ---
+
+    // Añadir cliente
+    document.getElementById('vpn-add-client-btn').addEventListener('click', () => showVPNAddClientModal());
+
+    // Botones QR
+    clientsCard.querySelectorAll('.vpn-qr-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const clientId = btn.dataset.id;
+            btn.disabled = true;
+            try {
+                const r = await authFetch(`${API_BASE}/vpn/clients/${clientId}/config`);
+                if (!r.ok) throw new Error('Error');
+                const data = await r.json();
+                showVPNQRModal(data);
+            } catch (e) {
+                showNotification('Error al obtener QR', 'error');
+            }
+            btn.disabled = false;
+        });
+    });
+
+    // Botones descargar
+    clientsCard.querySelectorAll('.vpn-download-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const clientId = btn.dataset.id;
+            const clientName = btn.dataset.name;
+            btn.disabled = true;
+            try {
+                const r = await authFetch(`${API_BASE}/vpn/clients/${clientId}/config`);
+                if (!r.ok) throw new Error('Error');
+                const data = await r.json();
+                const blob = new Blob([data.config], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${clientName}.conf`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (e) {
+                showNotification('Error al descargar configuración', 'error');
+            }
+            btn.disabled = false;
+        });
+    });
+
+    // Botones revocar
+    clientsCard.querySelectorAll('.vpn-revoke-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const clientId = btn.dataset.id;
+            const clientName = btn.dataset.name;
+            const confirmed = await showConfirmModal('Revocar cliente', `¿Seguro que quieres revocar el cliente "${clientName}"? No podrá conectarse más.`);
+            if (!confirmed) return;
+            btn.disabled = true;
+            try {
+                const r = await authFetch(`${API_BASE}/vpn/clients/${clientId}`, { method: 'DELETE' });
+                if (!r.ok) throw new Error('Error');
+                showNotification(`Cliente ${clientName} revocado`, 'success');
+                await renderVPNView();
+            } catch (e) {
+                showNotification('Error al revocar cliente', 'error');
+                btn.disabled = false;
+            }
+        });
+    });
+
+    // Editar configuración
+    const editConfigBtn = document.getElementById('vpn-edit-config-btn');
+    if (editConfigBtn) {
+        editConfigBtn.addEventListener('click', () => showVPNConfigModal(vpnStatus));
+    }
+}
+
+/**
+ * Modal para añadir nuevo cliente VPN
+ */
+function showVPNAddClientModal() {
+    const existing = document.getElementById('vpn-client-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'vpn-client-modal';
+    modal.className = 'modal active';
+
+    modal.innerHTML = `
+        <div class="glass-card modal-content">
+            <header class="modal-header">
+                <h3>Nuevo Cliente VPN</h3>
+                <button class="btn-close" id="close-vpn-client-modal">&times;</button>
+            </header>
+            <p class="vpn-modal-description">
+                Crea un perfil de cliente para conectar un dispositivo a tu VPN.
+                Se generará un QR code para escanear desde la app WireGuard.
+            </p>
+            <form id="vpn-client-form" class="vpn-form">
+                <div class="input-group">
+                    <input type="text" id="vpn-client-name" required placeholder=" " pattern="[a-zA-Z0-9_-]{1,32}" maxlength="32">
+                    <label>Nombre del dispositivo</label>
+                </div>
+                <div class="vpn-hint">Ej: iPhone-Pablo, Laptop-Maria, Tablet-casa</div>
+                <button type="submit" class="btn-primary" id="vpn-create-client-submit">🔑 Crear Cliente</button>
+            </form>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    document.getElementById('close-vpn-client-modal').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    document.getElementById('vpn-client-name').focus();
+
+    document.getElementById('vpn-client-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('vpn-client-name').value.trim();
+        const submitBtn = document.getElementById('vpn-create-client-submit');
+        submitBtn.disabled = true;
+        submitBtn.textContent = '⏳ Creando...';
+
+        try {
+            const res = await authFetch(`${API_BASE}/vpn/clients`, {
+                method: 'POST',
+                body: JSON.stringify({ name })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Error');
+
+            modal.remove();
+            showNotification(`Cliente "${name}" creado`, 'success');
+
+            // Mostrar QR inmediatamente
+            showVPNQRModal(data);
+
+            // Refrescar vista
+            await renderVPNView();
+        } catch (err) {
+            showNotification(`Error: ${err.message}`, 'error');
+            submitBtn.disabled = false;
+            submitBtn.textContent = '🔑 Crear Cliente';
+        }
+    });
+}
+
+/**
+ * Modal con QR code del cliente
+ */
+function showVPNQRModal(data) {
+    const existing = document.getElementById('vpn-qr-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'vpn-qr-modal';
+    modal.className = 'modal active';
+
+    const clientName = data.client ? data.client.name : 'Cliente';
+
+    modal.innerHTML = `
+        <div class="glass-card modal-content" style="text-align: center;">
+            <header class="modal-header">
+                <h3>📱 ${escapeHtml(clientName)}</h3>
+                <button class="btn-close" id="close-vpn-qr-modal">&times;</button>
+            </header>
+            <p class="vpn-modal-description">
+                Escanea este QR desde la app <strong>WireGuard</strong> en tu dispositivo móvil.
+            </p>
+            <div class="vpn-qr-container">
+                ${data.qrSvg ? data.qrSvg : '<div class="vpn-qr-fallback">QR no disponible. Instala qrencode en el servidor.</div>'}
+            </div>
+            <div>
+                <details class="vpn-config-details">
+                    <summary>Ver configuración de texto</summary>
+                    <pre class="vpn-config-pre">${escapeHtml(data.config || '')}</pre>
+                </details>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    document.getElementById('close-vpn-qr-modal').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+}
+
+/**
+ * Modal para editar configuración del servidor VPN
+ */
+function showVPNConfigModal(currentStatus) {
+    const existing = document.getElementById('vpn-config-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'vpn-config-modal';
+    modal.className = 'modal active';
+
+    modal.innerHTML = `
+        <div class="glass-card modal-content">
+            <header class="modal-header">
+                <h3>⚙️ Configuración VPN</h3>
+                <button class="btn-close" id="close-vpn-config-modal">&times;</button>
+            </header>
+            <form id="vpn-config-form" class="vpn-form">
+                <div class="input-group">
+                    <input type="text" id="vpn-cfg-endpoint" value="${escapeHtml(currentStatus.endpoint || '')}" placeholder=" ">
+                    <label>Endpoint (dominio o IP pública)</label>
+                </div>
+                <div class="vpn-hint">IP o dominio DDNS por donde se conectan los clientes</div>
+                <div class="input-group">
+                    <input type="number" id="vpn-cfg-port" value="${currentStatus.port || 51820}" min="1024" max="65535" placeholder=" ">
+                    <label>Puerto UDP</label>
+                </div>
+                <div class="input-group">
+                    <input type="text" id="vpn-cfg-dns" value="${escapeHtml(currentStatus.dns || '1.1.1.1, 8.8.8.8')}" placeholder=" ">
+                    <label>Servidores DNS (separados por coma)</label>
+                </div>
+                <button type="submit" class="btn-primary">💾 Guardar</button>
+            </form>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    document.getElementById('close-vpn-config-modal').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+    document.getElementById('vpn-config-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = {
+            endpoint: document.getElementById('vpn-cfg-endpoint').value.trim(),
+            port: parseInt(document.getElementById('vpn-cfg-port').value),
+            dns: document.getElementById('vpn-cfg-dns').value.trim()
+        };
+
+        try {
+            const res = await authFetch(`${API_BASE}/vpn/config`, {
+                method: 'PUT',
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Error');
+            modal.remove();
+            showNotification('Configuración VPN actualizada', 'success');
+            await renderVPNView();
+        } catch (err) {
+            showNotification(`Error: ${err.message}`, 'error');
+        }
+    });
+}
+
+// =============================================================================
 // INITIALIZATION
 // =============================================================================
 
@@ -7934,15 +8778,14 @@ let abBrowsePath = '/';
 
 async function renderActiveBackupView() {
     const container = document.createElement('div');
-    container.style.cssText = 'display: contents;';
+    container.className = 'abk-container';
 
     // Header card
     const headerCard = document.createElement('div');
-    headerCard.className = 'glass-card';
-    headerCard.style.cssText = 'grid-column: 1 / -1;';
+    headerCard.className = 'glass-card abk-header-card';
 
     const header = document.createElement('div');
-    header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;';
+    header.className = 'abk-header';
 
     const title = document.createElement('h3');
     title.textContent = '🖥️ Active Backup';
@@ -7959,37 +8802,35 @@ async function renderActiveBackupView() {
     // Pending agents section
     const pendingDiv = document.createElement('div');
     pendingDiv.id = 'ab-pending-agents';
-    pendingDiv.style.cssText = 'margin-bottom: 20px;';
+    pendingDiv.className = 'abk-pending-section';
     headerCard.appendChild(pendingDiv);
 
     // Devices grid
     const grid = document.createElement('div');
     grid.id = 'ab-devices-grid';
-    grid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px;';
-    grid.innerHTML = '<div style="padding: 20px; color: var(--text-dim);">Cargando dispositivos...</div>';
+    grid.className = 'abk-devices-grid';
+    grid.innerHTML = '<div class="abk-loading-text">Cargando dispositivos...</div>';
     headerCard.appendChild(grid);
     container.appendChild(headerCard);
 
     // Detail panel (shown when a device is selected)
     const detailCard = document.createElement('div');
-    detailCard.className = 'glass-card';
-    detailCard.style.cssText = 'grid-column: 1 / -1; display: none;';
+    detailCard.className = 'glass-card abk-detail-panel';
     detailCard.id = 'ab-detail-panel';
     container.appendChild(detailCard);
 
     // Recovery USB section
     const recoveryCard = document.createElement('div');
-    recoveryCard.className = 'glass-card';
-    recoveryCard.style.cssText = 'grid-column: 1 / -1;';
+    recoveryCard.className = 'glass-card abk-recovery-card';
     recoveryCard.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <div class="abk-recovery-header">
             <div>
-                <h3 style="margin-bottom: 4px;">🔧 USB de Recuperación</h3>
-                <p style="font-size: 0.85rem; color: var(--text-dim);">Crea un USB bootable para restaurar backups sin necesitar sistema operativo</p>
+                <h3 class="abk-recovery-title">🔧 USB de Recuperación</h3>
+                <p class="abk-recovery-subtitle">Crea un USB bootable para restaurar backups sin necesitar sistema operativo</p>
             </div>
         </div>
-        <div id="ab-recovery-status" style="padding: 15px; background: var(--bg-hover); border-radius: 8px; border: 1px solid var(--border);">
-            <p style="color: var(--text-dim);">Cargando...</p>
+        <div id="ab-recovery-status" class="abk-recovery-status">
+            <p class="vpn-loading-placeholder">Cargando...</p>
         </div>
     `;
     container.appendChild(recoveryCard);
@@ -8018,12 +8859,12 @@ async function loadABPendingAgents() {
 
         container.style.display = 'block';
         container.innerHTML = `
-            <div style="padding: 16px; background: linear-gradient(135deg, rgba(255,193,7,0.1), rgba(255,152,0,0.05)); border: 1px solid rgba(255,193,7,0.3); border-radius: 12px;">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-                    <span style="font-size: 1.3rem;">🔔</span>
-                    <h4 style="margin: 0; color: #ffc107;">Dispositivos pendientes de aprobación</h4>
+            <div class="abk-pending-banner">
+                <div class="abk-pending-header">
+                    <span class="abk-pending-icon">🔔</span>
+                    <h4 class="abk-pending-title">Dispositivos pendientes de aprobación</h4>
                 </div>
-                <div id="ab-pending-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+                <div id="ab-pending-list" class="abk-pending-list"></div>
             </div>`;
 
         const list = document.getElementById('ab-pending-list');
@@ -8033,15 +8874,15 @@ async function loadABPendingAgents() {
             const timeAgo = new Date(agent.registeredAt).toLocaleString('es-ES');
 
             const row = document.createElement('div');
-            row.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--bg-hover); border-radius: 8px; border: 1px solid var(--border);';
+            row.className = 'abk-pending-row';
             row.innerHTML = `
-                <div style="flex: 1;">
-                    <div style="font-weight: 600; font-size: 1rem;">${osIcon} ${agent.hostname}</div>
-                    <div style="font-size: 0.82rem; color: var(--text-dim); margin-top: 2px;">${agent.ip} · ${osName} · Registrado: ${timeAgo}</div>
+                <div class="abk-pending-device">
+                    <div class="abk-pending-name">${osIcon} ${agent.hostname}</div>
+                    <div class="abk-pending-info">${agent.ip} · ${osName} · Registrado: ${timeAgo}</div>
                 </div>
-                <div style="display: flex; gap: 8px;" id="ab-pending-actions-${agent.id}">
-                    <button class="btn-primary btn-sm" style="padding: 6px 14px;" id="ab-approve-${agent.id}">✓ Aprobar</button>
-                    <button class="btn-sm" style="padding: 6px 14px; background: var(--bg-hover); color: var(--text-dim); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;" id="ab-reject-${agent.id}">✗ Rechazar</button>
+                <div class="abk-pending-actions" id="ab-pending-actions-${agent.id}">
+                    <button class="btn-primary btn-sm abk-approve-btn" id="ab-approve-${agent.id}">✓ Aprobar</button>
+                    <button class="btn-sm abk-reject-btn" id="ab-reject-${agent.id}">✗ Rechazar</button>
                 </div>`;
             list.appendChild(row);
 
@@ -8059,7 +8900,7 @@ function showApproveDialog(agent) {
 
     // Create modal
     const overlay = document.createElement('div');
-    overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);';
+    overlay.className = 'abk-approve-overlay';
     overlay.id = 'ab-approve-overlay';
 
     // Auto-detect platform from agent OS
@@ -8068,14 +8909,14 @@ function showApproveDialog(agent) {
     else if (agent.os === 'darwin') defaultPlatform = 'mac';
 
     overlay.innerHTML = `
-        <div style="background: var(--bg-card, #1a1a2e); border-radius: 16px; padding: 32px; max-width: 480px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.5); border: 1px solid var(--border); color: #f5f5f5;">
-            <h3 style="margin: 0 0 4px 0; color: #f5f5f5;">${osIcon} Aprobar: ${agent.hostname}</h3>
-            <p style="color: #a3a3a3; font-size: 0.85rem; margin-bottom: 24px;">${agent.ip}</p>
-            
-            <div style="display: flex; flex-direction: column; gap: 16px;">
+        <div class="abk-approve-modal">
+            <h3 class="abk-approve-title">${osIcon} Aprobar: ${agent.hostname}</h3>
+            <p class="abk-approve-subtitle">${agent.ip}</p>
+
+            <div class="abk-approve-fields">
                 <div>
-                    <label style="font-size: 0.85rem; font-weight: 500; display: block; margin-bottom: 6px; color: #f5f5f5;">Plataforma</label>
-                    <select id="ab-approve-platform" style="width: 100%; padding: 10px 12px; background: #2a2a3e; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #f5f5f5; font-size: 0.95rem;">
+                    <label class="abk-approve-label">Plataforma</label>
+                    <select id="ab-approve-platform" class="abk-approve-select">
                         <option value="windows" ${defaultPlatform === 'windows' ? 'selected' : ''}>🪟 Windows</option>
                         <option value="linux" ${defaultPlatform === 'linux' ? 'selected' : ''}>🐧 Linux</option>
                         <option value="mac" ${defaultPlatform === 'mac' ? 'selected' : ''}>🍎 Mac</option>
@@ -8083,15 +8924,15 @@ function showApproveDialog(agent) {
                     </select>
                 </div>
                 <div>
-                    <label style="font-size: 0.85rem; font-weight: 500; display: block; margin-bottom: 6px; color: #f5f5f5;">Tipo de backup</label>
-                    <select id="ab-approve-type" style="width: 100%; padding: 10px 12px; background: #2a2a3e; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #f5f5f5; font-size: 0.95rem;">
+                    <label class="abk-approve-label">Tipo de backup</label>
+                    <select id="ab-approve-type" class="abk-approve-select">
                         <option value="image">💽 Imagen completa</option>
                         <option value="files">📁 Solo archivos</option>
                     </select>
                 </div>
                 <div>
-                    <label style="font-size: 0.85rem; font-weight: 500; display: block; margin-bottom: 6px; color: #f5f5f5;">Programación</label>
-                    <select id="ab-approve-schedule" style="width: 100%; padding: 10px 12px; background: #2a2a3e; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #f5f5f5; font-size: 0.95rem;">
+                    <label class="abk-approve-label">Programación</label>
+                    <select id="ab-approve-schedule" class="abk-approve-select">
                         <option value="0 3 * * *">Diario a las 3:00 AM</option>
                         <option value="0 2 * * *">Diario a las 2:00 AM</option>
                         <option value="0 12 * * *">Diario a las 12:00</option>
@@ -8101,8 +8942,8 @@ function showApproveDialog(agent) {
                     </select>
                 </div>
                 <div>
-                    <label style="font-size: 0.85rem; font-weight: 500; display: block; margin-bottom: 6px; color: #f5f5f5;">Copias a conservar</label>
-                    <select id="ab-approve-retention" style="width: 100%; padding: 10px 12px; background: #2a2a3e; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #f5f5f5; font-size: 0.95rem;">
+                    <label class="abk-approve-label">Copias a conservar</label>
+                    <select id="ab-approve-retention" class="abk-approve-select">
                         <option value="2">2 copias</option>
                         <option value="3" selected>3 copias</option>
                         <option value="5">5 copias</option>
@@ -8112,9 +8953,9 @@ function showApproveDialog(agent) {
                 </div>
             </div>
 
-            <div style="display: flex; gap: 10px; margin-top: 28px; justify-content: flex-end;">
-                <button id="ab-approve-cancel" class="btn-sm" style="padding: 8px 20px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #f5f5f5; cursor: pointer;">Cancelar</button>
-                <button id="ab-approve-confirm" class="btn-primary btn-sm" style="padding: 8px 20px; background: #6366f1; color: #fff;">✓ Aprobar</button>
+            <div class="abk-approve-actions">
+                <button id="ab-approve-cancel" class="btn-sm abk-approve-cancel">Cancelar</button>
+                <button id="ab-approve-confirm" class="btn-primary btn-sm abk-approve-confirm">✓ Aprobar</button>
             </div>
         </div>`;
 
@@ -8185,9 +9026,9 @@ async function loadABDevices() {
 
         if (abDevices.length === 0) {
             grid.innerHTML = `
-                <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-dim);">
-                    <div style="font-size: 3rem; margin-bottom: 15px;">🖥️</div>
-                    <p style="font-size: 1.1rem; margin-bottom: 8px;">No hay dispositivos registrados</p>
+                <div class="abk-empty-state">
+                    <div class="abk-empty-icon">🖥️</div>
+                    <p class="abk-empty-title">No hay dispositivos registrados</p>
                     <p>Añade un PC o servidor para hacer backup automático al NAS</p>
                 </div>`;
             return;
@@ -8196,7 +9037,7 @@ async function loadABDevices() {
         grid.innerHTML = '';
         abDevices.forEach(device => {
             const card = document.createElement('div');
-            card.style.cssText = 'background: var(--bg-hover); border-radius: 12px; padding: 20px; border: 1px solid var(--border); cursor: pointer; transition: all 0.2s;';
+            card.className = 'abk-device-card';
             card.addEventListener('mouseenter', () => card.style.borderColor = 'var(--accent)');
             card.addEventListener('mouseleave', () => card.style.borderColor = 'var(--border)');
 
@@ -8220,17 +9061,17 @@ async function loadABDevices() {
             const countLabel = isImage ? 'imágenes' : 'versiones';
 
             card.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                <div class="abk-device-header">
                     <div>
-                        <div style="font-weight: 600; font-size: 1.05rem;">${typeIcon} ${escapeHtml(device.name)}</div>
-                        <div style="color: var(--text-dim); font-size: 0.85rem; margin-top: 2px;">${subtitle}</div>
+                        <div class="abk-device-name">${typeIcon} ${escapeHtml(device.name)}</div>
+                        <div class="abk-device-subtitle">${subtitle}</div>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 6px;">
-                        <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${statusColor};"></span>
-                        <span style="font-size: 0.8rem; color: ${statusColor}; font-weight: 500;">${statusText}</span>
+                    <div class="abk-device-status">
+                        <span class="abk-device-status-dot" style="background: ${statusColor};"></span>
+                        <span class="abk-device-status-text" style="color: ${statusColor};">${statusText}</span>
                     </div>
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85rem; color: var(--text-dim);">
+                <div class="abk-device-info">
                     <div>📅 ${lastBackup}</div>
                     <div>📦 ${device.backupCount || 0} ${countLabel}</div>
                     <div>💾 ${sizeStr}</div>
@@ -8240,13 +9081,12 @@ async function loadABDevices() {
 
             // Action buttons
             const actions = document.createElement('div');
-            actions.style.cssText = 'display: flex; gap: 8px; margin-top: 15px; border-top: 1px solid var(--border); padding-top: 12px;';
+            actions.className = 'abk-device-actions';
 
             if (device.agentToken) {
                 // Agent-managed device: trigger backup via agent
                 const triggerBtn = document.createElement('button');
-                triggerBtn.className = 'btn-primary btn-sm';
-                triggerBtn.style.cssText = 'flex: 1; padding: 8px;';
+                triggerBtn.className = 'btn-primary btn-sm abk-action-btn';
                 triggerBtn.textContent = '▶ Backup';
                 triggerBtn.addEventListener('click', async (e) => {
                     e.stopPropagation();
@@ -8272,43 +9112,37 @@ async function loadABDevices() {
                 actions.appendChild(triggerBtn);
             } else if (!isImage) {
                 const backupBtn = document.createElement('button');
-                backupBtn.className = 'btn-primary btn-sm';
-                backupBtn.style.cssText = 'flex: 1; padding: 8px;';
+                backupBtn.className = 'btn-primary btn-sm abk-action-btn';
                 backupBtn.textContent = '▶ Backup';
                 backupBtn.addEventListener('click', (e) => { e.stopPropagation(); triggerABBackup(device.id, backupBtn); });
                 actions.appendChild(backupBtn);
             } else {
                 const instrBtn = document.createElement('button');
-                instrBtn.className = 'btn-primary btn-sm';
-                instrBtn.style.cssText = 'flex: 1; padding: 8px;';
+                instrBtn.className = 'btn-primary btn-sm abk-action-btn';
                 instrBtn.textContent = '📋 Instrucciones';
                 instrBtn.addEventListener('click', (e) => { e.stopPropagation(); showABInstructions(device); });
                 actions.appendChild(instrBtn);
             }
 
             const browseBtn = document.createElement('button');
-            browseBtn.className = 'btn-primary btn-sm';
-            browseBtn.style.cssText = 'flex: 1; padding: 8px; background: #6366f1;';
+            browseBtn.className = 'btn-primary btn-sm abk-browse-btn';
             browseBtn.textContent = '📂 Explorar';
             browseBtn.addEventListener('click', (e) => { e.stopPropagation(); isImage ? openABImageBrowse(device) : openABBrowse(device); });
 
             const renameBtn = document.createElement('button');
-            renameBtn.className = 'btn-primary btn-sm';
-            renameBtn.style.cssText = 'padding: 8px; background: #64748b;';
+            renameBtn.className = 'btn-primary btn-sm abk-rename-btn';
             renameBtn.textContent = '✏️';
             renameBtn.title = 'Renombrar';
             renameBtn.addEventListener('click', (e) => { e.stopPropagation(); showRenameDialog(device); });
 
             const editBtn = document.createElement('button');
-            editBtn.className = 'btn-primary btn-sm';
-            editBtn.style.cssText = 'padding: 8px; background: #64748b;';
+            editBtn.className = 'btn-primary btn-sm abk-edit-btn';
             editBtn.textContent = '⚙️';
             editBtn.title = 'Configurar';
             editBtn.addEventListener('click', (e) => { e.stopPropagation(); showEditDeviceForm(device); });
 
             const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'btn-primary btn-sm';
-            deleteBtn.style.cssText = 'padding: 8px; background: #ef4444;';
+            deleteBtn.className = 'btn-primary btn-sm abk-delete-btn';
             deleteBtn.textContent = '🗑️';
             deleteBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteABDevice(device); });
 
@@ -8322,7 +9156,7 @@ async function loadABDevices() {
         });
     } catch (e) {
         console.error('Load AB devices error:', e);
-        grid.innerHTML = '<div style="padding: 20px; color: #ef4444;">Error al cargar dispositivos</div>';
+        grid.innerHTML = '<div class="abk-error-state">Error al cargar dispositivos</div>';
     }
 }
 
@@ -8347,14 +9181,14 @@ function showAddDeviceForm(editDevice = null) {
     const curOS = editDevice?.os || 'linux';
 
     modal.innerHTML = `
-        <div class="glass-card modal-content" style="max-width: 520px; width: 90%; max-height: 85vh; overflow-y: auto;">
+        <div class="glass-card modal-content" class="abk-modal-content-wide">
             <header class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
                 <h3>${isEdit ? '⚙️ Editar Dispositivo' : '🖥️ Añadir Dispositivo'}</h3>
                 <button class="btn-close" id="close-ab-form">&times;</button>
             </header>
             <form id="ab-device-form" style="display: flex; flex-direction: column; gap: 12px; margin-top: 15px;">
                 ${!isEdit ? `
-                <div style="display: flex; gap: 10px;">
+                <div class="cloudbackup-sync-input-group">
                     <button type="button" class="btn-primary ab-type-btn ${curType === 'files' ? '' : 'ab-type-inactive'}" data-type="files" style="flex: 1; padding: 14px; text-align: center; ${curType === 'files' ? '' : 'background: var(--bg-hover); color: var(--text-dim);'}">
                         <div style="font-size: 1.5rem;">📁</div>
                         <div style="font-weight: 600; margin-top: 4px;">Archivos</div>
@@ -8385,7 +9219,7 @@ function showAddDeviceForm(editDevice = null) {
                 </div>
 
                 <div id="ab-ssh-fields" style="display: ${curType === 'files' ? 'flex' : 'none'}; flex-direction: column; gap: 12px;">
-                    <div style="display: grid; grid-template-columns: 1fr 100px; gap: 10px;">
+                    <div class="abk-ssh-host-row">
                         <div class="input-group">
                             <input type="text" id="ab-user" placeholder=" " value="${escapeHtml(editDevice?.sshUser || '')}">
                             <label>Usuario SSH</label>
@@ -8405,7 +9239,7 @@ function showAddDeviceForm(editDevice = null) {
                     </div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div class="abk-schedule-row">
                     <div class="input-group">
                         <input type="text" id="ab-schedule" required placeholder=" " value="${escapeHtml(editDevice?.schedule || '0 2 * * *')}">
                         <label>Cron (ej: 0 2 * * *)</label>
@@ -8487,12 +9321,12 @@ function showAddDeviceForm(editDevice = null) {
                 info.style.display = 'block';
                 const instr = data.sambaSetup.instructions;
                 info.innerHTML = `
-                    <h4 style="margin-bottom: 12px; color: var(--accent);">💽 ${escapeHtml(instr.title)}</h4>
+                    <h4 class="abk-setup-title">💽 ${escapeHtml(instr.title)}</h4>
                     ${instr.steps.map(step => `
-                        <div style="margin-bottom: 15px;">
-                            <p style="font-weight: 600; font-size: 0.9rem; margin-bottom: 6px;">${escapeHtml(step.title)}</p>
-                            <p style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 6px;">${escapeHtml(step.description)}</p>
-                            <div style="background: #0a0a0a; color: #10b981; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 0.75rem; word-break: break-all; white-space: pre-wrap; position: relative;">${escapeHtml(step.command)}</div>
+                        <div class="abk-setup-step-container">
+                            <p class="abk-setup-step-title">${escapeHtml(step.title)}</p>
+                            <p class="abk-setup-step-description">${escapeHtml(step.description)}</p>
+                            <div class="abk-setup-command">${escapeHtml(step.command)}</div>
                         </div>
                     `).join('')}
                     <button class="btn-primary btn-sm" data-action="close-modal" style="margin-top: 5px;">Entendido, cerrar</button>
@@ -8504,12 +9338,12 @@ function showAddDeviceForm(editDevice = null) {
                 info.style.display = 'block';
                 info.innerHTML = `
                     <h4 style="margin-bottom: 10px; color: var(--accent);">🔑 Configura el acceso SSH</h4>
-                    <p style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 10px;">Ejecuta esto en <strong>${escapeHtml(body.name)}</strong> (${escapeHtml(body.ip)}):</p>
-                    <div style="background: #0a0a0a; color: #10b981; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 0.8rem; word-break: break-all; margin-bottom: 10px;">
+                    <p class="abk-setup-ssh-description">Ejecuta esto en <strong>${escapeHtml(body.name)}</strong> (${escapeHtml(body.ip)}):</p>
+                    <div class="abk-setup-command-lg">
                         <code id="ab-ssh-cmd">mkdir -p ~/.ssh && echo '${escapeHtml(data.sshPublicKey)}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys</code>
                     </div>
                     <button class="btn-primary btn-sm" data-action="copy-ssh-cmd">📋 Copiar comando</button>
-                    <button class="btn-primary btn-sm" data-action="close-modal" style="margin-left: 8px; background: #6366f1;">Listo, cerrar</button>
+                    <button class="btn-primary btn-sm" data-action="close-modal" class="abk-setup-close-btn">Listo, cerrar</button>
                 `;
                 info.querySelector('[data-action="copy-ssh-cmd"]')?.addEventListener('click', function() {
                     navigator.clipboard.writeText(document.getElementById('ab-ssh-cmd').textContent);
@@ -8563,7 +9397,7 @@ async function showABInstructions(device) {
 
         const instr = data.instructions;
         modal.innerHTML = `
-            <div class="glass-card modal-content" style="max-width: 600px; width: 90%; max-height: 85vh; overflow-y: auto;">
+            <div class="glass-card modal-content" class="abk-modal-content-extra-wide">
                 <header class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
                     <h3>💽 ${escapeHtml(instr.title)}</h3>
                     <button class="btn-close" data-action="close-modal">&times;</button>
@@ -8571,8 +9405,8 @@ async function showABInstructions(device) {
                 <div style="margin-top: 15px;">
                     ${instr.steps.map(step => `
                         <div style="margin-bottom: 18px;">
-                            <p style="font-weight: 600; font-size: 0.9rem; margin-bottom: 6px;">${escapeHtml(step.title)}</p>
-                            <p style="font-size: 0.82rem; color: var(--text-dim); margin-bottom: 8px;">${escapeHtml(step.description)}</p>
+                            <p class="abk-setup-step-title">${escapeHtml(step.title)}</p>
+                            <p class="abk-setup-step-description">${escapeHtml(step.description)}</p>
                             <div class="ab-copy-cmd" style="background: #0a0a0a; color: #10b981; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 0.75rem; word-break: break-all; white-space: pre-wrap; cursor: pointer; position: relative;" title="Click para copiar">${escapeHtml(step.command)}</div>
                         </div>
                     `).join('')}
@@ -8608,11 +9442,11 @@ async function openABImageBrowse(device) {
         const allItems = [...windowsBackups, ...images];
 
         panel.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <div class="abk-browse-header">
                 <h3>💽 ${escapeHtml(device.name)} — Imágenes de Backup</h3>
                 <button class="btn-close" data-action="close-panel" style="font-size: 1.5rem;">&times;</button>
             </div>
-            <div style="margin-bottom: 10px; font-size: 0.85rem; color: var(--text-dim);">
+            <div class="abk-backup-summary">
                 Tamaño total: <strong>${formatABSize(data.totalSize || 0)}</strong>
             </div>
         `;
@@ -8620,7 +9454,7 @@ async function openABImageBrowse(device) {
 
         if (allItems.length === 0) {
             panel.innerHTML += `
-                <div style="padding: 30px; text-align: center; color: var(--text-dim);">
+                <div class="abk-backup-empty">
                     <p>No hay imágenes de backup todavía.</p>
                     <p style="margin-top: 8px;">Ejecuta el comando de backup desde el equipo Windows/Linux para que aparezcan aquí.</p>
                 </div>`;
@@ -8641,9 +9475,9 @@ async function openABImageBrowse(device) {
 
             const icon = item.type === 'windows-image' ? '🪟' : item.type === 'directory' ? '📁' : '💾';
             row.innerHTML = `
-                <span style="display: flex; align-items: center; gap: 8px;">${icon} ${escapeHtml(item.name)}</span>
-                <span style="font-size: 0.85rem; color: var(--text-dim);">${formatABSize(item.size)}</span>
-                <span style="font-size: 0.85rem; color: var(--text-dim);">${new Date(item.modified).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                <span class="abk-backup-item-name">${icon} ${escapeHtml(item.name)}</span>
+                <span class="abk-backup-item-size">${formatABSize(item.size)}</span>
+                <span class="abk-backup-item-size">${new Date(item.modified).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                 <span style="font-size: 0.8rem; padding: 2px 8px; border-radius: 8px; background: rgba(99,102,241,0.15); color: #6366f1;">${item.type === 'windows-image' ? 'WIM' : item.name.split('.').pop()}</span>
             `;
             list.appendChild(row);
@@ -8721,8 +9555,8 @@ async function openABBrowse(device) {
 
         if (versions.length === 0) {
             panel.innerHTML = `
-                <h3 style="margin-bottom: 15px;">📂 ${escapeHtml(device.name)} — Sin backups</h3>
-                <p style="color: var(--text-dim);">Ejecuta un backup primero para poder explorar archivos.</p>
+                <h3 class="abk-restore-title">📂 ${escapeHtml(device.name)} — Sin backups</h3>
+                <p class="abk-iso-note">Ejecuta un backup primero para poder explorar archivos.</p>
                 <button class="btn-primary btn-sm" data-action="close-panel" style="margin-top: 10px;">Cerrar</button>
             `;
             panel.querySelector('[data-action="close-panel"]')?.addEventListener('click', () => { document.getElementById('ab-detail-panel').style.display = 'none'; });
@@ -8730,13 +9564,13 @@ async function openABBrowse(device) {
         }
 
         panel.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <div class="abk-browse-header">
                 <h3>📂 ${escapeHtml(device.name)}</h3>
                 <button class="btn-close" data-action="close-panel" style="font-size: 1.5rem;">&times;</button>
             </div>
-            <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center;">
+            <div class="abk-browse-controls">
                 <label style="font-weight: 500;">Versión:</label>
-                <select id="ab-version-select" style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text);">
+                <select id="ab-version-select" class="abk-version-select">
                     ${versions.reverse().map(v => `<option value="${escapeHtml(v.name)}">${escapeHtml(v.name)} — ${new Date(v.date).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} (${formatABSize(v.size)})</option>`).join('')}
                 </select>
             </div>
@@ -8794,7 +9628,7 @@ async function loadABBrowse(deviceId) {
         });
     }
 
-    list.innerHTML = '<div style="padding: 20px; color: var(--text-dim);">Cargando...</div>';
+    list.innerHTML = '<div class="misc-backup-loading">Cargando...</div>';
 
     try {
         const res = await authFetch(`${API_BASE}/active-backup/devices/${deviceId}/browse?version=${encodeURIComponent(abBrowseVersion)}&path=${encodeURIComponent(abBrowsePath)}`);
@@ -8803,7 +9637,7 @@ async function loadABBrowse(deviceId) {
         const items = data.items || [];
 
         if (items.length === 0) {
-            list.innerHTML = '<div style="padding: 30px; text-align: center; color: var(--text-dim);">Carpeta vacía</div>';
+            list.innerHTML = '<div class="abk-browse-empty">Carpeta vacía</div>';
             return;
         }
 
@@ -8823,7 +9657,7 @@ async function loadABBrowse(deviceId) {
 
             const nameSpan = document.createElement('span');
             nameSpan.style.cssText = 'display: flex; align-items: center; gap: 8px;';
-            nameSpan.innerHTML = `<span>${item.type === 'directory' ? '📁' : '📄'}</span><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(item.name)}</span>`;
+            nameSpan.innerHTML = `<span>${item.type === 'directory' ? '📁' : '📄'}</span><span class="abk-browse-item-name">${escapeHtml(item.name)}</span>`;
 
             const sizeSpan = document.createElement('span');
             sizeSpan.style.cssText = 'font-size: 0.85rem; color: var(--text-dim);';
@@ -8863,7 +9697,7 @@ async function loadABBrowse(deviceId) {
             list.appendChild(row);
         });
     } catch(e) {
-        list.innerHTML = '<div style="padding: 20px; color: #ef4444;">Error al explorar backup</div>';
+        list.innerHTML = '<div class="abk-browse-error">Error al explorar backup</div>';
     }
 }
 
@@ -8879,17 +9713,17 @@ async function loadRecoveryStatus() {
             const size = formatABSize(data.iso.size);
             const date = new Date(data.iso.modified).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
             container.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
-                    <div style="flex: 1; min-width: 200px;">
-                        <div style="font-weight: 600; color: var(--accent);">✅ ISO disponible</div>
-                        <div style="font-size: 0.85rem; color: var(--text-dim); margin-top: 4px;">${size} · Creada: ${date}</div>
+                <div class="abk-iso-container">
+                    <div class="abk-iso-info">
+                        <div class="abk-iso-available-title">✅ ISO disponible</div>
+                        <div class="abk-iso-available-details">${size} · Creada: ${date}</div>
                     </div>
-                    <div style="display: flex; gap: 8px;">
+                    <div class="abk-iso-buttons">
                         <button class="btn-primary btn-sm" id="ab-download-iso" style="padding: 10px 16px;">⬇️ Descargar ISO</button>
-                        <button class="btn-primary btn-sm" id="ab-rebuild-iso" style="padding: 10px 16px; background: #64748b;">🔄 Regenerar</button>
+                        <button class="btn-primary btn-sm" id="ab-rebuild-iso" class="abk-iso-rebuild-btn">🔄 Regenerar</button>
                     </div>
                 </div>
-                <div style="margin-top: 12px; padding: 12px; background: #0a0a0a; border-radius: 6px; font-family: monospace; font-size: 0.8rem; color: #10b981;">
+                <div class="abk-iso-path">
                     <strong>Para flashear al USB:</strong><br>
                     sudo dd if=homepinas-recovery.iso of=/dev/sdX bs=4M status=progress && sync
                 </div>
@@ -8901,10 +9735,10 @@ async function loadRecoveryStatus() {
             document.getElementById('ab-rebuild-iso').addEventListener('click', () => buildRecoveryISO());
         } else {
             container.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
-                    <div style="flex: 1; min-width: 200px;">
+                <div class="abk-iso-container">
+                    <div class="abk-iso-info">
                         <div style="font-weight: 500;">No hay ISO generada todavía</div>
-                        <div style="font-size: 0.85rem; color: var(--text-dim); margin-top: 4px;">
+                        <div class="abk-iso-available-details">
                             Genera una ISO bootable (~500MB) que incluye herramientas de restauración, 
                             detección automática del NAS y soporte para BIOS + UEFI.
                         </div>
@@ -8913,8 +9747,8 @@ async function loadRecoveryStatus() {
                 </div>
                 <div style="margin-top: 12px;">
                     <details style="color: var(--text-dim); font-size: 0.85rem;">
-                        <summary style="cursor: pointer; font-weight: 500;">¿Qué incluye?</summary>
-                        <ul style="margin-top: 8px; padding-left: 20px; line-height: 1.8;">
+                        <summary class="abk-iso-details-summary">¿Qué incluye?</summary>
+                        <ul class="abk-iso-details-list">
                             <li>🔍 Detección automática del NAS por red (mDNS)</li>
                             <li>📋 Menú interactivo para seleccionar backup</li>
                             <li>💽 Restauración de imágenes completas (Windows/Linux)</li>
@@ -8931,7 +9765,7 @@ async function loadRecoveryStatus() {
             if (buildBtn) buildBtn.addEventListener('click', () => buildRecoveryISO());
         }
     } catch (e) {
-        container.innerHTML = `<p style="color: var(--text-dim);">Scripts de recovery disponibles. La generación de ISO requiere un sistema x86_64.</p>
+        container.innerHTML = `<p class="abk-iso-note">Scripts de recovery disponibles. La generación de ISO requiere un sistema x86_64.</p>
             <button class="btn-primary btn-sm" data-action="download-scripts" style="margin-top: 10px;">📦 Descargar Scripts</button>`;
         container.querySelector('[data-action="download-scripts"]')?.addEventListener('click', () => { window.open(`${API_BASE}/active-backup/recovery/scripts`, '_blank'); });
     }
@@ -8949,12 +9783,12 @@ async function buildRecoveryISO() {
         const container = document.getElementById('ab-recovery-status');
         if (container) {
             container.innerHTML = `
-                <div style="text-align: center; padding: 20px;">
-                    <div style="font-size: 2rem; margin-bottom: 10px;">⏳</div>
+                <div class="abk-iso-building-container">
+                    <div class="abk-iso-building-icon">⏳</div>
                     <div style="font-weight: 600;">Generando ISO de recuperación...</div>
-                    <div style="color: var(--text-dim); font-size: 0.85rem; margin-top: 8px;">Esto puede tardar 10-20 minutos. No cierres esta página.</div>
-                    <div style="margin-top: 15px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;">
-                        <div style="height: 100%; width: 30%; background: var(--accent); border-radius: 2px; animation: pulse 2s infinite;"></div>
+                    <div class="abk-iso-building-description">Esto puede tardar 10-20 minutos. No cierres esta página.</div>
+                    <div class="abk-iso-building-progress">
+                        <div class="abk-iso-building-bar"></div>
                     </div>
                 </div>
             `;
@@ -9016,15 +9850,15 @@ async function renderADContent() {
         if (!status.installed) {
             // Not installed - show install button
             container.innerHTML = `
-                <div class="card" style="text-align: center; padding: 40px;">
-                    <h3 style="color: var(--warning);">⚠️ Samba AD DC no instalado</h3>
-                    <p style="margin: 20px 0; color: var(--text-secondary);">
+                <div class="card ad-not-installed-card">
+                    <h3 class="ad-not-installed-title">⚠️ Samba AD DC no instalado</h3>
+                    <p class="ad-not-installed-description">
                         Active Directory Domain Controller permite que equipos Windows se unan a tu NAS como controlador de dominio.
                     </p>
                     <button class="btn btn-primary" id="ad-install-btn">
                         📦 Instalar Samba AD DC
                     </button>
-                    <p style="margin-top: 15px; font-size: 0.85rem; color: var(--text-muted);">
+                    <p class="ad-install-note">
                         Esto instalará ~500MB de paquetes y tardará unos minutos.
                     </p>
                 </div>
@@ -9059,164 +9893,6 @@ async function renderADContent() {
         if (!status.provisioned) {
             // Installed but not provisioned - show provision form
             container.innerHTML = `
-                <style>
-                    .ad-setup-container {
-                        display: grid;
-                        grid-template-columns: 1fr 1fr;
-                        gap: 24px;
-                        max-width: 1200px;
-                    }
-                    @media (max-width: 900px) {
-                        .ad-setup-container { grid-template-columns: 1fr; }
-                    }
-                    .ad-form-card {
-                        background: var(--card-bg, #fff);
-                        border-radius: 12px;
-                        padding: 28px;
-                        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-                        border: 1px solid var(--border-color, #e0e0e0);
-                    }
-                    .ad-form-header {
-                        display: flex;
-                        align-items: center;
-                        gap: 12px;
-                        margin-bottom: 8px;
-                    }
-                    .ad-form-header-icon {
-                        width: 48px;
-                        height: 48px;
-                        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-                        border-radius: 12px;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        font-size: 24px;
-                    }
-                    .ad-form-header h3 {
-                        margin: 0;
-                        font-size: 1.25rem;
-                        font-weight: 600;
-                    }
-                    .ad-form-header p {
-                        margin: 4px 0 0 0;
-                        color: var(--text-secondary, #666);
-                        font-size: 0.875rem;
-                    }
-                    .ad-form-field {
-                        margin-bottom: 20px;
-                    }
-                    .ad-form-field label {
-                        display: block;
-                        font-weight: 500;
-                        margin-bottom: 6px;
-                        color: var(--text-primary, #333);
-                        font-size: 0.9rem;
-                    }
-                    .ad-form-field input {
-                        width: 100%;
-                        padding: 12px 14px;
-                        border: 1px solid var(--border-color, #d1d5db);
-                        border-radius: 8px;
-                        font-size: 0.95rem;
-                        transition: border-color 0.2s, box-shadow 0.2s;
-                        background: var(--input-bg, #fff);
-                        color: var(--text-primary, #333);
-                        box-sizing: border-box;
-                    }
-                    .ad-form-field input:focus {
-                        outline: none;
-                        border-color: #3b82f6;
-                        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-                    }
-                    .ad-form-field input::placeholder {
-                        color: var(--text-tertiary, #9ca3af);
-                    }
-                    .ad-form-field small {
-                        display: block;
-                        margin-top: 6px;
-                        color: var(--text-secondary, #666);
-                        font-size: 0.8rem;
-                    }
-                    .ad-form-row {
-                        display: grid;
-                        grid-template-columns: 1fr 1fr;
-                        gap: 16px;
-                    }
-                    @media (max-width: 500px) {
-                        .ad-form-row { grid-template-columns: 1fr; }
-                    }
-                    .ad-submit-btn {
-                        width: 100%;
-                        padding: 14px 24px;
-                        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-                        color: white;
-                        border: none;
-                        border-radius: 8px;
-                        font-size: 1rem;
-                        font-weight: 600;
-                        cursor: pointer;
-                        transition: transform 0.15s, box-shadow 0.15s;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        gap: 8px;
-                    }
-                    .ad-submit-btn:hover {
-                        transform: translateY(-1px);
-                        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
-                    }
-                    .ad-submit-btn:disabled {
-                        opacity: 0.6;
-                        cursor: not-allowed;
-                        transform: none;
-                    }
-                    .ad-info-card {
-                        background: var(--card-bg, #fff);
-                        border-radius: 12px;
-                        padding: 28px;
-                        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-                        border: 1px solid var(--border-color, #e0e0e0);
-                    }
-                    .ad-info-card h4 {
-                        margin: 0 0 16px 0;
-                        font-size: 1rem;
-                        font-weight: 600;
-                        display: flex;
-                        align-items: center;
-                        gap: 8px;
-                    }
-                    .ad-info-item {
-                        display: flex;
-                        gap: 12px;
-                        padding: 14px 0;
-                        border-bottom: 1px solid var(--border-color, #e5e7eb);
-                    }
-                    .ad-info-item:last-child {
-                        border-bottom: none;
-                    }
-                    .ad-info-icon {
-                        width: 36px;
-                        height: 36px;
-                        background: var(--bg-tertiary, #f3f4f6);
-                        border-radius: 8px;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        font-size: 16px;
-                        flex-shrink: 0;
-                    }
-                    .ad-info-content strong {
-                        display: block;
-                        font-weight: 500;
-                        margin-bottom: 2px;
-                        color: var(--text-primary, #333);
-                    }
-                    .ad-info-content span {
-                        color: var(--text-secondary, #666);
-                        font-size: 0.85rem;
-                    }
-                </style>
-                
                 <div class="ad-setup-container">
                     <div class="ad-form-card">
                         <div class="ad-form-header">
@@ -9226,22 +9902,22 @@ async function renderADContent() {
                                 <p>Samba AD DC instalado — configura tu dominio</p>
                             </div>
                         </div>
-                        
-                        <form id="ad-provision-form" style="margin-top: 24px;">
+
+                        <form id="ad-provision-form" class="ad-form-container">
                             <div class="ad-form-field">
                                 <label>Nombre del dominio (NetBIOS)</label>
-                                <input type="text" id="ad-domain" placeholder="HOMELABS" 
+                                <input type="text" id="ad-domain" placeholder="HOMELABS"
                                        pattern="[A-Za-z][A-Za-z0-9]{0,14}" required
-                                       style="text-transform: uppercase;">
+                                       class="ad-form-field-uppercase">
                                 <small>Máx 15 caracteres, solo letras y números</small>
                             </div>
-                            
+
                             <div class="ad-form-field">
                                 <label>Realm (FQDN)</label>
                                 <input type="text" id="ad-realm" placeholder="homelabs.local" required>
                                 <small>Nombre completo del dominio para Kerberos</small>
                             </div>
-                            
+
                             <div class="ad-form-row">
                                 <div class="ad-form-field">
                                     <label>Contraseña Administrator</label>
@@ -9249,14 +9925,14 @@ async function renderADContent() {
                                            placeholder="••••••••">
                                     <small>Mínimo 8 caracteres</small>
                                 </div>
-                                
+
                                 <div class="ad-form-field">
                                     <label>Confirmar contraseña</label>
                                     <input type="password" id="ad-password-confirm" minlength="8" required
                                            placeholder="••••••••">
                                 </div>
                             </div>
-                            
+
                             <button type="submit" class="ad-submit-btn">
                                 <span>🚀</span> Crear Dominio
                             </button>
@@ -9360,175 +10036,6 @@ async function renderADContent() {
         const groups = Array.isArray(groupsData) ? groupsData : [];
         
         container.innerHTML = `
-            <style>
-                .ad-dashboard { max-width: 1400px; }
-                .ad-header-card {
-                    background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
-                    border-radius: 16px;
-                    padding: 24px 28px;
-                    color: white;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    flex-wrap: wrap;
-                    gap: 20px;
-                    box-shadow: 0 4px 20px rgba(30, 58, 95, 0.3);
-                }
-                .ad-header-info { display: flex; align-items: center; gap: 16px; }
-                .ad-header-icon {
-                    width: 56px; height: 56px;
-                    background: rgba(255,255,255,0.15);
-                    border-radius: 14px;
-                    display: flex; align-items: center; justify-content: center;
-                    font-size: 28px;
-                }
-                .ad-header-text h2 { margin: 0; font-size: 1.5rem; font-weight: 600; }
-                .ad-header-text p { margin: 4px 0 0; opacity: 0.85; font-size: 0.95rem; }
-                .ad-header-status {
-                    display: flex; align-items: center; gap: 8px;
-                    background: rgba(255,255,255,0.1); padding: 6px 14px;
-                    border-radius: 20px; font-size: 0.85rem;
-                }
-                .ad-header-status .dot {
-                    width: 10px; height: 10px; border-radius: 50%;
-                    background: ${status.running ? '#4ade80' : '#f87171'};
-                    box-shadow: 0 0 8px ${status.running ? '#4ade80' : '#f87171'};
-                }
-                .ad-header-actions { display: flex; gap: 10px; }
-                .ad-header-actions button {
-                    padding: 10px 18px; border-radius: 8px; border: none;
-                    font-weight: 500; cursor: pointer; transition: all 0.2s;
-                    display: flex; align-items: center; gap: 6px;
-                }
-                .ad-btn-stop { background: rgba(248,113,113,0.9); color: white; }
-                .ad-btn-stop:hover { background: #f87171; }
-                .ad-btn-start { background: rgba(74,222,128,0.9); color: #166534; }
-                .ad-btn-start:hover { background: #4ade80; }
-                .ad-btn-restart { background: rgba(255,255,255,0.15); color: white; }
-                .ad-btn-restart:hover { background: rgba(255,255,255,0.25); }
-                .ad-btn-restart:disabled { opacity: 0.4; cursor: not-allowed; }
-                
-                .ad-stats-grid {
-                    display: grid;
-                    grid-template-columns: repeat(3, 1fr);
-                    gap: 16px;
-                    margin-top: 20px;
-                }
-                @media (max-width: 700px) { .ad-stats-grid { grid-template-columns: 1fr; } }
-                .ad-stat-card {
-                    background: var(--card-bg, #fff);
-                    border-radius: 12px;
-                    padding: 20px 24px;
-                    display: flex;
-                    align-items: center;
-                    gap: 16px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-                    border: 1px solid var(--border-color, #e5e7eb);
-                }
-                .ad-stat-icon {
-                    width: 48px; height: 48px;
-                    border-radius: 12px;
-                    display: flex; align-items: center; justify-content: center;
-                    font-size: 22px;
-                }
-                .ad-stat-icon.users { background: #dbeafe; }
-                .ad-stat-icon.computers { background: #fce7f3; }
-                .ad-stat-icon.groups { background: #d1fae5; }
-                .ad-stat-value { font-size: 1.75rem; font-weight: 700; color: var(--text-primary, #1f2937); }
-                .ad-stat-label { font-size: 0.85rem; color: var(--text-secondary, #6b7280); margin-top: 2px; }
-                
-                .ad-tabs {
-                    display: flex;
-                    gap: 4px;
-                    margin-top: 24px;
-                    background: var(--bg-secondary, #f3f4f6);
-                    padding: 4px;
-                    border-radius: 12px;
-                    width: fit-content;
-                }
-                .ad-tab {
-                    padding: 10px 20px;
-                    border: none;
-                    background: transparent;
-                    border-radius: 8px;
-                    cursor: pointer;
-                    font-weight: 500;
-                    color: var(--text-secondary, #6b7280);
-                    transition: all 0.2s;
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                }
-                .ad-tab:hover { color: var(--text-primary, #1f2937); }
-                .ad-tab.active {
-                    background: var(--card-bg, #fff);
-                    color: #3b82f6;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                }
-                
-                .ad-content-card {
-                    background: var(--card-bg, #fff);
-                    border-radius: 12px;
-                    padding: 24px;
-                    margin-top: 16px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-                    border: 1px solid var(--border-color, #e5e7eb);
-                }
-                .ad-content-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 20px;
-                    flex-wrap: wrap;
-                    gap: 12px;
-                }
-                .ad-content-header h3 { margin: 0; font-size: 1.1rem; font-weight: 600; }
-                .ad-add-btn {
-                    padding: 8px 16px;
-                    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-                    color: white;
-                    border: none;
-                    border-radius: 8px;
-                    font-weight: 500;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                    transition: transform 0.15s, box-shadow 0.15s;
-                }
-                .ad-add-btn:hover {
-                    transform: translateY(-1px);
-                    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
-                }
-                
-                .ad-table {
-                    width: 100%;
-                    border-collapse: collapse;
-                }
-                .ad-table th {
-                    text-align: left;
-                    padding: 12px 16px;
-                    font-weight: 600;
-                    font-size: 0.8rem;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                    color: var(--text-secondary, #6b7280);
-                    border-bottom: 2px solid var(--border-color, #e5e7eb);
-                }
-                .ad-table td {
-                    padding: 14px 16px;
-                    border-bottom: 1px solid var(--border-color, #f3f4f6);
-                    color: var(--text-primary, #1f2937);
-                }
-                .ad-table tr:hover { background: var(--bg-secondary, #f9fafb); }
-                .ad-table-empty {
-                    text-align: center;
-                    padding: 40px;
-                    color: var(--text-secondary, #9ca3af);
-                }
-                .ad-table-empty-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
-            </style>
-            
             <div class="ad-dashboard">
                 <!-- Header -->
                 <div class="ad-header-card">
@@ -9539,7 +10046,7 @@ async function renderADContent() {
                             <p>${escapeHtml(status.realm || 'homelabs.local')}</p>
                         </div>
                         <div class="ad-header-status">
-                            <span class="dot"></span>
+                            <span class="dot ${status.running ? 'running' : 'stopped'}"></span>
                             ${status.running ? 'Activo' : 'Detenido'}
                         </div>
                     </div>
@@ -9629,8 +10136,8 @@ async function renderADContent() {
         
     } catch (error) {
         container.innerHTML = `
-            <div class="card" style="text-align: center; padding: 40px;">
-                <h3 style="color: var(--danger);">❌ Error</h3>
+            <div class="card ad-error-card">
+                <h3 class="ad-error-title">❌ Error</h3>
                 <p>${escapeHtml(error.message)}</p>
                 <button class="btn btn-primary" data-action="retry-ad">🔄 Reintentar</button>
             </div>
@@ -9656,7 +10163,7 @@ function renderADTab(tab, data) {
                     <div class="ad-table-empty">
                         <div class="ad-table-empty-icon">👤</div>
                         <p>No hay usuarios en el dominio</p>
-                        <p style="font-size: 0.85rem;">Haz clic en "Nuevo Usuario" para crear el primero</p>
+                        <p class="ad-table-empty-text">Haz clic en "Nuevo Usuario" para crear el primero</p>
                     </div>
                 ` : `
                     <table class="ad-table">
@@ -9665,7 +10172,7 @@ function renderADTab(tab, data) {
                                 <th>Usuario</th>
                                 <th>Nombre</th>
                                 <th>Estado</th>
-                                <th style="width: 120px;">Acciones</th>
+                                <th class="ad-actions-col">Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -9674,15 +10181,15 @@ function renderADTab(tab, data) {
                                     <td><strong>${escapeHtml(u.username)}</strong></td>
                                     <td>${escapeHtml(u.displayName || '-')}</td>
                                     <td>
-                                        <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 500; ${u.enabled !== false ? 'background: #dcfce7; color: #166534;' : 'background: #fee2e2; color: #991b1b;'}">
-                                            <span style="width: 6px; height: 6px; border-radius: 50%; background: currentColor;"></span>
+                                        <span class="ad-user-status-badge ${u.enabled !== false ? 'active' : 'disabled'}">
+                                            <span class="ad-user-status-dot"></span>
                                             ${u.enabled !== false ? 'Activo' : 'Deshabilitado'}
                                         </span>
                                     </td>
                                     <td>
-                                        <div style="display: flex; gap: 6px;">
-                                            <button class="ad-reset-pwd" data-user="${escapeHtml(u.username)}" title="Cambiar contraseña" style="padding: 6px 10px; border: 1px solid var(--border-color, #e5e7eb); background: var(--card-bg, #fff); border-radius: 6px; cursor: pointer;">🔑</button>
-                                            <button class="ad-delete-user" data-user="${escapeHtml(u.username)}" title="Eliminar usuario" style="padding: 6px 10px; border: 1px solid #fecaca; background: #fef2f2; border-radius: 6px; cursor: pointer; ${u.username.toLowerCase() === 'administrator' ? 'opacity: 0.4; cursor: not-allowed;' : ''}" ${u.username.toLowerCase() === 'administrator' ? 'disabled' : ''}>🗑️</button>
+                                        <div class="ad-action-buttons">
+                                            <button class="ad-action-btn ad-reset-pwd" data-user="${escapeHtml(u.username)}" title="Cambiar contraseña">🔑</button>
+                                            <button class="ad-action-btn delete ad-delete-user ${u.username.toLowerCase() === 'administrator' ? 'disabled' : ''}" data-user="${escapeHtml(u.username)}" title="Eliminar usuario" ${u.username.toLowerCase() === 'administrator' ? 'disabled' : ''}>🗑️</button>
                                         </div>
                                     </td>
                                 </tr>
@@ -9726,7 +10233,7 @@ function renderADTab(tab, data) {
                     <div class="ad-table-empty">
                         <div class="ad-table-empty-icon">💻</div>
                         <p>No hay equipos unidos al dominio</p>
-                        <p style="font-size: 0.85rem;">Ve a la pestaña "Unir Equipo" para ver las instrucciones</p>
+                        <p class="ad-table-empty-text">Ve a la pestaña "Unir Equipo" para ver las instrucciones</p>
                     </div>
                 ` : `
                     <table class="ad-table">
@@ -9740,12 +10247,12 @@ function renderADTab(tab, data) {
                         <tbody>
                             ${computers.map(c => `
                                 <tr>
-                                    <td style="display: flex; align-items: center; gap: 10px;">
-                                        <span style="width: 36px; height: 36px; background: #fce7f3; border-radius: 8px; display: flex; align-items: center; justify-content: center;">💻</span>
+                                    <td class="ad-item-with-icon">
+                                        <span class="ad-item-icon computer">💻</span>
                                         <strong>${escapeHtml(c.name)}</strong>
                                     </td>
                                     <td>${escapeHtml(c.os || 'Windows')}</td>
-                                    <td style="color: var(--text-secondary);">${escapeHtml(c.joined || '-')}</td>
+                                    <td class="ad-secondary-text">${escapeHtml(c.joined || '-')}</td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -9776,18 +10283,18 @@ function renderADTab(tab, data) {
                         <tbody>
                             ${groups.map(g => `
                                 <tr>
-                                    <td style="display: flex; align-items: center; gap: 10px;">
-                                        <span style="width: 36px; height: 36px; background: #d1fae5; border-radius: 8px; display: flex; align-items: center; justify-content: center;">👥</span>
+                                    <td class="ad-item-with-icon">
+                                        <span class="ad-item-icon group">👥</span>
                                         <strong>${escapeHtml(g.name)}</strong>
                                     </td>
-                                    <td style="color: var(--text-secondary);">${g.members || 0} miembros</td>
+                                    <td class="ad-secondary-text">${g.members || 0} miembros</td>
                                 </tr>
                             `).join('')}
                         </tbody>
                     </table>
                 `}
             `;
-            
+
             document.getElementById('ad-add-group-btn')?.addEventListener('click', () => showADGroupModal());
             break;
             
@@ -9796,150 +10303,150 @@ function renderADTab(tab, data) {
                 <div class="ad-content-header">
                     <h3>📋 Unir Equipo Windows al Dominio</h3>
                 </div>
-                
+
                 <!-- Domain Info Card -->
-                <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); border-radius: 12px; padding: 20px; color: white; margin-bottom: 24px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
-                    <div style="text-align: center;">
-                        <div style="font-size: 0.8rem; opacity: 0.85; margin-bottom: 4px;">DOMINIO</div>
-                        <div style="font-size: 1.25rem; font-weight: 600;">${escapeHtml(status.domain)}</div>
+                <div class="ad-domain-info-card">
+                    <div class="ad-domain-info-item">
+                        <div class="ad-domain-info-label">DOMINIO</div>
+                        <div class="ad-domain-info-value">${escapeHtml(status.domain)}</div>
                     </div>
-                    <div style="text-align: center; border-left: 1px solid rgba(255,255,255,0.2); border-right: 1px solid rgba(255,255,255,0.2);">
-                        <div style="font-size: 0.8rem; opacity: 0.85; margin-bottom: 4px;">REALM</div>
-                        <div style="font-size: 1.25rem; font-weight: 600;">${escapeHtml(status.realm)}</div>
+                    <div class="ad-domain-info-item ad-domain-info-divider">
+                        <div class="ad-domain-info-label">REALM</div>
+                        <div class="ad-domain-info-value">${escapeHtml(status.realm)}</div>
                     </div>
-                    <div style="text-align: center;">
-                        <div style="font-size: 0.8rem; opacity: 0.85; margin-bottom: 4px;">SERVIDOR DNS</div>
-                        <div style="font-size: 1.25rem; font-weight: 600;">${window.location.hostname}</div>
+                    <div class="ad-domain-info-item">
+                        <div class="ad-domain-info-label">SERVIDOR DNS</div>
+                        <div class="ad-domain-info-value">${window.location.hostname}</div>
                     </div>
                 </div>
                 
                 <!-- Steps -->
-                <div style="display: grid; gap: 16px;">
-                    <div style="display: flex; gap: 16px; padding: 20px; background: var(--bg-secondary, #f9fafb); border-radius: 12px; border: 1px solid var(--border-color, #e5e7eb);">
-                        <div style="width: 40px; height: 40px; background: #dbeafe; color: #1d4ed8; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">1</div>
-                        <div style="flex: 1;">
-                            <h4 style="margin: 0 0 12px 0; font-size: 1rem;">Configurar DNS del equipo (Windows 11)</h4>
-                            
-                            <div style="display: grid; gap: 12px;">
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
-                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">1.1</span>
-                                    <div>
+                <div class="ad-steps-container">
+                    <div class="ad-step-card">
+                        <div class="ad-step-number primary">1</div>
+                        <div class="ad-step-content">
+                            <h4 class="ad-step-title">Configurar DNS del equipo (Windows 11)</h4>
+
+                            <div class="ad-substeps">
+                                <div class="ad-substep primary">
+                                    <span class="ad-substep-number primary">1.1</span>
+                                    <div class="ad-substep-content">
                                         <strong>Abrir Configuración de Red</strong><br>
-                                        <span style="color: var(--text-secondary, #6b7280);">Clic derecho en el icono de WiFi/Red (abajo a la derecha) → <strong>"Configuración de red e Internet"</strong></span>
+                                        <span class="ad-substep-detail">Clic derecho en el icono de WiFi/Red (abajo a la derecha) → <strong>"Configuración de red e Internet"</strong></span>
                                     </div>
                                 </div>
-                                
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
-                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">1.2</span>
-                                    <div>
+
+                                <div class="ad-substep primary">
+                                    <span class="ad-substep-number primary">1.2</span>
+                                    <div class="ad-substep-content">
                                         <strong>Ir a "Configuración de red avanzada"</strong><br>
-                                        <span style="color: var(--text-secondary, #6b7280);">Baja hasta el final y pulsa <strong>"Configuración de red avanzada"</strong></span>
+                                        <span class="ad-substep-detail">Baja hasta el final y pulsa <strong>"Configuración de red avanzada"</strong></span>
                                     </div>
                                 </div>
-                                
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
-                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">1.3</span>
-                                    <div>
+
+                                <div class="ad-substep primary">
+                                    <span class="ad-substep-number primary">1.3</span>
+                                    <div class="ad-substep-content">
                                         <strong>Seleccionar tu conexión (Ethernet o Wi-Fi)</strong><br>
-                                        <span style="color: var(--text-secondary, #6b7280);">Haz clic en tu adaptador de red activo para expandirlo, luego pulsa <strong>"Ver propiedades adicionales"</strong></span>
+                                        <span class="ad-substep-detail">Haz clic en tu adaptador de red activo para expandirlo, luego pulsa <strong>"Ver propiedades adicionales"</strong></span>
                                     </div>
                                 </div>
-                                
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
-                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">1.4</span>
-                                    <div>
+
+                                <div class="ad-substep primary">
+                                    <span class="ad-substep-number primary">1.4</span>
+                                    <div class="ad-substep-content">
                                         <strong>Editar la configuración DNS</strong><br>
-                                        <span style="color: var(--text-secondary, #6b7280);">Junto a "Asignación de servidor DNS" pulsa <strong>"Editar"</strong></span>
+                                        <span class="ad-substep-detail">Junto a "Asignación de servidor DNS" pulsa <strong>"Editar"</strong></span>
                                     </div>
                                 </div>
-                                
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #10b981;">
-                                    <span style="background: #d1fae5; color: #166534; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">1.5</span>
-                                    <div>
+
+                                <div class="ad-substep success">
+                                    <span class="ad-substep-number success">1.5</span>
+                                    <div class="ad-substep-content">
                                         <strong>Cambiar a "Manual" y poner esta IP:</strong><br>
-                                        <code style="background: #fef3c7; padding: 4px 12px; border-radius: 4px; font-weight: 700; font-size: 1.1rem; display: inline-block; margin-top: 4px;">${window.location.hostname}</code>
-                                        <br><span style="color: var(--text-secondary, #6b7280); font-size: 0.85rem;">Activa IPv4, pon esta IP en "DNS preferido" y guarda</span>
+                                        <code class="ad-code-highlight">${window.location.hostname}</code>
+                                        <br><span class="ad-note-small">Activa IPv4, pon esta IP en "DNS preferido" y guarda</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                     
-                    <div style="display: flex; gap: 16px; padding: 20px; background: var(--bg-secondary, #f9fafb); border-radius: 12px; border: 1px solid var(--border-color, #e5e7eb);">
-                        <div style="width: 40px; height: 40px; background: #dbeafe; color: #1d4ed8; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">2</div>
-                        <div style="flex: 1;">
-                            <h4 style="margin: 0 0 12px 0; font-size: 1rem;">Unir el equipo al dominio (Windows 11)</h4>
-                            
-                            <div style="display: grid; gap: 12px;">
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
-                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">2.1</span>
-                                    <div>
+                    <div class="ad-step-card">
+                        <div class="ad-step-number primary">2</div>
+                        <div class="ad-step-content">
+                            <h4 class="ad-step-title">Unir el equipo al dominio (Windows 11)</h4>
+
+                            <div class="ad-substeps">
+                                <div class="ad-substep primary">
+                                    <span class="ad-substep-number primary">2.1</span>
+                                    <div class="ad-substep-content">
                                         <strong>Abrir Configuración</strong><br>
-                                        <span style="color: var(--text-secondary, #6b7280);">Pulsa <code style="background: #f3f4f6; padding: 2px 6px; border-radius: 3px;">⊞ Win + I</code> o busca "Configuración" en el menú inicio</span>
+                                        <span class="ad-substep-detail">Pulsa <code class="ad-code-inline">⊞ Win + I</code> o busca "Configuración" en el menú inicio</span>
                                     </div>
                                 </div>
-                                
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
-                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">2.2</span>
-                                    <div>
+
+                                <div class="ad-substep primary">
+                                    <span class="ad-substep-number primary">2.2</span>
+                                    <div class="ad-substep-content">
                                         <strong>Ir a Sistema → Información</strong><br>
-                                        <span style="color: var(--text-secondary, #6b7280);">En el menú lateral izquierdo selecciona <strong>Sistema</strong>, luego baja hasta <strong>Información</strong> (o "Acerca de")</span>
+                                        <span class="ad-substep-detail">En el menú lateral izquierdo selecciona <strong>Sistema</strong>, luego baja hasta <strong>Información</strong> (o "Acerca de")</span>
                                     </div>
                                 </div>
-                                
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
-                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">2.3</span>
-                                    <div>
+
+                                <div class="ad-substep primary">
+                                    <span class="ad-substep-number primary">2.3</span>
+                                    <div class="ad-substep-content">
                                         <strong>Clic en "Dominio o grupo de trabajo"</strong><br>
-                                        <span style="color: var(--text-secondary, #6b7280);">Busca el enlace <strong>"Dominio o grupo de trabajo"</strong> en la sección "Especificaciones del dispositivo"</span>
+                                        <span class="ad-substep-detail">Busca el enlace <strong>"Dominio o grupo de trabajo"</strong> en la sección "Especificaciones del dispositivo"</span>
                                     </div>
                                 </div>
-                                
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #3b82f6;">
-                                    <span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">2.4</span>
-                                    <div>
+
+                                <div class="ad-substep primary">
+                                    <span class="ad-substep-number primary">2.4</span>
+                                    <div class="ad-substep-content">
                                         <strong>Clic en "Cambiar..."</strong><br>
-                                        <span style="color: var(--text-secondary, #6b7280);">Se abre la ventana de Propiedades del sistema. Pulsa el botón <strong>"Cambiar..."</strong></span>
+                                        <span class="ad-substep-detail">Se abre la ventana de Propiedades del sistema. Pulsa el botón <strong>"Cambiar..."</strong></span>
                                     </div>
                                 </div>
-                                
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #10b981;">
-                                    <span style="background: #d1fae5; color: #166534; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">2.5</span>
-                                    <div>
+
+                                <div class="ad-substep success">
+                                    <span class="ad-substep-number success">2.5</span>
+                                    <div class="ad-substep-content">
                                         <strong>Seleccionar "Dominio" e introducir:</strong><br>
-                                        <code style="background: #fef3c7; padding: 4px 12px; border-radius: 4px; font-weight: 700; font-size: 1.1rem; display: inline-block; margin-top: 4px;">${escapeHtml(status.realm)}</code>
+                                        <code class="ad-code-highlight">${escapeHtml(status.realm)}</code>
                                     </div>
                                 </div>
-                                
-                                <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: white; border-radius: 8px; border-left: 3px solid #10b981;">
-                                    <span style="background: #d1fae5; color: #166534; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">2.6</span>
-                                    <div>
+
+                                <div class="ad-substep success">
+                                    <span class="ad-substep-number success">2.6</span>
+                                    <div class="ad-substep-content">
                                         <strong>Introducir credenciales del dominio:</strong><br>
-                                        <span style="color: var(--text-secondary, #6b7280);">Usuario:</span> <code style="background: #fef3c7; padding: 2px 8px; border-radius: 4px; font-weight: 600;">Administrator</code><br>
-                                        <span style="color: var(--text-secondary, #6b7280);">Contraseña:</span> <span style="color: #dc2626;">la que pusiste al crear el dominio</span>
+                                        <span class="ad-substep-detail">Usuario:</span> <code class="ad-code-highlight">Administrator</code><br>
+                                        <span class="ad-substep-detail">Contraseña:</span> <span class="ad-note-warning">la que pusiste al crear el dominio</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                     
-                    <div style="display: flex; gap: 16px; padding: 20px; background: var(--bg-secondary, #f9fafb); border-radius: 12px; border: 1px solid var(--border-color, #e5e7eb);">
-                        <div style="width: 40px; height: 40px; background: #d1fae5; color: #166534; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">3</div>
-                        <div>
-                            <h4 style="margin: 0 0 8px 0; font-size: 1rem;">Reiniciar y listo ✓</h4>
-                            <p style="margin: 0; color: var(--text-secondary, #6b7280);">
+                    <div class="ad-step-card">
+                        <div class="ad-step-number success">3</div>
+                        <div class="ad-step-content">
+                            <h4 class="ad-step-title">Reiniciar y listo ✓</h4>
+                            <p class="ad-substep-detail">
                                 Tras reiniciar, podrás hacer login con cualquier usuario del dominio.<br>
-                                Formato: <code style="background: white; padding: 2px 8px; border-radius: 4px;">${escapeHtml(status.domain)}\\usuario</code> o <code style="background: white; padding: 2px 8px; border-radius: 4px;">usuario@${escapeHtml(status.realm)}</code>
+                                Formato: <code class="ad-code-white">${escapeHtml(status.domain)}\\usuario</code> o <code class="ad-code-white">usuario@${escapeHtml(status.realm)}</code>
                             </p>
                         </div>
                     </div>
-                    
+
                     <!-- Important note about DNS -->
-                    <div style="display: flex; gap: 16px; padding: 20px; margin-top: 16px; background: #fef3c7; border-radius: 12px; border: 1px solid #fcd34d;">
-                        <div style="width: 40px; height: 40px; background: #fbbf24; color: white; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">💡</div>
+                    <div class="ad-note-card warning">
+                        <div class="ad-note-icon warning">💡</div>
                         <div>
-                            <h4 style="margin: 0 0 8px 0; font-size: 1rem; color: #92400e;">¿Y si salgo de casa?</h4>
-                            <p style="margin: 0; color: #a16207; line-height: 1.6;">
+                            <h4 class="ad-note-title warning">¿Y si salgo de casa?</h4>
+                            <p class="ad-note-text warning">
                                 <strong>El DNS del NAS solo es necesario para unirse al dominio.</strong><br>
                                 Una vez unido, puedes volver a poner el DNS en <strong>automático (DHCP)</strong> y tendrás internet normal dentro y fuera de casa.<br>
                                 El equipo seguirá unido al dominio aunque cambies el DNS.
@@ -10149,9 +10656,9 @@ async function renderCloudSyncView() {
     }
     
     dashboardContent.innerHTML = `
-        <div class="card" style="margin-bottom: 20px;">
+        <div class="card cloudsync-card">
             <div id="cloud-sync-status">
-                <h3 style="color: var(--primary);">☁️ Cloud Sync</h3>
+                <h3 class="cloudsync-title">☁️ Cloud Sync</h3>
                 <p>Cargando...</p>
             </div>
         </div>
@@ -10184,13 +10691,13 @@ async function loadCloudSyncStatus() {
         if (!status.installed) {
             // Syncthing not installed
             statusDiv.innerHTML = `
-                <h3 style="color: var(--primary);">☁️ Cloud Sync</h3>
-                <p style="margin: 15px 0;">Syncthing no está instalado. Instálalo para sincronizar archivos entre tu NAS y otros dispositivos.</p>
-                <button id="install-syncthing-btn" class="btn" style="background: var(--primary); color: #000; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                <h3 class="cloudsync-title">☁️ Cloud Sync</h3>
+                <p class="cloudsync-subtitle">Syncthing no está instalado. Instálalo para sincronizar archivos entre tu NAS y otros dispositivos.</p>
+                <button id="install-syncthing-btn" class="btn cloudsync-install-btn">
                     📦 Instalar Syncthing
                 </button>
             `;
-            
+
             document.getElementById('install-syncthing-btn')?.addEventListener('click', installSyncthing);
             contentDiv.innerHTML = '';
             return;
@@ -10199,15 +10706,15 @@ async function loadCloudSyncStatus() {
         if (!status.running) {
             // Syncthing installed but not running
             statusDiv.innerHTML = `
-                <h3 style="color: var(--primary);">☁️ Cloud Sync</h3>
-                <div style="display: flex; align-items: center; gap: 15px; margin: 15px 0;">
-                    <span style="color: #f59e0b;">⚠️ Syncthing está detenido</span>
-                    <button id="start-syncthing-btn" class="btn" style="background: #10b981; color: #fff; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer;">
+                <h3 class="cloudsync-title">☁️ Cloud Sync</h3>
+                <div class="cloudsync-status-row">
+                    <span class="cloudsync-status-warning">⚠️ Syncthing está detenido</span>
+                    <button id="start-syncthing-btn" class="btn cloudsync-start-btn">
                         ▶️ Iniciar
                     </button>
                 </div>
             `;
-            
+
             document.getElementById('start-syncthing-btn')?.addEventListener('click', startSyncthing);
             contentDiv.innerHTML = '';
             return;
@@ -10215,13 +10722,13 @@ async function loadCloudSyncStatus() {
         
         // Syncthing is running
         statusDiv.innerHTML = `
-            <h3 style="color: var(--primary);">☁️ Cloud Sync</h3>
-            <div style="display: flex; align-items: center; gap: 20px; margin: 15px 0; flex-wrap: wrap;">
-                <span style="color: #10b981;">● Activo</span>
-                <span style="color: var(--text-dim);">${escapeHtml(status.version ? (status.version.startsWith('v') ? status.version : 'v' + status.version) : t('common.unknown', 'Desconocido'))}</span>
-                <span style="color: var(--text-dim);">📁 ${status.folders.length} carpetas</span>
-                <span style="color: var(--text-dim);">📱 ${status.connections} dispositivos conectados</span>
-                <button id="stop-syncthing-btn" class="btn" style="background: #ef4444; color: #fff; padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
+            <h3 class="cloudsync-title">☁️ Cloud Sync</h3>
+            <div class="cloudsync-status-row--wide">
+                <span class="cloudsync-status-active">● Activo</span>
+                <span class="cloudsync-status-info">${escapeHtml(status.version ? (status.version.startsWith('v') ? status.version : 'v' + status.version) : t('common.unknown', 'Desconocido'))}</span>
+                <span class="cloudsync-status-info">📁 ${status.folders.length} carpetas</span>
+                <span class="cloudsync-status-info">📱 ${status.connections} dispositivos conectados</span>
+                <button id="stop-syncthing-btn" class="btn cloudsync-stop-btn">
                     ⏹️ Detener
                 </button>
             </div>
@@ -10234,8 +10741,8 @@ async function loadCloudSyncStatus() {
         
     } catch (e) {
         statusDiv.innerHTML = `
-            <h3 style="color: var(--primary);">☁️ Cloud Sync</h3>
-            <p style="color: #ef4444;">Error: ${escapeHtml(e.message)}</p>
+            <h3 class="cloudsync-title">☁️ Cloud Sync</h3>
+            <p class="cloudsync-error-text">Error: ${escapeHtml(e.message)}</p>
         `;
     }
 }
@@ -10248,50 +10755,49 @@ async function renderCloudSyncContent(status) {
     
     contentDiv.innerHTML = `
         <!-- Device ID / QR Section -->
-        <div class="card" style="margin-bottom: 20px;">
-            <h3 style="color: var(--secondary); margin-bottom: 15px;">🔗 Vincular Dispositivo</h3>
-            <p style="color: var(--text-dim); margin-bottom: 10px;">Escanea el QR o copia el ID para añadir este NAS en Syncthing de tu PC/móvil:</p>
-            <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
-                <div id="qr-code" style="background: #fff; padding: 10px; border-radius: 8px; width: 150px; height: 150px; display: flex; align-items: center; justify-content: center;">
-                    <span style="color: #666; font-size: 0.8rem;">Generando QR...</span>
+        <div class="card cloudsync-card">
+            <h3 class="cloudsync-link-title">🔗 Vincular Dispositivo</h3>
+            <p class="cloudsync-link-desc">Escanea el QR o copia el ID para añadir este NAS en Syncthing de tu PC/móvil:</p>
+            <div class="cloudsync-link-row">
+                <div id="qr-code" class="cloudsync-qr-box">
+                    <span class="cloudsync-qr-placeholder">Generando QR...</span>
                 </div>
-                <div style="flex: 1; min-width: 200px;">
-                    <label style="color: var(--text-dim); font-size: 0.85rem;">ID del Dispositivo:</label>
-                    <div style="display: flex; gap: 10px; margin-top: 5px;">
-                        <input type="text" id="device-id-input" value="${escapeHtml(deviceId)}" readonly 
-                            style="flex: 1; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: var(--text); font-family: monospace; font-size: 0.75rem;">
-                        <button id="copy-device-id-btn"
-                            style="padding: 10px 15px; background: var(--primary); color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                <div class="cloudsync-id-field">
+                    <label class="cloudsync-id-label">ID del Dispositivo:</label>
+                    <div class="cloudsync-id-row">
+                        <input type="text" id="device-id-input" value="${escapeHtml(deviceId)}" readonly
+                            class="cloudsync-id-input">
+                        <button id="copy-device-id-btn" class="cloudsync-copy-btn">
                             📋 Copiar
                         </button>
                     </div>
                 </div>
             </div>
         </div>
-        
+
         <!-- Folders Section -->
-        <div class="card" style="margin-bottom: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h3 style="color: var(--secondary);">📁 Carpetas Sincronizadas</h3>
-                <button id="add-folder-btn" style="padding: 8px 16px; background: #a78bfa; color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+        <div class="card cloudsync-card">
+            <div class="cloudsync-section-header">
+                <h3 class="cloudsync-section-title">📁 Carpetas Sincronizadas</h3>
+                <button id="add-folder-btn" class="cloudsync-add-folder-btn">
                     + Añadir Carpeta
                 </button>
             </div>
             <div id="folders-list">
-                ${status.folders.length === 0 ? '<p style="color: var(--text-dim);">No hay carpetas sincronizadas</p>' : ''}
+                ${status.folders.length === 0 ? '<p class="cloudsync-empty-text">No hay carpetas sincronizadas</p>' : ''}
             </div>
         </div>
-        
+
         <!-- Devices Section -->
-        <div class="card" style="margin-bottom: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h3 style="color: var(--secondary);">📱 Dispositivos</h3>
-                <button id="add-device-btn" style="padding: 8px 16px; background: #22d3ee; color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+        <div class="card cloudsync-card">
+            <div class="cloudsync-section-header">
+                <h3 class="cloudsync-section-title">📱 Dispositivos</h3>
+                <button id="add-device-btn" class="cloudsync-add-device-btn">
                     + Añadir Dispositivo
                 </button>
             </div>
             <div id="devices-list">
-                <p style="color: var(--text-dim);">Cargando dispositivos...</p>
+                <p class="cloudsync-empty-text">Cargando dispositivos...</p>
             </div>
         </div>
     `;
@@ -10326,12 +10832,12 @@ async function renderCloudSyncContent(status) {
 function generateQRCode(deviceId) {
     const qrDiv = document.getElementById('qr-code');
     if (!qrDiv || !deviceId) return;
-    
+
     // Show device ID as copyable text (external QR APIs may be blocked by CSP)
     qrDiv.innerHTML = `
-        <div style="background: var(--bg-card); border: 2px dashed var(--border); border-radius: 10px; padding: 15px; text-align: center;">
-            <span style="font-size: 2rem;">📋</span>
-            <p style="font-size: 0.75rem; color: var(--text-dim); margin-top: 5px;">Copia el ID del dispositivo</p>
+        <div class="cloudsync-qr-fallback">
+            <span class="cloudsync-qr-fallback-icon">📋</span>
+            <p class="cloudsync-qr-fallback-text">Copia el ID del dispositivo</p>
         </div>`;
 }
 
@@ -10340,55 +10846,51 @@ function renderFoldersList(folders) {
     if (!listDiv) return;
     
     if (folders.length === 0) {
-        listDiv.innerHTML = '<p style="color: var(--text-dim);">No hay carpetas sincronizadas. Añade una carpeta para empezar.</p>';
+        listDiv.innerHTML = '<p class="cloudsync-empty-text">No hay carpetas sincronizadas. Añade una carpeta para empezar.</p>';
         return;
     }
     
     listDiv.innerHTML = folders.map(f => `
-        <div class="sync-folder-card" data-folder-id="${escapeHtml(f.id)}" style="padding: 15px; background: rgba(255,255,255,0.03); border-radius: 10px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.05);">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
-                <div style="flex: 1;">
-                    <div style="font-weight: 600; color: var(--text); font-size: 1rem;">📁 ${escapeHtml(f.label)}</div>
-                    <div style="font-size: 0.8rem; color: var(--text-dim); margin-top: 3px; font-family: monospace;">${escapeHtml(f.path)}</div>
+        <div class="sync-folder-card cloudsync-folder-card" data-folder-id="${escapeHtml(f.id)}">
+            <div class="cloudsync-folder-header">
+                <div class="cloudsync-folder-info">
+                    <div class="cloudsync-folder-name">📁 ${escapeHtml(f.label)}</div>
+                    <div class="cloudsync-folder-path">${escapeHtml(f.path)}</div>
                 </div>
-                <div style="display: flex; gap: 6px;">
-                    <button class="pause-folder-btn" data-folder-id="${escapeHtml(f.id)}" data-paused="${f.paused}" 
-                        style="padding: 6px 10px; background: ${f.paused ? '#10b981' : '#f59e0b'}; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;" 
+                <div class="cloudsync-folder-actions">
+                    <button class="pause-folder-btn cloudsync-action-btn ${f.paused ? 'cloudsync-action-btn--resume' : 'cloudsync-action-btn--pause'}" data-folder-id="${escapeHtml(f.id)}" data-paused="${f.paused}"
                         title="${f.paused ? 'Reanudar' : 'Pausar'}">
                         ${f.paused ? '▶️' : '⏸️'}
                     </button>
-                    <button class="browse-folder-btn" data-folder-path="${escapeHtml(f.path)}" 
-                        style="padding: 6px 10px; background: #8b5cf6; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;" 
+                    <button class="browse-folder-btn cloudsync-action-btn cloudsync-action-btn--browse" data-folder-path="${escapeHtml(f.path)}"
                         title="Ver archivos">
                         📂
                     </button>
-                    <button class="share-folder-btn" data-folder-id="${escapeHtml(f.id)}" data-folder-label="${escapeHtml(f.label)}" 
-                        style="padding: 6px 10px; background: #3b82f6; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;" 
+                    <button class="share-folder-btn cloudsync-action-btn cloudsync-action-btn--share" data-folder-id="${escapeHtml(f.id)}" data-folder-label="${escapeHtml(f.label)}"
                         title="Compartir">
                         📤
                     </button>
-                    <button class="delete-folder-btn" data-folder-id="${escapeHtml(f.id)}" 
-                        style="padding: 6px 10px; background: #ef4444; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;" 
+                    <button class="delete-folder-btn cloudsync-action-btn cloudsync-action-btn--delete" data-folder-id="${escapeHtml(f.id)}"
                         title="Eliminar">
                         🗑️
                     </button>
                 </div>
             </div>
-            <div class="folder-sync-status" data-folder-id="${escapeHtml(f.id)}" style="margin-top: 10px;">
-                <div style="display: flex; align-items: center; gap: 10px; font-size: 0.85rem;">
-                    ${f.paused 
-                        ? '<span style="color: #f59e0b;">⏸️ Pausada</span>' 
-                        : '<span class="sync-state" style="color: #10b981;">● Cargando...</span>'}
-                    <span style="color: var(--text-dim);">· ${f.devices} dispositivo(s)</span>
+            <div class="folder-sync-status cloudsync-sync-status" data-folder-id="${escapeHtml(f.id)}">
+                <div class="cloudsync-sync-status-row">
+                    ${f.paused
+                        ? '<span class="cloudsync-sync-paused">⏸️ Pausada</span>'
+                        : '<span class="sync-state cloudsync-sync-active">● Cargando...</span>'}
+                    <span class="cloudsync-sync-devices">· ${f.devices} dispositivo(s)</span>
                 </div>
                 ${!f.paused ? `
-                <div class="sync-progress-container" style="margin-top: 8px; display: none;">
-                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-dim); margin-bottom: 4px;">
+                <div class="sync-progress-container cloudsync-progress-container">
+                    <div class="cloudsync-progress-header">
                         <span class="sync-files">-- archivos</span>
                         <span class="sync-percent">--%</span>
                     </div>
-                    <div style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
-                        <div class="sync-progress-bar" style="height: 100%; background: var(--primary); width: 0%; transition: width 0.3s;"></div>
+                    <div class="cloudsync-progress-track">
+                        <div class="sync-progress-bar cloudsync-progress-bar"></div>
                     </div>
                 </div>
                 ` : ''}
@@ -10525,35 +11027,33 @@ async function loadDevicesList() {
         const devices = await res.json();
         
         if (devices.length === 0) {
-            listDiv.innerHTML = '<p style="color: #9ca3af;">No hay dispositivos vinculados. Añade el ID del Dispositivo de tu PC o móvil.</p>';
+            listDiv.innerHTML = '<p class="cloudsync-empty-text">No hay dispositivos vinculados. Añade el ID del Dispositivo de tu PC o móvil.</p>';
             return;
         }
         
         listDiv.innerHTML = devices.map(d => `
-            <div class="sync-device-card" style="padding: 15px; background: rgba(255,255,255,0.03); border-radius: 10px; margin-bottom: 12px; border: 1px solid ${d.connected ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.05)'};">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <div style="flex: 1;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span style="font-size: 1.2rem;">${d.connected ? '🟢' : '⚪'}</span>
-                            <span style="font-weight: 600; color: var(--text); font-size: 1rem;">${escapeHtml(d.name)}</span>
+            <div class="sync-device-card cloudsync-device-card ${d.connected ? 'cloudsync-device-card--connected' : 'cloudsync-device-card--disconnected'}">
+                <div class="cloudsync-device-header">
+                    <div class="cloudsync-device-info">
+                        <div class="cloudsync-device-name-row">
+                            <span class="cloudsync-device-icon">${d.connected ? '🟢' : '⚪'}</span>
+                            <span class="cloudsync-device-name">${escapeHtml(d.name)}</span>
                         </div>
-                        <div style="font-size: 0.75rem; color: var(--text-dim); font-family: monospace; margin-top: 6px; word-break: break-all;">
+                        <div class="cloudsync-device-id">
                             ${escapeHtml(d.id.substring(0, 30))}...
                         </div>
-                        <div style="display: flex; gap: 15px; margin-top: 8px; font-size: 0.8rem;">
-                            ${d.connected 
-                                ? `<span style="color: #10b981;">● Conectado</span><span style="color: var(--text-dim);">📍 ${escapeHtml(d.address || 'LAN')}</span>` 
-                                : '<span style="color: #6b7280;">○ Desconectado</span>'}
+                        <div class="cloudsync-device-status-row">
+                            ${d.connected
+                                ? `<span class="cloudsync-device-connected">● Conectado</span><span class="cloudsync-device-address">📍 ${escapeHtml(d.address || 'LAN')}</span>`
+                                : '<span class="cloudsync-device-disconnected">○ Desconectado</span>'}
                         </div>
                     </div>
-                    <div style="display: flex; gap: 6px;">
-                        <button class="rename-device-btn" data-device-id="${escapeHtml(d.id)}" data-device-name="${escapeHtml(d.name)}"
-                            style="padding: 6px 10px; background: #6b7280; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;" 
+                    <div class="cloudsync-device-actions">
+                        <button class="rename-device-btn cloudsync-action-btn cloudsync-action-btn--rename" data-device-id="${escapeHtml(d.id)}" data-device-name="${escapeHtml(d.name)}"
                             title="Renombrar">
                             ✏️
                         </button>
-                        <button class="delete-device-btn" data-device-id="${escapeHtml(d.id)}" 
-                            style="padding: 6px 10px; background: #ef4444; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;"
+                        <button class="delete-device-btn cloudsync-action-btn cloudsync-action-btn--delete" data-device-id="${escapeHtml(d.id)}"
                             title="Eliminar">
                             🗑️
                         </button>
@@ -10570,7 +11070,7 @@ async function loadDevicesList() {
             btn.addEventListener('click', () => deleteDevice(btn.dataset.deviceId));
         });
     } catch (e) {
-        listDiv.innerHTML = `<p style="color: #ef4444;">Error: ${escapeHtml(e.message)}</p>`;
+        listDiv.innerHTML = `<p class="cloudsync-error-text">Error: ${escapeHtml(e.message)}</p>`;
     }
 }
 
@@ -10578,22 +11078,20 @@ async function loadDevicesList() {
 function showRenameDeviceModal(deviceId, currentName) {
     const modal = document.createElement('div');
     modal.id = 'rename-device-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 99999;';
+    modal.className = 'cloudsync-modal-overlay';
     modal.innerHTML = `
-        <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 400px;">
-            <h3 style="color: #22d3ee; margin-bottom: 20px;">✏️ Renombrar Dispositivo</h3>
-            <div style="margin-bottom: 20px;">
-                <label style="color: #9ca3af; font-size: 0.9rem;">Nombre:</label>
+        <div class="cloudsync-modal-content cloudsync-modal-content--sm">
+            <h3 class="cloudsync-modal-title cloudsync-modal-title--blue">✏️ Renombrar Dispositivo</h3>
+            <div class="cloudsync-modal-field--last">
+                <label class="cloudsync-modal-label">Nombre:</label>
                 <input type="text" id="device-new-name" value="${escapeHtml(currentName)}"
-                    style="width: 100%; padding: 12px; margin-top: 5px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff;">
+                    class="cloudsync-modal-input">
             </div>
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button id="rename-cancel-btn"
-                    style="padding: 10px 20px; background: #4b5563; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
+            <div class="cloudsync-modal-actions">
+                <button id="rename-cancel-btn" class="cloudsync-btn-cancel">
                     Cancelar
                 </button>
-                <button id="rename-save-btn"
-                    style="padding: 10px 20px; background: #a78bfa; color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                <button id="rename-save-btn" class="cloudsync-btn-save">
                     Guardar
                 </button>
             </div>
@@ -10701,27 +11199,25 @@ async function stopSyncthing() {
 function showAddFolderModal() {
     const modal = document.createElement('div');
     modal.id = 'add-folder-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 99999;';
+    modal.className = 'cloudsync-modal-overlay';
     modal.innerHTML = `
-        <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 500px;">
-            <h3 style="color: #a78bfa; margin-bottom: 20px;">📁 Añadir Carpeta Sincronizada</h3>
-            <div style="margin-bottom: 15px;">
-                <label style="color: #9ca3af; font-size: 0.9rem;">Ruta (relativa a /mnt/storage):</label>
-                <input type="text" id="folder-path" placeholder="ej: Documents, Photos, Backup" 
-                    style="width: 100%; padding: 12px; margin-top: 5px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff;">
+        <div class="cloudsync-modal-content cloudsync-modal-content--lg">
+            <h3 class="cloudsync-modal-title cloudsync-modal-title--purple">📁 Añadir Carpeta Sincronizada</h3>
+            <div class="cloudsync-modal-field">
+                <label class="cloudsync-modal-label">Ruta (relativa a /mnt/storage):</label>
+                <input type="text" id="folder-path" placeholder="ej: Documents, Photos, Backup"
+                    class="cloudsync-modal-input">
             </div>
-            <div style="margin-bottom: 20px;">
-                <label style="color: #9ca3af; font-size: 0.9rem;">Nombre (opcional):</label>
+            <div class="cloudsync-modal-field--last">
+                <label class="cloudsync-modal-label">Nombre (opcional):</label>
                 <input type="text" id="folder-label" placeholder="Nombre para mostrar"
-                    style="width: 100%; padding: 12px; margin-top: 5px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff;">
+                    class="cloudsync-modal-input">
             </div>
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button id="cancel-folder-btn"
-                    style="padding: 10px 20px; background: #4b5563; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
+            <div class="cloudsync-modal-actions">
+                <button id="cancel-folder-btn" class="cloudsync-btn-cancel">
                     Cancelar
                 </button>
-                <button id="add-folder-confirm-btn"
-                    style="padding: 10px 20px; background: #a78bfa; color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                <button id="add-folder-confirm-btn" class="cloudsync-btn-save">
                     Añadir
                 </button>
             </div>
@@ -10825,31 +11321,30 @@ async function showShareFolderModal(folderId, folderLabel) {
     
     const modal = document.createElement('div');
     modal.id = 'share-folder-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 99999;';
+    modal.className = 'cloudsync-modal-overlay';
     modal.innerHTML = `
-        <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 450px;">
-            <h3 style="color: #22d3ee; margin-bottom: 20px;">📤 Compartir "${escapeHtml(folderLabel)}"</h3>
-            <p style="color: #9ca3af; margin-bottom: 15px; font-size: 0.9rem;">
+        <div class="cloudsync-modal-content cloudsync-modal-content--md">
+            <h3 class="cloudsync-modal-title cloudsync-modal-title--blue">📤 Compartir "${escapeHtml(folderLabel)}"</h3>
+            <p class="cloudsync-modal-desc">
                 Selecciona los dispositivos con los que quieres sincronizar esta carpeta:
             </p>
-            <div id="share-devices-list" style="max-height: 300px; overflow-y: auto;">
+            <div id="share-devices-list" class="cloudsync-share-list">
                 ${devices.map(d => `
-                    <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; margin-bottom: 8px; cursor: pointer;">
-                        <input type="checkbox" class="share-device-checkbox" data-device-id="${escapeHtml(d.id)}" 
-                            ${folderDevices.includes(d.id) ? 'checked' : ''}
-                            style="width: 18px; height: 18px; cursor: pointer;">
+                    <label class="cloudsync-share-item">
+                        <input type="checkbox" class="share-device-checkbox cloudsync-share-checkbox" data-device-id="${escapeHtml(d.id)}"
+                            ${folderDevices.includes(d.id) ? 'checked' : ''}>
                         <div>
-                            <div style="color: #e5e7eb; font-weight: 500;">${d.connected ? '🟢' : '⚪'} ${escapeHtml(d.name)}</div>
-                            <div style="color: #9ca3af; font-size: 0.8rem;">${escapeHtml(d.id.substring(0, 15))}...</div>
+                            <div class="cloudsync-share-name">${d.connected ? '🟢' : '⚪'} ${escapeHtml(d.name)}</div>
+                            <div class="cloudsync-share-id">${escapeHtml(d.id.substring(0, 15))}...</div>
                         </div>
                     </label>
                 `).join('')}
             </div>
-            <div style="display: flex; gap: 12px; margin-top: 20px;">
-                <button id="share-cancel-btn" style="flex: 1; padding: 12px; background: #4b5563; color: #fff; border: none; border-radius: 8px; cursor: pointer;">
+            <div class="cloudsync-modal-actions--full">
+                <button id="share-cancel-btn" class="cloudsync-btn-cancel--full">
                     Cancelar
                 </button>
-                <button id="share-save-btn" style="flex: 1; padding: 12px; background: #22c55e; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                <button id="share-save-btn" class="cloudsync-btn-save--full cloudsync-btn-save--green">
                     💾 Guardar
                 </button>
             </div>
@@ -10901,30 +11396,28 @@ async function showShareFolderModal(folderId, folderLabel) {
 function showAddDeviceModal() {
     const modal = document.createElement('div');
     modal.id = 'add-device-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 99999;';
+    modal.className = 'cloudsync-modal-overlay';
     modal.innerHTML = `
-        <div style="background: #1a1a2e; padding: 25px; border-radius: 12px; width: 90%; max-width: 500px;">
-            <h3 style="color: #22d3ee; margin-bottom: 20px;">📱 Añadir Dispositivo</h3>
-            <p style="color: #9ca3af; margin-bottom: 15px; font-size: 0.9rem;">
+        <div class="cloudsync-modal-content cloudsync-modal-content--lg">
+            <h3 class="cloudsync-modal-title cloudsync-modal-title--blue">📱 Añadir Dispositivo</h3>
+            <p class="cloudsync-modal-desc">
                 Copia el ID del Dispositivo de Syncthing desde tu PC o móvil (Ajustes → Mostrar ID).
             </p>
-            <div style="margin-bottom: 15px;">
-                <label style="color: #9ca3af; font-size: 0.9rem;">ID del Dispositivo:</label>
+            <div class="cloudsync-modal-field">
+                <label class="cloudsync-modal-label">ID del Dispositivo:</label>
                 <input type="text" id="device-id" placeholder="XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX"
-                    style="width: 100%; padding: 12px; margin-top: 5px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff; font-family: monospace; font-size: 0.8rem;">
+                    class="cloudsync-modal-input cloudsync-modal-input--mono">
             </div>
-            <div style="margin-bottom: 20px;">
-                <label style="color: #9ca3af; font-size: 0.9rem;">Nombre:</label>
+            <div class="cloudsync-modal-field--last">
+                <label class="cloudsync-modal-label">Nombre:</label>
                 <input type="text" id="device-name" placeholder="Mi PC, iPhone, etc."
-                    style="width: 100%; padding: 12px; margin-top: 5px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff;">
+                    class="cloudsync-modal-input">
             </div>
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button id="cancel-device-btn"
-                    style="padding: 10px 20px; background: #4b5563; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
+            <div class="cloudsync-modal-actions">
+                <button id="cancel-device-btn" class="cloudsync-btn-cancel">
                     Cancelar
                 </button>
-                <button id="add-device-confirm-btn"
-                    style="padding: 10px 20px; background: #22d3ee; color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                <button id="add-device-confirm-btn" class="cloudsync-btn-add-device">
                     Añadir
                 </button>
             </div>
@@ -10996,22 +11489,22 @@ let systemArch = null;
 async function renderHomeStoreView() {
     dashboardContent.innerHTML = `
         <div class="section">
-            <div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 10px;">
-                <div id="homestore-status" style="display: flex; gap: 15px; align-items: center;">
+            <div class="homestore-header">
+                <div id="homestore-status" class="homestore-status">
                     <div id="homestore-arch-status"></div>
                     <div id="homestore-docker-status"></div>
                 </div>
             </div>
-            <p style="color: var(--text-secondary); margin-bottom: 20px;">
+            <p class="homestore-description">
                 Instala aplicaciones con un clic. Todas funcionan sobre Docker.
             </p>
-            
-            <div id="homestore-categories" style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;"></div>
-            
-            <div id="homestore-apps" class="grid-3" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;"></div>
+
+            <div id="homestore-categories" class="homestore-categories"></div>
+
+            <div id="homestore-apps" class="homestore-apps-grid"></div>
         </div>
     `;
-    
+
     await loadHomeStoreCatalog();
 }
 
@@ -11039,7 +11532,7 @@ async function loadHomeStoreCatalog() {
         if (archStatusDiv && systemArch) {
             const archLabel = systemArch.isArm ? 'ARM' : (systemArch.isX86 ? 'x86' : systemArch.arch);
             const archIcon = systemArch.isArm ? '🍓' : '💻';
-            archStatusDiv.innerHTML = `<span style="color: var(--text-secondary);">${archIcon} ${archLabel.toUpperCase()}</span>`;
+            archStatusDiv.innerHTML = `<span class="homestore-status-arch">${archIcon} ${archLabel.toUpperCase()}</span>`;
         }
         
         // Check Docker status
@@ -11047,13 +11540,13 @@ async function loadHomeStoreCatalog() {
         const dockerData = await dockerRes.json();
         
         if (!dockerData.available) {
-            dockerStatusDiv.innerHTML = `<span style="color: #ef4444;">⚠️ Docker no disponible</span>`;
+            dockerStatusDiv.innerHTML = `<span class="homestore-status-docker-error">⚠️ Docker no disponible</span>`;
             appsDiv.innerHTML = `
-                <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-secondary);">
-                    <p style="font-size: 48px; margin-bottom: 20px;">🐳</p>
+                <div class="homestore-empty">
+                    <p class="homestore-empty-icon">🐳</p>
                     <p>Docker no está instalado o no está corriendo.</p>
-                    <p style="margin-top: 10px;">Instala Docker primero desde el Gestor de Docker.</p>
-                    <button data-action="go-docker" class="btn" style="margin-top: 20px; background: var(--primary); color: #000; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;">
+                    <p class="homestore-description">Instala Docker primero desde el Gestor de Docker.</p>
+                    <button data-action="go-docker" class="homestore-go-docker-btn">
                         Ir a Gestor de Docker
                     </button>
                 </div>
@@ -11062,7 +11555,7 @@ async function loadHomeStoreCatalog() {
             return;
         }
 
-        dockerStatusDiv.innerHTML = `<span style="color: #10b981;">✓ Docker activo</span>`;
+        dockerStatusDiv.innerHTML = `<span class="homestore-status-docker-active">✓ Docker activo</span>`;
 
         // Load catalog
         const res = await authFetch(`${API_BASE}/homestore/catalog`);
@@ -11075,17 +11568,14 @@ async function loadHomeStoreCatalog() {
         // Render categories
         const categories = Object.entries(data.categories).sort((a, b) => a[1].order - b[1].order);
         categoriesDiv.innerHTML = `
-            <button class="homestore-cat-btn ${homestoreFilter === 'all' ? 'active' : ''}" data-cat="all" 
-                    style="padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border); background: ${homestoreFilter === 'all' ? 'var(--primary)' : 'var(--bg-card)'}; color: ${homestoreFilter === 'all' ? '#000' : 'var(--text)'}; cursor: pointer;">
+            <button class="homestore-cat-btn ${homestoreFilter === 'all' ? 'active' : ''}" data-cat="all">
                 Todas
             </button>
-            <button class="homestore-cat-btn ${homestoreFilter === 'installed' ? 'active' : ''}" data-cat="installed"
-                    style="padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border); background: ${homestoreFilter === 'installed' ? 'var(--primary)' : 'var(--bg-card)'}; color: ${homestoreFilter === 'installed' ? '#000' : 'var(--text)'}; cursor: pointer;">
+            <button class="homestore-cat-btn ${homestoreFilter === 'installed' ? 'active' : ''}" data-cat="installed">
                 ✓ Instaladas
             </button>
             ${categories.map(([id, cat]) => `
-                <button class="homestore-cat-btn ${homestoreFilter === id ? 'active' : ''}" data-cat="${id}"
-                        style="padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border); background: ${homestoreFilter === id ? 'var(--primary)' : 'var(--bg-card)'}; color: ${homestoreFilter === id ? '#000' : 'var(--text)'}; cursor: pointer;">
+                <button class="homestore-cat-btn ${homestoreFilter === id ? 'active' : ''}" data-cat="${id}">
                     ${cat.icon} ${cat.name}
                 </button>
             `).join('')}
@@ -11110,7 +11600,7 @@ async function loadHomeStoreCatalog() {
         // Render apps
         if (apps.length === 0) {
             appsDiv.innerHTML = `
-                <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-secondary);">
+                <div class="homestore-empty">
                     <p>No hay aplicaciones en esta categoría.</p>
                 </div>
             `;
@@ -11136,9 +11626,9 @@ async function loadHomeStoreCatalog() {
     } catch (error) {
         console.error('Error loading HomeStore:', error);
         appsDiv.innerHTML = `
-            <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #ef4444;">
+            <div class="homestore-error">
                 <p>Error al cargar el catálogo: ${error.message}</p>
-                <button data-action="retry-catalog" class="btn" style="margin-top: 20px;">Reintentar</button>
+                <button data-action="retry-catalog" class="homestore-go-docker-btn">Reintentar</button>
             </div>
         `;
         appsDiv.querySelector('[data-action="retry-catalog"]')?.addEventListener('click', () => loadHomeStoreCatalog());
@@ -11161,7 +11651,7 @@ function renderHomeStoreAppCard(app, categories) {
     
     if (!isCompatible) {
         compatWarning = `
-            <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 0.85rem; color: #92400e;">
+            <div class="homestore-compat-warning">
                 ⚠️ No compatible con ${systemArch.arch.toUpperCase()}${archNote ? ` — ${archNote}` : ''}
             </div>
         `;
@@ -11169,28 +11659,28 @@ function renderHomeStoreAppCard(app, categories) {
     
     if (app.installed) {
         if (isRunning) {
-            statusBadge = `<span style="background: #10b981; color: #fff; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem;">● Activa</span>`;
+            statusBadge = `<span class="homestore-status-badge homestore-status-badge--running">● Activa</span>`;
             actionButtons = `
-                <button class="homestore-open-btn" style="background: var(--primary); color: #000; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                <button class="homestore-open-btn">
                     Abrir
                 </button>
-                <button class="homestore-stop-btn" style="background: #6b7280; color: #fff; padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer;">
+                <button class="homestore-stop-btn">
                     ⏹ Parar
                 </button>
-                <button class="homestore-logs-btn" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; cursor: pointer;">
+                <button class="homestore-logs-btn">
                     📋
                 </button>
             `;
         } else {
-            statusBadge = `<span style="background: #6b7280; color: #fff; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem;">○ Parada</span>`;
+            statusBadge = `<span class="homestore-status-badge homestore-status-badge--stopped">○ Parada</span>`;
             actionButtons = `
-                <button class="homestore-start-btn" style="background: #10b981; color: #fff; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                <button class="homestore-start-btn">
                     ▶ Iniciar
                 </button>
-                <button class="homestore-uninstall-btn" style="background: #ef4444; color: #fff; padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer;">
+                <button class="homestore-uninstall-btn">
                     🗑
                 </button>
-                <button class="homestore-update-btn" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; cursor: pointer;">
+                <button class="homestore-update-btn">
                     ↻
                 </button>
             `;
@@ -11198,19 +11688,19 @@ function renderHomeStoreAppCard(app, categories) {
     } else {
         if (isCompatible) {
             actionButtons = `
-                <button class="homestore-install-btn" style="background: var(--primary); color: #000; padding: 8px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                <button class="homestore-install-btn">
                     Instalar
                 </button>
-                <a href="${app.docs}" target="_blank" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; text-decoration: none; display: inline-block;">
+                <a href="${app.docs}" target="_blank" class="homestore-docs-link">
                     📖 Docs
                 </a>
             `;
         } else {
             actionButtons = `
-                <button disabled style="background: #6b7280; color: #fff; padding: 8px 20px; border: none; border-radius: 6px; cursor: not-allowed; font-weight: 500; opacity: 0.6;">
+                <button disabled class="homestore-unavailable-btn">
                     No disponible
                 </button>
-                <a href="${app.docs}" target="_blank" style="background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; text-decoration: none; display: inline-block;">
+                <a href="${app.docs}" target="_blank" class="homestore-docs-link">
                     📖 Docs
                 </a>
             `;
@@ -11220,7 +11710,7 @@ function renderHomeStoreAppCard(app, categories) {
     // Show supported architectures
     const archBadges = appArch.map(a => {
         const isCurrentArch = systemArch && systemArch.arch === a;
-        return `<span style="background: ${isCurrentArch ? '#10b981' : 'var(--bg-card)'}; color: ${isCurrentArch ? '#fff' : 'var(--text-secondary)'}; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; border: 1px solid var(--border);">${a}</span>`;
+        return `<span class="homestore-arch-badge ${isCurrentArch ? 'homestore-arch-badge--current' : 'homestore-arch-badge--other'}">${a}</span>`;
     }).join(' ');
     
     // Build config info section for installed apps
@@ -11233,18 +11723,18 @@ function renderHomeStoreAppCard(app, categories) {
         const volumeEntries = Object.entries(configVolumes).slice(0, 2);
         const volumeInfo = volumeEntries.map(([container, host]) => {
             const shortPath = host.length > 30 ? '...' + host.slice(-27) : host;
-            return `<span style="font-family: monospace; font-size: 0.75rem; color: var(--text-secondary);" title="${escapeHtml(host)}">📁 ${escapeHtml(shortPath)}</span>`;
+            return `<span class="homestore-config-volume-path" title="${escapeHtml(host)}">📁 ${escapeHtml(shortPath)}</span>`;
         }).join('<br>');
-        
+
         // Show port
         const portEntry = Object.entries(configPorts)[0];
-        const portInfo = portEntry ? `<span style="font-family: monospace; font-size: 0.75rem; color: var(--text-secondary);">🌐 :${escapeHtml(portEntry[0].split('/')[0])}</span>` : '';
-        
+        const portInfo = portEntry ? `<span class="homestore-config-port-info">🌐 :${escapeHtml(portEntry[0].split('/')[0])}</span>` : '';
+
         if (volumeInfo || portInfo) {
             configInfoHtml = `
-                <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 0.8rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
-                        <div style="flex: 1; line-height: 1.6;">${volumeInfo}</div>
+                <div class="homestore-config-info">
+                    <div class="homestore-config-info-inner">
+                        <div class="homestore-config-volume-info">${volumeInfo}</div>
                         <div>${portInfo}</div>
                     </div>
                 </div>
@@ -11253,26 +11743,26 @@ function renderHomeStoreAppCard(app, categories) {
     }
     
     return `
-        <div id="homestore-app-${app.id}" class="card" style="background: rgba(30, 30, 50, 0.95); border: 2px solid ${isCompatible ? 'rgba(100, 100, 140, 0.5)' : '#f59e0b'}; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); color: #fff; ${!isCompatible ? 'opacity: 0.7;' : ''}">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    ${app.icon && app.icon.startsWith('http') ? `<img src="${app.icon}" style="width: 48px; height: 48px; border-radius: 8px;" onerror="this.outerHTML='📦'">` : `<span style="font-size: 2rem;">${app.icon || '📦'}</span>`}
+        <div id="homestore-app-${app.id}" class="homestore-card ${!isCompatible ? 'homestore-card--incompatible' : ''}">
+            <div class="homestore-card-header">
+                <div class="homestore-card-icon-row">
+                    ${app.icon && app.icon.startsWith('http') ? `<img src="${app.icon}" class="homestore-card-icon" onerror="this.outerHTML='📦'">` : `<span class="homestore-card-icon-emoji">${app.icon || '📦'}</span>`}
                     <div>
-                        <h3 style="margin: 0; font-size: 1.1rem; color: #fff;">${app.name}</h3>
-                        <span style="color: rgba(255,255,255,0.7); font-size: 0.85rem;">${cat.icon} ${cat.name}</span>
+                        <h3 class="homestore-card-title">${app.name}</h3>
+                        <span class="homestore-card-category">${cat.icon} ${cat.name}</span>
                     </div>
                 </div>
                 ${statusBadge}
             </div>
             ${compatWarning}
-            <p style="color: rgba(255,255,255,0.8); font-size: 0.9rem; margin-bottom: 12px; line-height: 1.4;">
+            <p class="homestore-card-desc">
                 ${app.description}
             </p>
             ${configInfoHtml}
-            <div style="margin-bottom: 12px;">
+            <div class="homestore-arch-badges">
                 ${archBadges}
             </div>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <div class="homestore-actions">
                 ${actionButtons}
             </div>
         </div>
@@ -11330,19 +11820,17 @@ async function showHomeStoreConfigModal(appId) {
         }
         
         return `
-            <div class="homestore-config-volume" style="margin-bottom: 16px;">
-                <label style="color: var(--text-secondary); font-size: 0.85rem; display: block; margin-bottom: 6px;">
-                    ${icon} ${escapeHtml(label)} <code style="font-size: 0.75rem; opacity: 0.7;">(${escapeHtml(containerPath)})</code>
+            <div class="homestore-config-volume">
+                <label class="homestore-config-label">
+                    ${icon} ${escapeHtml(label)} <code class="homestore-config-label-code">(${escapeHtml(containerPath)})</code>
                 </label>
-                <div style="display: flex; gap: 8px;">
-                    <input type="text" 
-                           class="homestore-volume-input" 
+                <div class="homestore-config-input-row">
+                    <input type="text"
+                           class="homestore-volume-input"
                            data-container-path="${escapeHtml(containerPath)}"
                            value="${escapeHtml(savedPath)}"
-                           placeholder="${escapeHtml(hostPath)}"
-                           style="flex: 1; padding: 10px 12px; background: rgba(255,255,255,0.1); border: 1px solid #3a3a5e; border-radius: 8px; color: #fff; font-family: monospace; font-size: 0.9rem;">
+                           placeholder="${escapeHtml(hostPath)}">
                     <button type="button" class="homestore-browse-btn" data-target="${escapeHtml(containerPath)}"
-                            style="padding: 10px 14px; background: rgba(255,255,255,0.1); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; color: var(--text);"
                             title="Explorar carpetas">
                         📂
                     </button>
@@ -11356,19 +11844,18 @@ async function showHomeStoreConfigModal(appId) {
     const portInputs = Object.entries(defaultPorts).map(([hostPort, containerPort]) => {
         const savedPort = previousConfig?.ports?.[hostPort] || hostPort;
         return `
-            <div class="homestore-config-port" style="margin-bottom: 12px;">
-                <label style="color: var(--text-secondary); font-size: 0.85rem; display: block; margin-bottom: 6px;">
+            <div class="homestore-config-port">
+                <label class="homestore-config-label">
                     🌐 Puerto ${escapeHtml(String(containerPort).replace('/udp', ' (UDP)').replace('/tcp', ''))}
                 </label>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <input type="number" 
-                           class="homestore-port-input" 
+                <div class="homestore-port-input-row">
+                    <input type="number"
+                           class="homestore-port-input"
                            data-original-port="${escapeHtml(hostPort)}"
                            data-container-port="${escapeHtml(containerPort)}"
                            value="${escapeHtml(savedPort.toString().split('/')[0])}"
-                           min="1" max="65535"
-                           style="width: 100px; padding: 10px 12px; background: rgba(255,255,255,0.1); border: 1px solid #3a3a5e; border-radius: 8px; color: #fff; font-family: monospace;">
-                    <span style="color: var(--text-secondary);">→ ${escapeHtml(containerPort)}</span>
+                           min="1" max="65535">
+                    <span class="homestore-port-arrow">→ ${escapeHtml(containerPort)}</span>
                 </div>
             </div>
         `;
@@ -11380,16 +11867,15 @@ async function showHomeStoreConfigModal(appId) {
         const savedValue = previousConfig?.env?.[key] ?? value;
         const isPassword = key.toLowerCase().includes('password') || key.toLowerCase().includes('secret');
         return `
-            <div class="homestore-config-env" style="margin-bottom: 12px;">
-                <label style="color: var(--text-secondary); font-size: 0.85rem; display: block; margin-bottom: 6px;">
+            <div class="homestore-config-env">
+                <label class="homestore-config-label">
                     ${isPassword ? '🔑' : '📝'} ${escapeHtml(key)}
                 </label>
-                <input type="${isPassword ? 'password' : 'text'}" 
-                       class="homestore-env-input" 
+                <input type="${isPassword ? 'password' : 'text'}"
+                       class="homestore-env-input"
                        data-env-key="${escapeHtml(key)}"
                        value="${escapeHtml(savedValue)}"
-                       placeholder="${escapeHtml(value)}"
-                       style="width: 100%; padding: 10px 12px; background: rgba(255,255,255,0.1); border: 1px solid #3a3a5e; border-radius: 8px; color: #fff; font-family: monospace; font-size: 0.9rem;">
+                       placeholder="${escapeHtml(value)}">
             </div>
         `;
     }).join('') : '';
@@ -11397,64 +11883,64 @@ async function showHomeStoreConfigModal(appId) {
     // Create the modal
     const modal = document.createElement('div');
     modal.id = 'homestore-config-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.92); display: flex; align-items: center; justify-content: center; z-index: 100000; backdrop-filter: blur(4px);';
+    modal.className = 'homestore-modal-overlay';
     modal.innerHTML = `
-        <div style="background: #1a1a2e; border: 1px solid #3a3a5e; border-radius: 16px; width: 90%; max-width: 600px; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.5);">
-            <div style="padding: 20px 24px; border-bottom: 1px solid #3a3a5e; display: flex; justify-content: space-between; align-items: center; background: #1a1a2e;">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    ${app.icon && app.icon.startsWith('http') ? `<img src="${app.icon}" style="width: 48px; height: 48px; border-radius: 8px;" onerror="this.outerHTML='📦'">` : `<span style="font-size: 2rem;">${app.icon || '📦'}</span>`}
+        <div class="homestore-modal-container">
+            <div class="homestore-modal-header">
+                <div class="homestore-modal-header-content">
+                    ${app.icon && app.icon.startsWith('http') ? `<img src="${app.icon}" class="homestore-modal-header-icon" onerror="this.outerHTML='📦'">` : `<span class="homestore-modal-header-icon-emoji">${app.icon || '📦'}</span>`}
                     <div>
-                        <h3 style="margin: 0; font-size: 1.2rem; color: var(--text);">Configurar ${escapeHtml(app.name)}</h3>
-                        <span style="color: var(--text-secondary); font-size: 0.85rem;">Personaliza la instalación</span>
+                        <h3 class="homestore-modal-title">Configurar ${escapeHtml(app.name)}</h3>
+                        <span class="homestore-modal-subtitle">Personaliza la instalación</span>
                     </div>
                 </div>
-                <button id="homestore-config-close" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); padding: 4px 8px;">&times;</button>
+                <button id="homestore-config-close" class="homestore-modal-close">&times;</button>
             </div>
-            
-            <div style="padding: 24px; overflow-y: auto; flex: 1;">
+
+            <div class="homestore-modal-body">
                 ${previousConfig ? `
-                    <div style="background: rgba(34, 197, 94, 0.1); border: 1px solid #22c55e; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-                        <span style="font-size: 1.2rem;">♻️</span>
+                    <div class="homestore-prev-config-alert">
+                        <span class="homestore-prev-config-icon">♻️</span>
                         <div>
-                            <div style="color: #22c55e; font-weight: 500;">Configuración anterior encontrada</div>
-                            <div style="color: var(--text-secondary); font-size: 0.85rem;">Se han restaurado los paths de la instalación previa</div>
+                            <div class="homestore-prev-config-title">Configuración anterior encontrada</div>
+                            <div class="homestore-prev-config-desc">Se han restaurado los paths de la instalación previa</div>
                         </div>
                     </div>
                 ` : ''}
-                
+
                 ${volumeInputs ? `
-                    <div style="margin-bottom: 24px;">
-                        <h4 style="color: var(--primary); margin: 0 0 16px 0; font-size: 1rem; display: flex; align-items: center; gap: 8px;">
+                    <div class="homestore-config-section">
+                        <h4 class="homestore-config-section-title">
                             📂 Rutas de almacenamiento
                         </h4>
                         ${volumeInputs}
                     </div>
                 ` : ''}
-                
+
                 ${portInputs ? `
-                    <div style="margin-bottom: 24px;">
-                        <h4 style="color: var(--primary); margin: 0 0 16px 0; font-size: 1rem; display: flex; align-items: center; gap: 8px;">
+                    <div class="homestore-config-section">
+                        <h4 class="homestore-config-section-title">
                             🌐 Puertos
                         </h4>
                         ${portInputs}
                     </div>
                 ` : ''}
-                
+
                 ${envInputs ? `
-                    <div style="margin-bottom: 24px;">
-                        <h4 style="color: var(--primary); margin: 0 0 16px 0; font-size: 1rem; display: flex; align-items: center; gap: 8px;">
+                    <div class="homestore-config-section">
+                        <h4 class="homestore-config-section-title">
                             ⚙️ Variables de entorno
                         </h4>
                         ${envInputs}
                     </div>
                 ` : ''}
             </div>
-            
-            <div style="padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 12px; justify-content: flex-end;">
-                <button id="homestore-config-cancel" style="padding: 12px 24px; background: rgba(255,255,255,0.1); border: 1px solid #3a3a5e; border-radius: 8px; cursor: pointer; color: #fff; font-size: 0.95rem;">
+
+            <div class="homestore-modal-footer">
+                <button id="homestore-config-cancel" class="homestore-cancel-btn">
                     Cancelar
                 </button>
-                <button id="homestore-config-install" style="padding: 12px 24px; background: var(--primary); border: none; border-radius: 8px; cursor: pointer; color: #000; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+                <button id="homestore-config-install" class="homestore-install-modal-btn">
                     🚀 Instalar
                 </button>
             </div>
@@ -11484,27 +11970,27 @@ async function showHomeStoreConfigModal(appId) {
             const currentPath = input.value || '/mnt/storage';
             const pickerModal = document.createElement('div');
             pickerModal.id = 'folder-picker-modal';
-            pickerModal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 999999;';
-            
+            pickerModal.className = 'homestore-folder-picker-overlay';
+
             pickerModal.innerHTML = `
-                <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; width: 90%; max-width: 500px; max-height: 70vh; display: flex; flex-direction: column;">
-                    <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-                        <h3 style="margin: 0; font-size: 1rem;">📂 Seleccionar carpeta</h3>
-                        <button id="folder-picker-close" style="background: none; border: none; font-size: 1.3rem; cursor: pointer; color: var(--text-secondary);">&times;</button>
+                <div class="homestore-folder-picker-container">
+                    <div class="homestore-folder-picker-header">
+                        <h3 class="homestore-folder-picker-title">📂 Seleccionar carpeta</h3>
+                        <button id="folder-picker-close" class="homestore-folder-picker-close">&times;</button>
                     </div>
-                    <div style="padding: 16px 20px;">
-                        <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-                            <input type="text" id="folder-picker-path" value="${escapeHtml(currentPath)}" 
-                                   style="flex: 1; padding: 10px 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: monospace;">
-                            <button id="folder-picker-go" style="padding: 10px 14px; background: var(--primary); border: none; border-radius: 8px; cursor: pointer; color: #000;">Ir</button>
+                    <div class="homestore-folder-picker-body">
+                        <div class="homestore-folder-picker-path-row">
+                            <input type="text" id="folder-picker-path" value="${escapeHtml(currentPath)}"
+                                   class="homestore-folder-picker-path-input">
+                            <button id="folder-picker-go" class="homestore-folder-picker-go-btn">Ir</button>
                         </div>
-                        <div id="folder-picker-list" style="max-height: 300px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 8px;">
-                            <div style="padding: 20px; text-align: center; color: var(--text-secondary);">Cargando...</div>
+                        <div id="folder-picker-list" class="homestore-folder-picker-list">
+                            <div class="homestore-folder-picker-loading">Cargando...</div>
                         </div>
                     </div>
-                    <div style="padding: 12px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end;">
-                        <button id="folder-picker-cancel" style="padding: 10px 20px; background: rgba(255,255,255,0.1); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; color: var(--text);">Cancelar</button>
-                        <button id="folder-picker-select" style="padding: 10px 20px; background: var(--primary); border: none; border-radius: 8px; cursor: pointer; color: #000; font-weight: 600;">Seleccionar</button>
+                    <div class="homestore-folder-picker-footer">
+                        <button id="folder-picker-cancel" class="homestore-folder-picker-cancel">Cancelar</button>
+                        <button id="folder-picker-select" class="homestore-folder-picker-select">Seleccionar</button>
                     </div>
                 </div>
             `;
@@ -11523,13 +12009,13 @@ async function showHomeStoreConfigModal(appId) {
             const listDiv = document.getElementById('folder-picker-list');
             
             async function loadFolders(path) {
-                listDiv.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Cargando...</div>';
+                listDiv.innerHTML = '<div class="homestore-folder-picker-loading">Cargando...</div>';
                 try {
                     const res = await authFetch(`${API_BASE}/files/list?path=${encodeURIComponent(path)}`);
                     const data = await res.json();
-                    
+
                     if (!data.success && data.error) {
-                        listDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #ef4444;">${escapeHtml(data.error)}</div>`;
+                        listDiv.innerHTML = `<div class="homestore-folder-picker-error">${escapeHtml(data.error)}</div>`;
                         return;
                     }
                     
@@ -11538,35 +12024,33 @@ async function showHomeStoreConfigModal(appId) {
                     // Add parent directory option
                     let html = '';
                     if (path !== '/') {
-                        html += `<div class="folder-item folder-item-hover" data-path="${escapeHtml(path.split('/').slice(0, -1).join('/') || '/')}"
-                                     style="padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; border-radius: 6px; margin-bottom: 4px;">
-                                    📁 <span style="color: var(--text-secondary);">..</span>
+                        html += `<div class="folder-item-hover" data-path="${escapeHtml(path.split('/').slice(0, -1).join('/') || '/')}">
+                                    📁 <span class="folder-item-parent">..</span>
                                  </div>`;
                     }
-                    
+
                     folders.forEach(f => {
                         const fullPath = path === '/' ? `/${f.name}` : `${path}/${f.name}`;
-                        html += `<div class="folder-item folder-item-hover" data-path="${escapeHtml(fullPath)}"
-                                     style="padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; border-radius: 6px; margin-bottom: 4px;">
+                        html += `<div class="folder-item-hover" data-path="${escapeHtml(fullPath)}">
                                     📁 ${escapeHtml(f.name)}
                                  </div>`;
                     });
-                    
+
                     if (folders.length === 0 && path !== '/') {
-                        html += '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Sin subcarpetas</div>';
+                        html += '<div class="homestore-folder-picker-empty">Sin subcarpetas</div>';
                     }
-                    
-                    listDiv.innerHTML = html || '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Vacío</div>';
+
+                    listDiv.innerHTML = html || '<div class="homestore-folder-picker-empty">Vacío</div>';
                     
                     // Add click handlers for folders
-                    listDiv.querySelectorAll('.folder-item').forEach(item => {
+                    listDiv.querySelectorAll('.folder-item-hover').forEach(item => {
                         item.addEventListener('click', () => {
                             pathInput.value = item.dataset.path;
                             loadFolders(item.dataset.path);
                         });
                     });
                 } catch (e) {
-                    listDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #ef4444;">Error: ${escapeHtml(e.message)}</div>`;
+                    listDiv.innerHTML = `<div class="homestore-folder-picker-error">Error: ${escapeHtml(e.message)}</div>`;
                 }
             }
             
@@ -11724,14 +12208,14 @@ async function showHomeStoreAppLogs(appId) {
         
         // Create modal
         const modal = document.createElement('div');
-        modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; align-items: center; justify-content: center;';
+        modal.className = 'homestore-logs-modal-overlay';
         modal.innerHTML = `
-            <div style="background: var(--bg-card); border-radius: 12px; padding: 20px; width: 90%; max-width: 800px; max-height: 80vh; display: flex; flex-direction: column;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="margin: 0;">📋 Logs: ${appId}</h3>
-                    <button id="close-logs-modal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text);">×</button>
+            <div class="homestore-logs-modal-container">
+                <div class="homestore-logs-modal-header">
+                    <h3 class="homestore-logs-modal-title">📋 Logs: ${appId}</h3>
+                    <button id="close-logs-modal" class="homestore-logs-modal-close">×</button>
                 </div>
-                <pre style="background: #1a1a2e; color: #0f0; padding: 15px; border-radius: 8px; overflow: auto; flex: 1; font-size: 0.85rem; line-height: 1.4;">${data.logs || 'No logs available'}</pre>
+                <pre class="homestore-logs-content">${data.logs || 'No logs available'}</pre>
             </div>
         `;
         
@@ -11791,60 +12275,37 @@ async function openStacksManager() {
     // Remove existing modal
     const existing = document.getElementById('stacks-modal');
     if (existing) existing.remove();
-    
+
     const modal = document.createElement('div');
     modal.id = 'stacks-modal';
-    modal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.85);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 99999;
-    `;
-    
+    modal.className = 'stacks-overlay';
+
     modal.innerHTML = `
-        <div style="
-            background: #1a1a2e;
-            border: 1px solid #3d3d5c;
-            border-radius: 16px;
-            width: 95%;
-            max-width: 900px;
-            max-height: 90vh;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        ">
-            <div style="padding: 20px; border-bottom: 1px solid #3d3d5c; display: flex; justify-content: space-between; align-items: center;">
-                <h2 style="margin: 0; color: #10b981;">🗂️ Docker Stacks</h2>
-                <button id="stacks-close-btn" style="background: none; border: none; color: #ffffff; font-size: 24px; cursor: pointer;">×</button>
+        <div class="stacks-container">
+            <div class="stacks-header">
+                <h2>🗂️ Docker Stacks</h2>
+                <button id="stacks-close-btn" class="stacks-close-btn">×</button>
             </div>
-            <div style="padding: 20px; border-bottom: 1px solid #3d3d5c; display: flex; gap: 10px; flex-wrap: wrap;">
-                <button id="stacks-new-btn" class="btn-primary" style="background: #10b981; color: white;">➕ Nuevo Stack</button>
-                <button id="stacks-template-btn" class="btn-primary" style="background: #6366f1; color: white;">📋 Desde Template</button>
-                <button id="stacks-refresh-btn" class="btn-primary" style="background: #4a4a6a; color: white;">🔄 Refrescar</button>
+            <div class="stacks-toolbar">
+                <button id="stacks-new-btn" class="btn-primary stacks-btn-new">➕ Nuevo Stack</button>
+                <button id="stacks-template-btn" class="btn-primary stacks-btn-template">📋 Desde Template</button>
+                <button id="stacks-refresh-btn" class="btn-primary stacks-btn-refresh">🔄 Refrescar</button>
             </div>
-            <div id="stacks-list" style="flex: 1; overflow-y: auto; padding: 20px;">
-                <div style="text-align: center; padding: 40px; color: #a0a0b0;">
-                    Cargando stacks...
-                </div>
+            <div id="stacks-list" class="stacks-body">
+                <div class="stacks-loading">Cargando stacks...</div>
             </div>
         </div>
     `;
-    
+
     document.body.appendChild(modal);
-    
+
     // Event listeners
     document.getElementById('stacks-close-btn').addEventListener('click', () => modal.remove());
     document.getElementById('stacks-new-btn').addEventListener('click', openNewStackModal);
     document.getElementById('stacks-template-btn').addEventListener('click', openTemplateSelector);
     document.getElementById('stacks-refresh-btn').addEventListener('click', loadStacksList);
     modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
-    
+
     await loadStacksList();
 }
 
@@ -11852,7 +12313,7 @@ async function loadStacksList() {
     const listDiv = document.getElementById('stacks-list');
     if (!listDiv) return;
     
-    listDiv.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-secondary);">Cargando...</div>';
+    listDiv.innerHTML = '<div class="stacks-loading">Cargando...</div>';
     
     try {
         const res = await authFetch(`${API_BASE}/stacks/list`);
@@ -11864,8 +12325,8 @@ async function loadStacksList() {
         
         if (data.stacks.length === 0) {
             listDiv.innerHTML = `
-                <div style="text-align: center; padding: 60px; color: var(--text-secondary);">
-                    <div style="font-size: 48px; margin-bottom: 20px;">📦</div>
+                <div class="stacks-empty">
+                    <div class="stacks-empty-icon">📦</div>
                     <h3>No hay stacks</h3>
                     <p>Crea tu primer stack o usa una plantilla predefinida.</p>
                 </div>
@@ -11874,57 +12335,33 @@ async function loadStacksList() {
         }
         
         listDiv.innerHTML = data.stacks.map(stack => `
-            <div class="stack-card" style="
-                background: var(--bg-hover);
-                border: 1px solid var(--border);
-                border-radius: 12px;
-                padding: 16px;
-                margin-bottom: 12px;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                flex-wrap: wrap;
-                gap: 12px;
-            ">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <span style="font-size: 32px;">${stack.icon || '📦'}</span>
+            <div class="stacks-card">
+                <div class="stacks-card-info">
+                    <span class="stacks-card-icon">${stack.icon || '📦'}</span>
                     <div>
-                        <h4 style="margin: 0; color: var(--text);">${escapeHtml(stack.name || stack.id)}</h4>
-                        <p style="margin: 4px 0 0; color: var(--text-secondary); font-size: 13px;">${escapeHtml(stack.description || 'Sin descripción')}</p>
-                        <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+                        <h4 class="stacks-card-name">${escapeHtml(stack.name || stack.id)}</h4>
+                        <p class="stacks-card-desc">${escapeHtml(stack.description || 'Sin descripción')}</p>
+                        <div class="stacks-card-services">
                             ${stack.services.map(s => `
-                                <span style="
-                                    padding: 2px 8px;
-                                    border-radius: 4px;
-                                    font-size: 11px;
-                                    background: ${s.state === 'running' ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'};
-                                    color: ${s.state === 'running' ? '#10b981' : '#ef4444'};
-                                ">${escapeHtml(s.name)}</span>
+                                <span class="stacks-service-badge ${s.state === 'running' ? 'stacks-service-badge--running' : 'stacks-service-badge--stopped'}">${escapeHtml(s.name)}</span>
                             `).join('')}
                         </div>
                     </div>
                 </div>
-                <div style="display: flex; gap: 8px; align-items: center;">
-                    <span style="
-                        padding: 4px 12px;
-                        border-radius: 20px;
-                        font-size: 12px;
-                        font-weight: 600;
-                        background: ${stack.status === 'running' ? 'rgba(16,185,129,0.2)' : stack.status === 'partial' ? 'rgba(245,158,11,0.2)' : 'rgba(107,114,128,0.2)'};
-                        color: ${stack.status === 'running' ? '#10b981' : stack.status === 'partial' ? '#f59e0b' : '#6b7280'};
-                    ">${stack.status === 'running' ? '● En Ejecución' : stack.status === 'partial' ? '◐ Parcial' : '○ Detenido'}</span>
+                <div class="stacks-card-actions">
+                    <span class="stacks-status-badge ${stack.status === 'running' ? 'stacks-status-badge--running' : stack.status === 'partial' ? 'stacks-status-badge--partial' : 'stacks-status-badge--stopped'}">${stack.status === 'running' ? '● En Ejecución' : stack.status === 'partial' ? '◐ Parcial' : '○ Detenido'}</span>
 
                     <button data-action="toggle" data-stack="${stack.id}" data-cmd="${stack.status === 'running' ? 'down' : 'up'}"
-                        class="btn-primary stack-btn" style="padding: 6px 12px; font-size: 12px; background: ${stack.status === 'running' ? '#ef4444' : '#10b981'};">
+                        class="btn-primary stack-btn stacks-action-btn ${stack.status === 'running' ? 'stacks-action-btn--stop' : 'stacks-action-btn--start'}">
                         ${stack.status === 'running' ? '⏹ Detener' : '▶ Iniciar'}
                     </button>
-                    <button data-action="edit" data-stack="${stack.id}" class="btn-primary stack-btn" style="padding: 6px 12px; font-size: 12px; background: #6366f1;">
+                    <button data-action="edit" data-stack="${stack.id}" class="btn-primary stack-btn stacks-action-btn stacks-action-btn--edit">
                         ✏️ Editar
                     </button>
-                    <button data-action="logs" data-stack="${stack.id}" class="btn-primary stack-btn" style="padding: 6px 12px; font-size: 12px; background: var(--bg-hover);">
+                    <button data-action="logs" data-stack="${stack.id}" class="btn-primary stack-btn stacks-action-btn stacks-action-btn--logs">
                         📜 Logs
                     </button>
-                    <button data-action="delete" data-stack="${stack.id}" class="btn-primary stack-btn" style="padding: 6px 12px; font-size: 12px; background: #ef4444;">
+                    <button data-action="delete" data-stack="${stack.id}" class="btn-primary stack-btn stacks-action-btn stacks-action-btn--delete">
                         🗑️
                     </button>
                 </div>
@@ -11949,7 +12386,7 @@ async function loadStacksList() {
         });
         
     } catch (e) {
-        listDiv.innerHTML = `<div style="text-align: center; padding: 40px; color: #ef4444;">Error: ${escapeHtml(e.message)}</div>`;
+        listDiv.innerHTML = `<div class="stacks-error">Error: ${escapeHtml(e.message)}</div>`;
     }
 }
 
@@ -11959,56 +12396,29 @@ async function openNewStackModal() {
     
     const content = modal.querySelector('div > div');
     content.innerHTML = `
-        <div style="padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-            <h2 style="margin: 0; color: var(--primary);">➕ Nuevo Stack</h2>
-            <button id="stack-back-btn" style="background: none; border: none; color: var(--text); font-size: 14px; cursor: pointer;">← Volver</button>
+        <div class="stacks-header">
+            <h2>➕ Nuevo Stack</h2>
+            <button id="stack-back-btn" class="stacks-back-btn">← Volver</button>
         </div>
-        <div style="padding: 20px; overflow-y: auto; max-height: 70vh;">
-            <div style="margin-bottom: 16px;">
-                <label style="display: block; margin-bottom: 6px; color: var(--text-secondary);">Nombre del Stack</label>
-                <input type="text" id="stack-name" placeholder="mi-stack" style="
-                    width: 100%;
-                    padding: 10px;
-                    border-radius: 8px;
-                    border: 1px solid #4a4a6a;
-                    background: #1a1a2e;
-                    color: #e0e0e0;
-                    font-size: 14px;
-                ">
+        <div class="stacks-form-body">
+            <div class="stacks-form-group">
+                <label class="stacks-form-label">Nombre del Stack</label>
+                <input type="text" id="stack-name" placeholder="mi-stack" class="stacks-form-input">
             </div>
-            <div style="margin-bottom: 16px;">
-                <label style="display: block; margin-bottom: 6px; color: var(--text-secondary);">Descripción (opcional)</label>
-                <input type="text" id="stack-desc" placeholder="Descripción del stack" style="
-                    width: 100%;
-                    padding: 10px;
-                    border-radius: 8px;
-                    border: 1px solid #4a4a6a;
-                    background: #1a1a2e;
-                    color: #e0e0e0;
-                    font-size: 14px;
-                ">
+            <div class="stacks-form-group">
+                <label class="stacks-form-label">Descripción (opcional)</label>
+                <input type="text" id="stack-desc" placeholder="Descripción del stack" class="stacks-form-input">
             </div>
-            <div style="margin-bottom: 16px;">
-                <label style="display: block; margin-bottom: 6px; color: var(--text-secondary);">docker-compose.yml</label>
+            <div class="stacks-form-group">
+                <label class="stacks-form-label">docker-compose.yml</label>
                 <textarea id="stack-compose" placeholder="version: '3.8'
 services:
   web:
     image: nginx
     ports:
-      - '8080:80'" style="
-                    width: 100%;
-                    height: 300px;
-                    padding: 12px;
-                    border-radius: 8px;
-                    border: 1px solid #4a4a6a;
-                    background: #1a1a2e;
-                    color: #e0e0e0;
-                    font-family: monospace;
-                    font-size: 13px;
-                    resize: vertical;
-                "></textarea>
+      - '8080:80'" class="stacks-form-textarea"></textarea>
             </div>
-            <button id="stack-create-btn" class="btn-primary" style="width: 100%; padding: 12px; background: #10b981; font-size: 14px;">
+            <button id="stack-create-btn" class="btn-primary stacks-btn-create">
                 🚀 Crear Stack
             </button>
         </div>
@@ -12055,12 +12465,12 @@ async function openTemplateSelector() {
     
     const content = modal.querySelector('div > div');
     content.innerHTML = `
-        <div style="padding: 20px; border-bottom: 1px solid #3d3d5c; display: flex; justify-content: space-between; align-items: center;">
-            <h2 style="margin: 0; color: #10b981;">📋 Plantillas</h2>
-            <button id="template-back-btn" style="background: #4a4a6a; border: none; color: #ffffff; font-size: 14px; cursor: pointer; padding: 8px 16px; border-radius: 6px;">← Volver</button>
+        <div class="stacks-header">
+            <h2>📋 Plantillas</h2>
+            <button id="template-back-btn" class="stacks-back-btn--template">← Volver</button>
         </div>
-        <div id="templates-list" style="padding: 20px; overflow-y: auto; max-height: 70vh;">
-            <div style="text-align: center; padding: 40px; color: #a0a0b0;">Cargando plantillas...</div>
+        <div id="templates-list" class="stacks-form-body">
+            <div class="stacks-loading">Cargando plantillas...</div>
         </div>
     `;
     
@@ -12072,24 +12482,15 @@ async function openTemplateSelector() {
         
         const list = document.getElementById('templates-list');
         list.innerHTML = data.templates.map(t => `
-            <div style="
-                background: #2d2d44;
-                border: 1px solid #3d3d5c;
-                border-radius: 12px;
-                padding: 16px;
-                margin-bottom: 12px;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-            ">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <span style="font-size: 32px;">${t.icon}</span>
+            <div class="stacks-template-card">
+                <div class="stacks-template-info">
+                    <span class="stacks-template-icon">${t.icon}</span>
                     <div>
-                        <h4 style="margin: 0; color: #ffffff;">${escapeHtml(t.name)}</h4>
-                        <p style="margin: 4px 0 0; color: #a0a0b0; font-size: 13px;">${escapeHtml(t.description)}</p>
+                        <h4 class="stacks-template-name">${escapeHtml(t.name)}</h4>
+                        <p class="stacks-template-desc">${escapeHtml(t.description)}</p>
                     </div>
                 </div>
-                <button data-action="use-template" data-template-id="${t.id}" class="btn-primary" style="padding: 8px 16px; background: #10b981; color: white;">
+                <button data-action="use-template" data-template-id="${t.id}" class="btn-primary stacks-btn-use">
                     Usar
                 </button>
             </div>
@@ -12099,7 +12500,7 @@ async function openTemplateSelector() {
             btn.addEventListener('click', () => useTemplate(btn.dataset.templateId));
         });
     } catch (e) {
-        document.getElementById('templates-list').innerHTML = `<div style="color: #ef4444;">Error: ${e.message}</div>`;
+        document.getElementById('templates-list').innerHTML = `<div class="stacks-error">Error: ${e.message}</div>`;
     }
 }
 
@@ -12153,30 +12554,20 @@ async function openStackEditor(stackId) {
         const content = modal.querySelector('div > div');
         
         content.innerHTML = `
-            <div style="padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-                <h2 style="margin: 0; color: var(--primary);">✏️ Editar: ${escapeHtml(data.stack.name || stackId)}</h2>
-                <button id="editor-back-btn" style="background: none; border: none; color: var(--text); font-size: 14px; cursor: pointer;">← Volver</button>
+            <div class="stacks-header">
+                <h2>✏️ Editar: ${escapeHtml(data.stack.name || stackId)}</h2>
+                <button id="editor-back-btn" class="stacks-back-btn">← Volver</button>
             </div>
-            <div style="padding: 20px; overflow-y: auto; max-height: 70vh;">
-                <div style="margin-bottom: 16px;">
-                    <label style="display: block; margin-bottom: 6px; color: var(--text-secondary);">docker-compose.yml</label>
-                    <textarea id="edit-compose" style="
-                        width: 100%;
-                        height: 400px;
-                        padding: 12px;
-                        border-radius: 8px;
-                        border: 1px solid #4a4a6a;
-                        background: #1a1a2e;
-                        color: #e0e0e0;
-                        font-family: monospace;
-                        font-size: 13px;
-                    ">${escapeHtml(data.stack.compose)}</textarea>
+            <div class="stacks-form-body">
+                <div class="stacks-form-group">
+                    <label class="stacks-form-label">docker-compose.yml</label>
+                    <textarea id="edit-compose" class="stacks-form-textarea stacks-form-textarea--tall">${escapeHtml(data.stack.compose)}</textarea>
                 </div>
-                <div style="display: flex; gap: 10px;">
-                    <button id="save-stack-btn" class="btn-primary" style="flex: 1; padding: 12px; background: #10b981;">
+                <div class="stacks-editor-actions">
+                    <button id="save-stack-btn" class="btn-primary stacks-btn-save">
                         💾 Guardar
                     </button>
-                    <button id="redeploy-stack-btn" class="btn-primary" style="flex: 1; padding: 12px; background: #6366f1;">
+                    <button id="redeploy-stack-btn" class="btn-primary stacks-btn-redeploy">
                         🚀 Guardar y Redesplegar
                     </button>
                 </div>
@@ -12228,21 +12619,12 @@ async function showStackLogs(stackId) {
     const content = modal.querySelector('div > div');
     
     content.innerHTML = `
-        <div style="padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-            <h2 style="margin: 0; color: var(--primary);">📜 Logs: ${escapeHtml(stackId)}</h2>
-            <button id="logs-back-btn" style="background: none; border: none; color: var(--text); font-size: 14px; cursor: pointer;">← Volver</button>
+        <div class="stacks-header">
+            <h2>📜 Logs: ${escapeHtml(stackId)}</h2>
+            <button id="logs-back-btn" class="stacks-back-btn">← Volver</button>
         </div>
-        <div style="padding: 20px; overflow-y: auto; max-height: 70vh;">
-            <pre id="stack-logs" style="
-                background: #0a0a0a;
-                padding: 16px;
-                border-radius: 8px;
-                overflow-x: auto;
-                font-size: 12px;
-                color: #10b981;
-                max-height: 500px;
-                overflow-y: auto;
-            ">Cargando logs...</pre>
+        <div class="stacks-form-body">
+            <pre id="stack-logs" class="stacks-logs-pre">Cargando logs...</pre>
         </div>
     `;
     
@@ -12289,17 +12671,17 @@ async function renderCloudBackupView() {
     if (!dashboardContent) return;
     
     dashboardContent.innerHTML = `
-        <div class="glass-card" style="margin-bottom: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="glass-card cloudbackup-card-margin">
+            <div class="cloudbackup-header-container">
                 <div>
-                    <h3 style="color: var(--primary); margin: 0;">☁️ Cloud Backup</h3>
-                    <p style="color: var(--text-dim); margin: 5px 0 0;">Sincroniza con Google Drive, Dropbox, OneDrive y más</p>
+                    <h3 class="cloudbackup-header-title">☁️ Cloud Backup</h3>
+                    <p class="cloudbackup-header-subtitle">Sincroniza con Google Drive, Dropbox, OneDrive y más</p>
                 </div>
                 <div id="cloud-backup-status-badge"></div>
             </div>
         </div>
         <div id="cloud-backup-content">
-            <div style="text-align: center; padding: 40px; color: var(--text-dim);">
+            <div class="cloudbackup-loading">
                 Cargando...
             </div>
         </div>
@@ -12319,14 +12701,14 @@ async function loadCloudBackupStatus() {
         
         if (!status.installed) {
             // rclone not installed
-            badgeDiv.innerHTML = '<span style="color: #f59e0b;">⚠️ rclone no instalado</span>';
+            badgeDiv.innerHTML = '<span class="cloudbackup-warning-badge">⚠️ rclone no instalado</span>';
             contentDiv.innerHTML = `
-                <div class="glass-card" style="text-align: center; padding: 40px;">
-                    <h3 style="margin-bottom: 15px;">📦 Instalar rclone</h3>
-                    <p style="color: var(--text-dim); margin-bottom: 20px;">
+                <div class="glass-card cloudbackup-install-card">
+                    <h3 class="cloudbackup-install-title">📦 Instalar rclone</h3>
+                    <p class="cloudbackup-install-description">
                         rclone es necesario para conectar con servicios de nube como Google Drive, Dropbox, OneDrive, etc.
                     </p>
-                    <button id="btn-install-rclone" class="btn-primary" style="padding: 12px 24px;">
+                    <button id="btn-install-rclone" class="btn-primary cloudbackup-install-btn">
                         Instalar rclone
                     </button>
                 </div>
@@ -12334,8 +12716,8 @@ async function loadCloudBackupStatus() {
             document.getElementById('btn-install-rclone').addEventListener('click', installRclone);
             return;
         }
-        
-        badgeDiv.innerHTML = `<span style="color: #10b981;">✓ rclone v${status.version}</span>`;
+
+        badgeDiv.innerHTML = `<span class="cloudbackup-version-badge">✓ rclone v${status.version}</span>`;
         
         // Load configured remotes
         const remotesRes = await authFetch(`${API_BASE}/cloud-backup/remotes`);
@@ -12344,31 +12726,31 @@ async function loadCloudBackupStatus() {
         let remotesHtml = '';
         if (remotesData.remotes && remotesData.remotes.length > 0) {
             remotesHtml = `
-                <div class="glass-card" style="margin-bottom: 20px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h4 style="margin: 0;">🌐 Nubes Configuradas</h4>
-                        <button data-action="add-cloud" class="btn-primary" style="padding: 8px 16px;">
+                <div class="glass-card cloudbackup-card-margin">
+                    <div class="cloudbackup-remotes-header">
+                        <h4 class="cloudbackup-remotes-header-title">🌐 Nubes Configuradas</h4>
+                        <button data-action="add-cloud" class="btn-primary cloudbackup-remotes-add-btn">
                             + Añadir Nube
                         </button>
                     </div>
                     <div id="cloud-remotes-list">
                         ${remotesData.remotes.map(r => `
-                            <div class="remote-card" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background: rgba(255,255,255,0.03); border-radius: 10px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.05);">
-                                <div style="display: flex; align-items: center; gap: 12px;">
-                                    <span style="font-size: 1.8rem;">${r.icon}</span>
+                            <div class="cloudbackup-remote-card">
+                                <div class="cloudbackup-remote-info">
+                                    <span class="cloudbackup-remote-icon">${r.icon}</span>
                                     <div>
-                                        <div style="font-weight: 600;">${escapeHtml(r.name)}</div>
-                                        <div style="font-size: 0.85rem; color: var(--text-dim);">${r.displayName}</div>
+                                        <div class="cloudbackup-remote-name">${escapeHtml(r.name)}</div>
+                                        <div class="cloudbackup-remote-type">${r.displayName}</div>
                                     </div>
                                 </div>
-                                <div style="display: flex; gap: 8px;">
-                                    <button data-action="browse-remote" data-remote="${escapeHtml(r.name)}" class="btn-sm" style="background: #6366f1;" title="Explorar">
+                                <div class="cloudbackup-remote-actions">
+                                    <button data-action="browse-remote" data-remote="${escapeHtml(r.name)}" class="btn-sm cloudbackup-btn-browse" title="Explorar">
                                         📂
                                     </button>
-                                    <button data-action="sync-remote" data-remote="${escapeHtml(r.name)}" class="btn-sm" style="background: #10b981;" title="Sincronizar">
+                                    <button data-action="sync-remote" data-remote="${escapeHtml(r.name)}" class="btn-sm cloudbackup-btn-sync" title="Sincronizar">
                                         🔄
                                     </button>
-                                    <button data-action="delete-remote" data-remote="${escapeHtml(r.name)}" class="btn-sm" style="background: #ef4444;" title="Eliminar">
+                                    <button data-action="delete-remote" data-remote="${escapeHtml(r.name)}" class="btn-sm cloudbackup-btn-delete" title="Eliminar">
                                         🗑️
                                     </button>
                                 </div>
@@ -12379,12 +12761,12 @@ async function loadCloudBackupStatus() {
             `;
         } else {
             remotesHtml = `
-                <div class="glass-card" style="text-align: center; padding: 40px;">
-                    <h3 style="margin-bottom: 15px;">🌐 No hay nubes configuradas</h3>
-                    <p style="color: var(--text-dim); margin-bottom: 20px;">
+                <div class="glass-card cloudbackup-empty-state">
+                    <h3 class="cloudbackup-empty-title">🌐 No hay nubes configuradas</h3>
+                    <p class="cloudbackup-empty-description">
                         Añade tu primera nube para empezar a sincronizar archivos
                     </p>
-                    <button data-action="add-cloud" class="btn-primary" style="padding: 12px 24px;">
+                    <button data-action="add-cloud" class="btn-primary cloudbackup-empty-add-btn">
                         + Añadir Nube
                     </button>
                 </div>
@@ -12407,23 +12789,23 @@ async function loadCloudBackupStatus() {
         let activeHtml = '';
         if (activeJobsData.jobs && activeJobsData.jobs.length > 0) {
             activeHtml = `
-                <div class="glass-card" style="margin-bottom: 20px; border: 2px solid rgba(16,185,129,0.3);">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h4 style="margin: 0; color: #10b981;">🔄 Sincronizaciones Activas</h4>
-                        <span style="font-size: 0.8rem; color: #a0a0b0;">Auto-actualiza cada 5s</span>
+                <div class="glass-card cloudbackup-active-syncs-card">
+                    <div class="cloudbackup-active-syncs-header">
+                        <h4 class="cloudbackup-active-syncs-title">🔄 Sincronizaciones Activas</h4>
+                        <span class="cloudbackup-active-syncs-refresh-label">Auto-actualiza cada 5s</span>
                     </div>
                     <div id="active-syncs-list">
                         ${activeJobsData.jobs.map(job => `
-                            <div style="padding: 15px; background: rgba(16,185,129,0.05); border-radius: 8px; margin-bottom: 10px; border: 1px solid rgba(16,185,129,0.2);">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                                    <div style="overflow: hidden;">
-                                        <div style="font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(job.source)}</div>
-                                        <div style="font-size: 0.8rem; color: #a0a0b0;">→ ${escapeHtml(job.dest)}</div>
+                            <div class="cloudbackup-active-sync-item">
+                                <div class="cloudbackup-active-sync-header">
+                                    <div class="cloudbackup-active-sync-paths">
+                                        <div class="cloudbackup-active-sync-source">${escapeHtml(job.source)}</div>
+                                        <div class="cloudbackup-active-sync-dest">→ ${escapeHtml(job.dest)}</div>
                                     </div>
-                                    <span style="color: #10b981; font-weight: 600; font-size: 1.1rem;">${job.percent}%</span>
+                                    <span class="cloudbackup-active-sync-percent">${job.percent}%</span>
                                 </div>
-                                <div style="height: 6px; background: #2d2d44; border-radius: 3px; overflow: hidden;">
-                                    <div style="height: 100%; background: linear-gradient(90deg, #10b981, #6366f1); width: ${job.percent}%; transition: width 0.5s ease;"></div>
+                                <div class="cloudbackup-active-sync-progress-bg">
+                                    <div class="cloudbackup-active-sync-progress-bar" style="width: ${job.percent}%;"></div>
                                 </div>
                             </div>
                         `).join('')}
@@ -12441,71 +12823,71 @@ async function loadCloudBackupStatus() {
         
         // Build scheduled syncs section
         let schedulesHtml = `
-            <div class="glass-card" style="margin-bottom: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h4 style="margin: 0;">⏰ Sincronizaciones Programadas</h4>
+            <div class="glass-card cloudbackup-card-margin">
+                <div class="cloudbackup-schedules-header">
+                    <h4 class="cloudbackup-schedules-title">⏰ Sincronizaciones Programadas</h4>
                 </div>
                 <div id="scheduled-syncs-list">
         `;
-        
+
         if (schedulesData.schedules && schedulesData.schedules.length > 0) {
             schedulesHtml += schedulesData.schedules.map(s => `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 8px; border: 1px solid ${s.enabled ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.05)'};">
-                    <div style="flex: 1; overflow: hidden;">
-                        <div style="font-weight: 500;">${escapeHtml(s.name)}</div>
-                        <div style="font-size: 0.8rem; color: #a0a0b0;">
+                <div class="cloudbackup-schedule-item ${s.enabled ? 'cloudbackup-schedule-item-enabled' : ''}">
+                    <div class="cloudbackup-schedule-info">
+                        <div class="cloudbackup-schedule-name">${escapeHtml(s.name)}</div>
+                        <div class="cloudbackup-schedule-paths">
                             ${escapeHtml(s.source)} → ${escapeHtml(s.dest)}
                         </div>
-                        <div style="font-size: 0.75rem; color: #6366f1; margin-top: 4px;">
+                        <div class="cloudbackup-schedule-config">
                             ${getScheduleLabel(s.schedule)} • ${s.mode}
                         </div>
                     </div>
-                    <div style="display: flex; gap: 8px;">
-                        <button data-action="toggle-schedule" data-id="${s.id}" class="btn-sm" style="background: ${s.enabled ? '#10b981' : '#4a4a6a'};" title="${s.enabled ? 'Pausar' : 'Activar'}">
+                    <div class="cloudbackup-schedule-actions">
+                        <button data-action="toggle-schedule" data-id="${s.id}" class="btn-sm ${s.enabled ? 'cloudbackup-schedule-btn-enabled' : 'cloudbackup-schedule-btn-disabled'}" title="${s.enabled ? 'Pausar' : 'Activar'}">
                             ${s.enabled ? '⏸️' : '▶️'}
                         </button>
-                        <button data-action="delete-schedule" data-id="${s.id}" class="btn-sm" style="background: #ef4444;" title="Eliminar">
+                        <button data-action="delete-schedule" data-id="${s.id}" class="btn-sm cloudbackup-btn-delete" title="Eliminar">
                             🗑️
                         </button>
                     </div>
                 </div>
             `).join('');
         } else {
-            schedulesHtml += `<div style="text-align: center; padding: 20px; color: #a0a0b0;">No hay sincronizaciones programadas</div>`;
+            schedulesHtml += `<div class="cloudbackup-schedules-empty">No hay sincronizaciones programadas</div>`;
         }
         schedulesHtml += '</div></div>';
         
         // Build history section
         let historyHtml = `
             <div class="glass-card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h4 style="margin: 0;">📜 Historial de Transferencias</h4>
+                <div class="cloudbackup-history-header">
+                    <h4 class="cloudbackup-history-title">📜 Historial de Transferencias</h4>
                     ${historyData.history && historyData.history.length > 0 ? `
-                        <button data-action="clear-history" class="btn-sm" style="background: #4a4a6a;">Limpiar</button>
+                        <button data-action="clear-history" class="btn-sm cloudbackup-history-clear-btn">Limpiar</button>
                     ` : ''}
                 </div>
-                <div id="transfer-history-list" style="max-height: 300px; overflow-y: auto;">
+                <div id="transfer-history-list" class="cloudbackup-history-list">
         `;
-        
+
         if (historyData.history && historyData.history.length > 0) {
             historyHtml += historyData.history.slice(0, 20).map(t => {
                 const statusIcon = t.status === 'completed' ? '✅' : t.status === 'running' ? '🔄' : '❌';
                 const statusColor = t.status === 'completed' ? '#10b981' : t.status === 'running' ? '#f59e0b' : '#ef4444';
                 return `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: rgba(255,255,255,0.02); border-radius: 6px; margin-bottom: 6px; border-left: 3px solid ${statusColor};">
-                    <div style="flex: 1; overflow: hidden;">
-                        <div style="font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                <div class="cloudbackup-history-item" style="border-left: 3px solid ${statusColor};">
+                    <div class="cloudbackup-history-item-info">
+                        <div class="cloudbackup-history-item-path">
                             ${escapeHtml(t.source)} → ${escapeHtml(t.dest)}
                         </div>
-                        <div style="font-size: 0.75rem; color: #a0a0b0;">
+                        <div class="cloudbackup-history-item-meta">
                             ${new Date(t.timestamp).toLocaleString()} • ${t.mode}
                         </div>
                     </div>
-                    <span style="font-size: 1.2rem;" title="${t.status}">${statusIcon}</span>
+                    <span class="cloudbackup-history-item-icon" title="${t.status}">${statusIcon}</span>
                 </div>
             `}).join('');
         } else {
-            historyHtml += `<div style="text-align: center; padding: 20px; color: #a0a0b0;">Sin transferencias recientes</div>`;
+            historyHtml += `<div class="cloudbackup-history-empty">Sin transferencias recientes</div>`;
         }
         historyHtml += '</div></div>';
         
@@ -12515,7 +12897,7 @@ async function loadCloudBackupStatus() {
         bindCloudBackupEventListeners();
         
     } catch (e) {
-        contentDiv.innerHTML = `<div class="glass-card" style="color: #ef4444; padding: 20px;">Error: ${e.message}</div>`;
+        contentDiv.innerHTML = `<div class="glass-card cloudbackup-error">Error: ${e.message}</div>`;
     }
 }
 
@@ -12636,21 +13018,21 @@ async function installRclone() {
     
     const updateProgress = (step, percent, text) => {
         contentDiv.innerHTML = `
-            <div class="glass-card" style="text-align: center; padding: 40px;">
-                <h3 style="margin-bottom: 20px; color: var(--primary);">📦 Instalando rclone</h3>
-                <div style="margin-bottom: 15px;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                        <span style="color: #a0a0b0;">${text}</span>
-                        <span style="color: #10b981; font-weight: 600;">${percent}%</span>
+            <div class="glass-card cloudbackup-install-progress-card">
+                <h3 class="cloudbackup-install-progress-title">📦 Instalando rclone</h3>
+                <div class="cloudbackup-form-group">
+                    <div class="cloudbackup-install-progress-info">
+                        <span class="cloudbackup-install-progress-text">${text}</span>
+                        <span class="cloudbackup-install-progress-percent">${percent}%</span>
                     </div>
-                    <div style="height: 8px; background: #2d2d44; border-radius: 4px; overflow: hidden;">
-                        <div style="height: 100%; background: linear-gradient(90deg, #10b981, #6366f1); width: ${percent}%; transition: width 0.5s ease;"></div>
+                    <div class="cloudbackup-install-progress-bg">
+                        <div class="cloudbackup-install-progress-bar" style="width: ${percent}%;"></div>
                     </div>
                 </div>
-                <div style="display: flex; justify-content: center; gap: 20px; margin-top: 20px;">
-                    <span style="color: ${step >= 1 ? '#10b981' : '#4a4a6a'};">${step >= 1 ? '✅' : '⏳'} Descargando</span>
-                    <span style="color: ${step >= 2 ? '#10b981' : '#4a4a6a'};">${step >= 2 ? '✅' : '⏳'} Extrayendo</span>
-                    <span style="color: ${step >= 3 ? '#10b981' : '#4a4a6a'};">${step >= 3 ? '✅' : '⏳'} Instalando</span>
+                <div class="cloudbackup-install-steps">
+                    <span class="${step >= 1 ? 'cloudbackup-install-step-active' : 'cloudbackup-install-step-inactive'}">${step >= 1 ? '✅' : '⏳'} Descargando</span>
+                    <span class="${step >= 2 ? 'cloudbackup-install-step-active' : 'cloudbackup-install-step-inactive'}">${step >= 2 ? '✅' : '⏳'} Extrayendo</span>
+                    <span class="${step >= 3 ? 'cloudbackup-install-step-active' : 'cloudbackup-install-step-inactive'}">${step >= 3 ? '✅' : '⏳'} Instalando</span>
                 </div>
             </div>
         `;
@@ -12706,29 +13088,21 @@ async function showAddCloudModal() {
     
         const modal = document.createElement('div');
         modal.id = 'add-cloud-modal';
-        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100000;';
-        
+        modal.className = 'cloudbackup-modal-overlay';
+
         modal.innerHTML = `
-            <div style="background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 16px; width: 95%; max-width: 600px; max-height: 80vh; overflow: hidden;">
-                <div style="padding: 20px; border-bottom: 1px solid #3d3d5c; display: flex; justify-content: space-between; align-items: center;">
-                    <h3 style="margin: 0; color: #10b981;">☁️ Añadir Nube</h3>
-                    <button data-action="close-modal" style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer;">×</button>
+            <div class="cloudbackup-modal-container">
+                <div class="cloudbackup-modal-header">
+                    <h3 class="cloudbackup-modal-title">☁️ Añadir Nube</h3>
+                    <button data-action="close-modal" class="cloudbackup-modal-close-btn">×</button>
                 </div>
-                <div style="padding: 20px; overflow-y: auto; max-height: 60vh;">
-                    <p style="color: #a0a0b0; margin-bottom: 20px;">Selecciona el servicio de nube que quieres configurar:</p>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px;">
+                <div class="cloudbackup-modal-content">
+                    <p class="cloudbackup-modal-description">Selecciona el servicio de nube que quieres configurar:</p>
+                    <div class="cloudbackup-providers-grid">
                         ${data.providers.map(p => `
-                            <button data-action="select-provider" data-provider="${p.id}" data-color="${p.color}" class="cloud-provider-btn" style="
-                                background: rgba(255,255,255,0.05);
-                                border: 2px solid rgba(255,255,255,0.1);
-                                border-radius: 12px;
-                                padding: 20px 15px;
-                                cursor: pointer;
-                                text-align: center;
-                                transition: all 0.2s;
-                            ">
-                                <div style="font-size: 2rem; margin-bottom: 8px;">${p.icon}</div>
-                                <div style="color: #fff; font-size: 0.9rem;">${p.name}</div>
+                            <button data-action="select-provider" data-provider="${p.id}" data-color="${p.color}" class="cloudbackup-provider-btn">
+                                <div class="cloudbackup-provider-icon">${p.icon}</div>
+                                <div class="cloudbackup-provider-name">${p.name}</div>
                             </button>
                         `).join('')}
                     </div>
@@ -12739,7 +13113,7 @@ async function showAddCloudModal() {
         document.body.appendChild(modal);
 
         // Add hover effect for cloud provider buttons
-        modal.querySelectorAll('.cloud-provider-btn').forEach(btn => {
+        modal.querySelectorAll('.cloudbackup-provider-btn').forEach(btn => {
             const color = btn.dataset.color;
             btn.addEventListener('mouseover', () => { btn.style.borderColor = color; });
             btn.addEventListener('mouseout', () => { btn.style.borderColor = 'rgba(255,255,255,0.1)'; });
@@ -12793,25 +13167,25 @@ async function startCloudConfig(provider) {
 function showOAuthModal(provider, instructions) {
     const modal = document.createElement('div');
     modal.id = 'oauth-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100000;';
-    
+    modal.className = 'cloudbackup-modal-overlay';
+
     modal.innerHTML = `
-        <div style="background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 16px; width: 95%; max-width: 500px; padding: 25px;">
-            <h3 style="color: #10b981; margin-bottom: 20px;">🔐 Autorización OAuth</h3>
-            <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                <pre style="white-space: pre-wrap; color: #a0a0b0; font-size: 0.9rem;">${escapeHtml(instructions)}</pre>
+        <div class="cloudbackup-oauth-modal">
+            <h3 class="cloudbackup-oauth-title">🔐 Autorización OAuth</h3>
+            <div class="cloudbackup-oauth-instructions">
+                <pre class="cloudbackup-oauth-instructions-text">${escapeHtml(instructions)}</pre>
             </div>
-            <div style="margin-bottom: 15px;">
-                <label style="color: #fff; display: block; margin-bottom: 8px;">Nombre para esta nube:</label>
-                <input type="text" id="oauth-remote-name" value="${provider}" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+            <div class="cloudbackup-form-group">
+                <label class="cloudbackup-form-label">Nombre para esta nube:</label>
+                <input type="text" id="oauth-remote-name" value="${provider}" class="cloudbackup-form-input">
             </div>
-            <div style="margin-bottom: 20px;">
-                <label style="color: #fff; display: block; margin-bottom: 8px;">Pega el token aquí:</label>
-                <textarea id="oauth-token" rows="4" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff; resize: vertical;"></textarea>
+            <div class="cloudbackup-form-group">
+                <label class="cloudbackup-form-label">Pega el token aquí:</label>
+                <textarea id="oauth-token" rows="4" class="cloudbackup-form-textarea"></textarea>
             </div>
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button data-action="cancel" style="padding: 10px 20px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Cancelar</button>
-                <button data-action="save" style="padding: 10px 20px; background: #10b981; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Guardar</button>
+            <div class="cloudbackup-modal-actions">
+                <button data-action="cancel" class="cloudbackup-btn-cancel">Cancelar</button>
+                <button data-action="save" class="cloudbackup-btn-save">Guardar</button>
             </div>
         </div>
     `;
@@ -12863,35 +13237,35 @@ async function saveOAuthConfig(provider) {
 function showConfigFormModal(provider, fields) {
     const modal = document.createElement('div');
     modal.id = 'config-form-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100000;';
-    
+    modal.className = 'cloudbackup-modal-overlay';
+
     const fieldNames = fields.map(f => f.name);
-    
+
     const fieldsHtml = fields.map(f => `
-        <div style="margin-bottom: 15px;">
-            <label style="color: #fff; display: block; margin-bottom: 8px;">${f.label}${f.required ? ' *' : ''}:</label>
+        <div class="cloudbackup-form-group">
+            <label class="cloudbackup-form-label">${f.label}${f.required ? ' *' : ''}:</label>
             ${f.type === 'select' ? `
-                <select id="config-${f.name}" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+                <select id="config-${f.name}" class="cloudbackup-form-select">
                     ${f.options.map(o => `<option value="${o}">${o}</option>`).join('')}
                 </select>
             ` : `
-                <input type="${f.type}" id="config-${f.name}" value="${f.default || ''}" placeholder="${f.placeholder || ''}" 
-                    style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+                <input type="${f.type}" id="config-${f.name}" value="${f.default || ''}" placeholder="${f.placeholder || ''}"
+                    class="cloudbackup-form-input">
             `}
         </div>
     `).join('');
-    
+
     modal.innerHTML = `
-        <div style="background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 16px; width: 95%; max-width: 500px; padding: 25px;">
-            <h3 style="color: #10b981; margin-bottom: 20px;">⚙️ Configurar ${provider.toUpperCase()}</h3>
-            <div style="margin-bottom: 15px;">
-                <label style="color: #fff; display: block; margin-bottom: 8px;">Nombre para esta nube *:</label>
-                <input type="text" id="config-name" value="${provider}" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+        <div class="cloudbackup-oauth-modal">
+            <h3 class="cloudbackup-oauth-title">⚙️ Configurar ${provider.toUpperCase()}</h3>
+            <div class="cloudbackup-form-group">
+                <label class="cloudbackup-form-label">Nombre para esta nube *:</label>
+                <input type="text" id="config-name" value="${provider}" class="cloudbackup-form-input">
             </div>
             ${fieldsHtml}
-            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
-                <button data-action="cancel" style="padding: 10px 20px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Cancelar</button>
-                <button data-action="save" style="padding: 10px 20px; background: #10b981; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Guardar</button>
+            <div class="cloudbackup-modal-actions-footer">
+                <button data-action="cancel" class="cloudbackup-btn-cancel">Cancelar</button>
+                <button data-action="save" class="cloudbackup-btn-save">Guardar</button>
             </div>
         </div>
     `;
@@ -12947,30 +13321,30 @@ async function saveSimpleConfig(provider, fieldNames) {
 async function browseRemote(remoteName, path = '') {
     const modal = document.createElement('div');
     modal.id = 'remote-browser-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 100000;';
+    modal.className = 'cloudbackup-modal-overlay-dark';
     
     modal.innerHTML = `
-        <div style="background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 16px; width: 95%; max-width: 800px; height: 80vh; display: flex; flex-direction: column;">
-            <div style="padding: 15px 20px; border-bottom: 1px solid #3d3d5c; display: flex; justify-content: space-between; align-items: center;">
+        <div class="cloudbackup-browser-modal">
+            <div class="cloudbackup-browser-header">
                 <div>
-                    <h3 style="margin: 0; color: #10b981;">📂 ${escapeHtml(remoteName)}</h3>
-                    <div id="remote-path-display" style="font-size: 0.85rem; color: #a0a0b0; margin-top: 4px;">/${escapeHtml(path)}</div>
+                    <h3 class="cloudbackup-browser-title">📂 ${escapeHtml(remoteName)}</h3>
+                    <div id="remote-path-display" class="cloudbackup-browser-path">/${escapeHtml(path)}</div>
                 </div>
-                <button data-action="close" style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer;">×</button>
+                <button data-action="close" class="cloudbackup-browser-close">×</button>
             </div>
-            <div style="padding: 10px 20px; border-bottom: 1px solid #3d3d5c; display: flex; gap: 10px;">
-                <button id="remote-back-btn" data-action="back" style="padding: 8px 16px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;" ${!path ? 'disabled style="opacity:0.5;padding: 8px 16px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff;"' : ''}>
+            <div class="cloudbackup-browser-toolbar">
+                <button id="remote-back-btn" data-action="back" class="${!path ? 'cloudbackup-browser-btn-disabled' : 'cloudbackup-browser-btn'}" ${!path ? 'disabled' : ''}>
                     ⬅️ Atrás
                 </button>
-                <button data-action="refresh" style="padding: 8px 16px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;">
+                <button data-action="refresh" class="cloudbackup-browser-btn">
                     🔄 Actualizar
                 </button>
-                <button data-action="sync-folder" style="padding: 8px 16px; background: #10b981; border: none; border-radius: 6px; color: #fff; cursor: pointer;">
+                <button data-action="sync-folder" class="cloudbackup-browser-btn-sync">
                     📥 Sincronizar esta carpeta
                 </button>
             </div>
-            <div id="remote-files-list" style="flex: 1; overflow-y: auto; padding: 15px 20px;">
-                <div style="text-align: center; padding: 40px; color: #a0a0b0;">Cargando...</div>
+            <div id="remote-files-list" class="cloudbackup-browser-files">
+                <div class="cloudbackup-browser-loading">Cargando...</div>
             </div>
         </div>
     `;
@@ -13008,7 +13382,7 @@ async function loadRemoteFiles(remoteName, path) {
         const data = await res.json();
         
         if (!data.items || data.items.length === 0) {
-            listDiv.innerHTML = '<div style="text-align: center; padding: 40px; color: #a0a0b0;">📭 Carpeta vacía</div>';
+            listDiv.innerHTML = '<div class="cloudbackup-browser-empty">📭 Carpeta vacía</div>';
             return;
         }
         
@@ -13020,13 +13394,13 @@ async function loadRemoteFiles(remoteName, path) {
         });
         
         listDiv.innerHTML = sorted.map(item => `
-            <div class="remote-file-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 8px; cursor: ${item.isDir ? 'pointer' : 'default'}; border: 1px solid rgba(255,255,255,0.05);"
+            <div class="cloudbackup-file-item ${item.isDir ? 'cloudbackup-file-item-clickable' : 'cloudbackup-file-item-default'}"
                 ${item.isDir ? `data-action="navigate" data-path="${escapeHtml(item.path)}"` : ''}>
-                <div style="display: flex; align-items: center; gap: 12px; overflow: hidden;">
-                    <span style="font-size: 1.4rem;">${item.isDir ? '📁' : getFileIcon(item.name)}</span>
-                    <div style="overflow: hidden;">
-                        <div style="font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(item.name)}</div>
-                        <div style="font-size: 0.8rem; color: #a0a0b0;">
+                <div class="cloudbackup-file-item-info">
+                    <span class="cloudbackup-file-icon">${item.isDir ? '📁' : getFileIcon(item.name)}</span>
+                    <div class="cloudbackup-file-details">
+                        <div class="cloudbackup-file-name">${escapeHtml(item.name)}</div>
+                        <div class="cloudbackup-file-meta">
                             ${item.isDir ? 'Carpeta' : formatFileSize(item.size)}
                             ${item.modTime ? ' • ' + new Date(item.modTime).toLocaleDateString() : ''}
                         </div>
@@ -13034,7 +13408,7 @@ async function loadRemoteFiles(remoteName, path) {
                 </div>
                 ${!item.isDir ? `
                     <button data-action="download" data-path="${escapeHtml(item.path)}"
-                        style="padding: 6px 12px; background: #6366f1; border: none; border-radius: 6px; color: #fff; cursor: pointer; font-size: 0.85rem;">
+                        class="cloudbackup-file-download-btn">
                         📥
                     </button>
                 ` : ''}
@@ -13060,7 +13434,7 @@ async function loadRemoteFiles(remoteName, path) {
         });
         
     } catch (e) {
-        listDiv.innerHTML = `<div style="text-align: center; padding: 40px; color: #ef4444;">Error: ${e.message}</div>`;
+        listDiv.innerHTML = `<div class="cloudbackup-browser-empty" style="color: #ef4444;">Error: ${e.message}</div>`;
     }
 }
 
@@ -13121,42 +13495,42 @@ async function syncRemote(remoteName) {
 function showSyncWizard(remoteName, remotePath = '') {
     const modal = document.createElement('div');
     modal.id = 'sync-wizard-modal';
-    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 100000;';
+    modal.className = 'cloudbackup-modal-overlay-dark';
     
     modal.innerHTML = `
-        <div style="background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 16px; width: 95%; max-width: 600px; padding: 25px;">
-            <h3 style="color: #10b981; margin-bottom: 20px;">🔄 Configurar Sincronización</h3>
+        <div class="cloudbackup-sync-wizard">
+            <h3 class="cloudbackup-sync-wizard-title">🔄 Configurar Sincronización</h3>
             
-            <div style="margin-bottom: 20px;">
-                <label style="color: #fff; display: block; margin-bottom: 8px;">📤 Origen (nube):</label>
-                <div style="display: flex; gap: 10px;">
+            <div class="cloudbackup-sync-field">
+                <label class="cloudbackup-sync-label">📤 Origen (nube):</label>
+                <div class="cloudbackup-sync-input-group">
                     <input type="text" id="sync-source" value="${remoteName}:${remotePath}" readonly 
-                        style="flex: 1; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
-                    <button data-action="browse-source" style="padding: 10px 15px; background: #6366f1; border: none; border-radius: 6px; color: #fff; cursor: pointer;">📂</button>
+                        class="cloudbackup-sync-input">
+                    <button data-action="browse-source" class="cloudbackup-sync-browse-btn">📂</button>
                 </div>
             </div>
             
-            <div style="margin-bottom: 20px;">
-                <label style="color: #fff; display: block; margin-bottom: 8px;">📥 Destino (NAS):</label>
-                <div style="display: flex; gap: 10px;">
+            <div class="cloudbackup-sync-field">
+                <label class="cloudbackup-sync-label">📥 Destino (NAS):</label>
+                <div class="cloudbackup-sync-input-group">
                     <input type="text" id="sync-dest" value="/mnt/storage/cloud-backup/${remoteName}" 
-                        style="flex: 1; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
-                    <button data-action="browse-dest" style="padding: 10px 15px; background: #6366f1; border: none; border-radius: 6px; color: #fff; cursor: pointer;">📂</button>
+                        class="cloudbackup-sync-input">
+                    <button data-action="browse-dest" class="cloudbackup-sync-browse-btn">📂</button>
                 </div>
             </div>
             
-            <div style="margin-bottom: 20px;">
-                <label style="color: #fff; display: block; margin-bottom: 8px;">⚙️ Modo:</label>
-                <select id="sync-mode" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+            <div class="cloudbackup-sync-field">
+                <label class="cloudbackup-sync-label">⚙️ Modo:</label>
+                <select id="sync-mode" class="cloudbackup-form-select">
                     <option value="copy">📥 Copiar (solo añade archivos nuevos)</option>
                     <option value="sync">🔄 Sincronizar (hace destino idéntico al origen)</option>
                     <option value="move">✂️ Mover (elimina del origen después de copiar)</option>
                 </select>
             </div>
             
-            <div style="margin-bottom: 20px;">
-                <label style="color: #fff; display: block; margin-bottom: 8px;">⏰ Programar:</label>
-                <select id="sync-schedule" style="width: 100%; padding: 10px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 6px; color: #fff;">
+            <div class="cloudbackup-sync-field">
+                <label class="cloudbackup-sync-label">⏰ Programar:</label>
+                <select id="sync-schedule" class="cloudbackup-form-select">
                     <option value="now">▶️ Ejecutar ahora (una vez)</option>
                     <option value="hourly">🕐 Cada hora</option>
                     <option value="daily">📅 Diariamente (3:00 AM)</option>
@@ -13164,9 +13538,9 @@ function showSyncWizard(remoteName, remotePath = '') {
                 </select>
             </div>
             
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button data-action="cancel" style="padding: 12px 24px; background: #4a4a6a; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Cancelar</button>
-                <button data-action="start-sync" style="padding: 12px 24px; background: #10b981; border: none; border-radius: 6px; color: #fff; cursor: pointer; font-weight: 600;">🚀 Iniciar</button>
+            <div class="cloudbackup-sync-actions">
+                <button data-action="cancel" class="cloudbackup-sync-btn-cancel">Cancelar</button>
+                <button data-action="start-sync" class="cloudbackup-sync-btn-start">🚀 Iniciar</button>
             </div>
         </div>
     `;
@@ -13247,18 +13621,18 @@ async function startSync() {
 function showSyncProgress(jobId) {
     const toast = document.createElement('div');
     toast.id = `sync-progress-${jobId}`;
-    toast.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: #1a1a2e; border: 1px solid #3d3d5c; border-radius: 12px; padding: 15px 20px; z-index: 100001; width: 320px;';
+    toast.className = 'cloudbackup-progress-toast';
     toast.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <span style="color: #10b981; font-weight: 600;">🔄 Sincronizando...</span>
-            <button data-action="close" style="background: none; border: none; color: #fff; cursor: pointer; font-size: 18px;">×</button>
+        <div class="cloudbackup-progress-header">
+            <span class="cloudbackup-progress-title">🔄 Sincronizando...</span>
+            <button data-action="close" class="cloudbackup-progress-close">×</button>
         </div>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <span id="sync-progress-text-${jobId}" style="color: #a0a0b0; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px;">Iniciando...</span>
-            <span id="sync-progress-percent-${jobId}" style="color: #10b981; font-weight: 600; font-size: 0.9rem;">0%</span>
+        <div class="cloudbackup-progress-info">
+            <span id="sync-progress-text-${jobId}" class="cloudbackup-progress-text">Iniciando...</span>
+            <span id="sync-progress-percent-${jobId}" class="cloudbackup-progress-percent">0%</span>
         </div>
-        <div style="height: 6px; background: #2d2d44; border-radius: 3px; overflow: hidden;">
-            <div id="sync-progress-bar-${jobId}" style="height: 100%; background: linear-gradient(90deg, #10b981, #6366f1); width: 0%; transition: width 0.5s ease;"></div>
+        <div class="cloudbackup-progress-bg">
+            <div id="sync-progress-bar-${jobId}" class="cloudbackup-progress-bar" style="width: 0%;"></div>
         </div>
     `;
     document.body.appendChild(toast);

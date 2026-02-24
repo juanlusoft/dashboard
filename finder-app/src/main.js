@@ -16,9 +16,10 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
       preload: path.join(__dirname, 'preload.js')
     },
-    icon: path.join(__dirname, '../assets/icon.png')
+    icon: path.join(__dirname, '../assets/icon.svg')
   });
 
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
@@ -45,9 +46,24 @@ app.on('activate', () => {
 
 // IPC handlers
 ipcMain.handle('scan-network', async () => {
-  return await scanNetwork();
+  try {
+    return await scanNetwork();
+  } catch (err) {
+    console.error('Network scan failed:', err);
+    return [];
+  }
 });
 
 ipcMain.handle('open-nas', (event, url) => {
-  shell.openExternal(url);
+  // SECURITY: Validate URL before opening — only allow https:// and http:// protocols
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      console.error('Blocked openExternal with non-HTTP protocol:', parsed.protocol);
+      return;
+    }
+    shell.openExternal(url);
+  } catch (e) {
+    console.error('Invalid URL passed to open-nas:', e.message);
+  }
 });

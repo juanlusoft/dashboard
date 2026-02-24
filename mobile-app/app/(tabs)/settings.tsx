@@ -41,7 +41,7 @@ export default function Settings() {
               
               // Try to logout on server
               if (url && sessionId) {
-                await fetch(`${url}/api/auth/logout`, {
+                await fetch(`${url}/api/logout`, {
                   method: 'POST',
                   headers: { 'X-Session-ID': sessionId },
                 }).catch(() => {});
@@ -89,7 +89,7 @@ export default function Settings() {
           </View>
           <View style={styles.row}>
             <Text style={styles.label}>Build</Text>
-            <Text style={styles.value}>Expo SDK 54</Text>
+            <Text style={styles.value}>Expo SDK 52</Text>
           </View>
         </View>
       </View>

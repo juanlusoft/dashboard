@@ -43,7 +43,7 @@ export default function Backup() {
 
       const [devRes, pendingRes] = await Promise.all([
         fetch(`${nasUrl}/api/active-backup/devices`, { headers }),
-        fetch(`${nasUrl}/api/active-backup/agent/pending`, { headers }),
+        fetch(`${nasUrl}/api/active-backup/pending`, { headers }),
       ]);
 
       if (devRes.ok) {

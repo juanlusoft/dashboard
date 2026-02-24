@@ -406,6 +406,7 @@
                     <button class="header-btn sidebar-toggle" id="sidebar-toggle" title="Toggle sidebar">☰</button>
                     <div class="top-header-logo">
                         <span>HomePiNAS</span>
+                        <span class="header-version" id="header-version"></span>
                     </div>
                 </div>
                 <div class="header-search">
@@ -422,13 +423,13 @@
                         <button class="header-btn" id="power-btn" title="Opciones de energía">⏻</button>
                         <div class="power-dropdown" id="power-dropdown">
                             <button class="power-option" id="power-logout">
-                                <span style="font-size:18px;">🚪</span> Cerrar sesión
+                                <span class="power-option-icon">🚪</span> Cerrar sesión
                             </button>
                             <button class="power-option" id="power-reboot">
-                                <span style="font-size:18px;">🔄</span> Reiniciar sistema
+                                <span class="power-option-icon">🔄</span> Reiniciar sistema
                             </button>
                             <button class="power-option power-option--danger" id="power-shutdown">
-                                <span style="font-size:18px;">⏻</span> Apagar sistema
+                                <span class="power-option-icon">⏻</span> Apagar sistema
                             </button>
                         </div>
                     </div>
@@ -491,6 +492,10 @@
                         <li data-view="network">
                             <span class="nav-icon">🌐</span>
                             <span class="nav-text" data-i18n="nav.network">Red</span>
+                        </li>
+                        <li data-view="vpn">
+                            <span class="nav-icon">🔒</span>
+                            <span class="nav-text" data-i18n="nav.vpn">VPN Server</span>
                         </li>
                         <li data-view="users">
                             <span class="nav-icon">👥</span>

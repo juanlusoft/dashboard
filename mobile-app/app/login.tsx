@@ -29,15 +29,17 @@ export default function Login() {
     setLoading(true);
     
     let url = nasUrl.trim();
-    if (!url.startsWith('http')) {
-      url = `http://${url}`;
-    }
-    if (!url.includes(':')) {
+    // Check if user provided a port (look for : after the host part)
+    const urlWithoutProtocol = url.replace(/^https?:\/\//, '');
+    if (!urlWithoutProtocol.includes(':')) {
       url = `${url}:3001`;
+    }
+    if (!url.startsWith('http')) {
+      url = `https://${url}`;
     }
 
     try {
-      const response = await fetch(`${url}/api/system/info`, { 
+      const response = await fetch(`${url}/api/system/status`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' },
       });
@@ -68,7 +70,7 @@ export default function Login() {
     
     try {
       const savedUrl = await AsyncStorage.getItem('nas_url');
-      const response = await fetch(`${savedUrl}/api/auth/login`, {
+      const response = await fetch(`${savedUrl}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -76,13 +78,13 @@ export default function Login() {
 
       const data = await response.json();
 
-      if (data.success) {
+      if (data.requires2FA) {
+        Alert.alert('2FA', '2FA no está soportado aún en la app');
+      } else if (data.success) {
         await AsyncStorage.setItem('session_id', data.sessionId);
         await AsyncStorage.setItem('csrf_token', data.csrfToken);
         await AsyncStorage.setItem('username', data.user?.username || username);
         router.replace('/(tabs)');
-      } else if (data.requires2FA) {
-        Alert.alert('2FA', '2FA no está soportado aún en la app');
       } else {
         Alert.alert('Error', data.message || 'Credenciales incorrectas');
       }

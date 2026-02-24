@@ -17,7 +17,7 @@ export default function Index() {
       
       if (sessionId && nasUrl) {
         // Verify session is still valid
-        const response = await fetch(`${nasUrl}/api/auth/verify-session`, {
+        const response = await fetch(`${nasUrl}/api/verify-session`, {
           method: 'POST',
           headers: { 'X-Session-ID': sessionId },
         });

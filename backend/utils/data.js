@@ -26,7 +26,8 @@ const initialState = {
     notifications: {
         email: null,
         telegram: null,
-        history: []
+        history: [],
+        errorReporting: null
     },
     backups: [],
     scheduledTasks: [],

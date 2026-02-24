@@ -12,17 +12,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 interface SystemInfo {
   hostname: string;
   uptime: string;
-  cpu: number;
-  memory: { used: number; total: number; percent: number };
-  temp: number;
+  cpuLoad: number;
+  ramUsedPercent: number;
+  ramUsed: number;
+  ramTotal: number;
+  cpuTemp: number;
 }
 
 interface PoolStatus {
-  configured: boolean;
-  running: boolean;
-  poolSize: string;
-  poolUsed: string;
-  poolFree: string;
+  mergerfs: { running: boolean };
+  capacity: { total: string; used: string; free: string };
+  disks: any[];
 }
 
 export default function Dashboard() {
@@ -45,7 +45,7 @@ export default function Dashboard() {
       const headers = { 'X-Session-ID': sessionId };
 
       const [sysRes, poolRes] = await Promise.all([
-        fetch(`${nasUrl}/api/system/resources`, { headers }),
+        fetch(`${nasUrl}/api/system/stats`, { headers }),
         fetch(`${nasUrl}/api/storage/pool/status`, { headers }),
       ]);
 
@@ -112,46 +112,46 @@ export default function Dashboard() {
       <View style={styles.statsGrid}>
         <View style={styles.statCard}>
           <Text style={styles.statIcon}>🖥️</Text>
-          <Text style={styles.statValue}>{system?.cpu?.toFixed(1) || 0}%</Text>
+          <Text style={styles.statValue}>{system?.cpuLoad?.toFixed(1) || 0}%</Text>
           <Text style={styles.statLabel}>CPU</Text>
         </View>
 
         <View style={styles.statCard}>
           <Text style={styles.statIcon}>🧠</Text>
-          <Text style={styles.statValue}>{system?.memory?.percent?.toFixed(0) || 0}%</Text>
+          <Text style={styles.statValue}>{system?.ramUsedPercent?.toFixed(0) || 0}%</Text>
           <Text style={styles.statLabel}>RAM</Text>
         </View>
 
         <View style={styles.statCard}>
           <Text style={styles.statIcon}>🌡️</Text>
-          <Text style={[styles.statValue, (system?.temp || 0) > 60 && styles.hot]}>
-            {system?.temp?.toFixed(0) || 0}°C
+          <Text style={[styles.statValue, (system?.cpuTemp || 0) > 60 && styles.hot]}>
+            {system?.cpuTemp?.toFixed(0) || 0}°C
           </Text>
           <Text style={styles.statLabel}>Temp</Text>
         </View>
       </View>
 
       {/* Storage Pool */}
-      {pool && pool.configured && (
+      {pool && pool.disks && pool.disks.length > 0 && (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>💾 Storage Pool</Text>
           <View style={styles.poolInfo}>
             <View style={styles.poolRow}>
               <Text style={styles.poolLabel}>Usado</Text>
-              <Text style={styles.poolValue}>{pool.poolUsed}</Text>
+              <Text style={styles.poolValue}>{pool.capacity?.used}</Text>
             </View>
             <View style={styles.poolRow}>
               <Text style={styles.poolLabel}>Libre</Text>
-              <Text style={[styles.poolValue, styles.green]}>{pool.poolFree}</Text>
+              <Text style={[styles.poolValue, styles.green]}>{pool.capacity?.free}</Text>
             </View>
             <View style={styles.poolRow}>
               <Text style={styles.poolLabel}>Total</Text>
-              <Text style={styles.poolValue}>{pool.poolSize}</Text>
+              <Text style={styles.poolValue}>{pool.capacity?.total}</Text>
             </View>
           </View>
           <View style={styles.statusBadge}>
             <Text style={styles.statusText}>
-              {pool.running ? '🟢 Online' : '🔴 Offline'}
+              {pool.mergerfs?.running ? '🟢 Online' : '🔴 Offline'}
             </Text>
           </View>
         </View>

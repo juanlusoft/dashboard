@@ -1,7 +1,6 @@
 const Bonjour = require('bonjour-service').Bonjour;
-const net = require('net');
 const os = require('os');
-const http = require('http');
+const https = require('https');
 
 const NAS_PORT = 443;
 const SCAN_TIMEOUT = 3000;
@@ -43,14 +42,14 @@ function scanMDNS() {
     const devices = [];
     const bonjour = new Bonjour();
     
-    const browser = bonjour.find({ type: 'http' }, (service) => {
+    const browser = bonjour.find({ type: 'https' }, (service) => {
       // Buscar servicios HomePiNAS
       if (service.name?.toLowerCase().includes('homepinas') || 
           service.port === NAS_PORT) {
         const ip = service.addresses?.find(a => a.includes('.')) || service.host;
         if (ip) {
           devices.push({
-            ip: ip.replace(/\.local$/, ''),
+            ip: ip,
             name: service.name || 'HomePiNAS',
             hostname: service.host || '',
             method: 'mDNS'
@@ -132,10 +131,11 @@ function checkHomePiNAS(ip, hostname = '') {
       port: NAS_PORT,
       path: '/api/system/info',
       method: 'GET',
-      timeout: 1500
+      timeout: 1500,
+      rejectUnauthorized: false
     };
-    
-    const req = http.request(options, (res) => {
+
+    const req = https.request(options, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {

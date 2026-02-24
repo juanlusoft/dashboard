@@ -48,12 +48,12 @@ function requireAdmin(req, res, next) {
 function getUsers() {
   const data = getData();
 
-  // Modern multi-user format
-  if (data.users && Array.isArray(data.users)) {
+  // Modern multi-user format (only if array has entries)
+  if (data.users && Array.isArray(data.users) && data.users.length > 0) {
     return data.users;
   }
 
-  // Legacy single-user format: migrate to array
+  // Legacy single-user format or empty users array: include legacy user
   if (data.user) {
     const legacyUser = {
       ...data.user,

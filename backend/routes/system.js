@@ -491,11 +491,18 @@ router.get('/disks', async (req, res) => {
 // Status endpoint - public (needed by frontend to check if user exists)
 router.get('/status', async (req, res) => {
     const data = getData();
+    // Read version from package.json
+    let version = '';
+    try {
+        const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8'));
+        version = pkg.version || '';
+    } catch { /* ignore */ }
     res.json({
         user: data.user ? { username: data.user.username } : null,
         storageConfig: data.storageConfig,
         poolConfigured: data.poolConfigured || false,
-        network: data.network
+        network: data.network,
+        version
     });
 });
 

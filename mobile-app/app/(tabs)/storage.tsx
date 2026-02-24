@@ -10,13 +10,13 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Disk {
-  id: string;
+  name: string;
   model: string;
-  size: string;
-  type: string;
-  temp: number;
+  sizeGB: number;
+  diskType: string;
+  smart?: { temp?: number };
+  temperature?: number;
   serial: string;
-  usage: number;
 }
 
 export default function Storage() {
@@ -35,7 +35,7 @@ export default function Storage() {
         return;
       }
 
-      const response = await fetch(`${nasUrl}/api/storage/disks`, {
+      const response = await fetch(`${nasUrl}/api/system/disks`, {
         headers: { 'X-Session-ID': sessionId },
       });
 
@@ -88,39 +88,28 @@ export default function Storage() {
 
       {error && <Text style={styles.error}>{error}</Text>}
 
-      {disks.map((disk) => (
-        <View key={disk.id} style={styles.diskCard}>
-          <View style={styles.diskHeader}>
-            <View>
-              <Text style={styles.diskModel}>{disk.model || 'Unknown'}</Text>
-              <Text style={styles.diskInfo}>
-                {disk.id} • {disk.type} • {disk.size}
-              </Text>
+      {disks.map((disk) => {
+        const temp = disk.smart?.temp ?? disk.temperature ?? 0;
+        return (
+          <View key={disk.name} style={styles.diskCard}>
+            <View style={styles.diskHeader}>
+              <View>
+                <Text style={styles.diskModel}>{disk.model || 'Unknown'}</Text>
+                <Text style={styles.diskInfo}>
+                  {disk.name} • {disk.diskType} • {disk.sizeGB} GB
+                </Text>
+              </View>
+              <View style={[styles.tempBadge, { backgroundColor: getTempColor(temp) + '20' }]}>
+                <Text style={[styles.tempText, { color: getTempColor(temp) }]}>
+                  🌡️ {temp}°C
+                </Text>
+              </View>
             </View>
-            <View style={[styles.tempBadge, { backgroundColor: getTempColor(disk.temp || 0) + '20' }]}>
-              <Text style={[styles.tempText, { color: getTempColor(disk.temp || 0) }]}>
-                🌡️ {disk.temp || 0}°C
-              </Text>
-            </View>
-          </View>
 
-          {/* Usage bar */}
-          <View style={styles.usageContainer}>
-            <View style={styles.usageBar}>
-              <View
-                style={[
-                  styles.usageFill,
-                  { width: `${disk.usage || 0}%` },
-                  (disk.usage || 0) > 90 && styles.usageHigh,
-                ]}
-              />
-            </View>
-            <Text style={styles.usageText}>{disk.usage || 0}% usado</Text>
+            <Text style={styles.serial}>SN: {disk.serial || 'N/A'}</Text>
           </View>
-
-          <Text style={styles.serial}>SN: {disk.serial || 'N/A'}</Text>
-        </View>
-      ))}
+        );
+      })}
 
       {disks.length === 0 && !error && (
         <Text style={styles.empty}>No hay discos configurados</Text>

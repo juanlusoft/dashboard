@@ -24,7 +24,7 @@ class NASDiscovery {
     const hostnames = ['homepinas.local', 'homepinas', 'nas.local'];
     for (const host of hostnames) {
       try {
-        const result = await this._checkHost(host, 3001);
+        const result = await this._checkHost(host, 443);
         if (result) results.push(result);
       } catch (e) {}
     }
@@ -62,7 +62,7 @@ class NASDiscovery {
             if (addr) {
               results.push({
                 address: addr,
-                port: service.port || 3001,
+                port: service.port || 443,
                 name: service.name,
                 method: 'mdns',
               });
@@ -83,13 +83,15 @@ class NASDiscovery {
 
   async _checkHost(host, port) {
     return new Promise((resolve) => {
+      // Discovery uses rejectUnauthorized:false since we don't know the cert yet.
+      // The agent will pin the cert fingerprint after first successful connection.
+      const discoveryAgent = new https.Agent({ rejectUnauthorized: false });
       const req = https.get({
         hostname: host,
         port,
         path: '/api/system/stats',
-        rejectAuthorized: false,
         timeout: this.timeout,
-        agent: new https.Agent({ rejectUnauthorized: false }),
+        agent: discoveryAgent,
       }, (res) => {
         let data = '';
         res.on('data', (chunk) => { data += chunk; });
@@ -130,7 +132,7 @@ class NASDiscovery {
       if (ip === localIP) continue;
 
       promises.push(
-        this._checkHost(ip, 3001).then(result => {
+        this._checkHost(ip, 443).then(result => {
           if (result) results.push(result);
         }).catch(() => {})
       );
