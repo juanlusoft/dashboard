@@ -8010,9 +8010,8 @@ body.fm-dragging .fm-tree-item {
 }
 
 .abk-devices-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 16px;
+    display: block;
+    overflow-x: auto;
 }
 
 .abk-detail-panel {
@@ -8792,6 +8791,485 @@ body.fm-dragging .fm-tree-item {
     background: var(--accent);
     border-radius: 2px;
     animation: pulse 2s infinite;
+}
+
+/* =============================================================================
+   ACTIVE BACKUP — TABLE VIEW & DETAIL PANEL (v1.6)
+   ============================================================================= */
+
+/* ── Device table ─────────────────────────────────────────────────────────── */
+.abk-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.abk-th-row {
+    background: var(--hover-bg);
+}
+
+.abk-th {
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--card-border);
+}
+
+.abk-th-dot {
+    width: 24px;
+    padding-right: 4px;
+}
+
+.abk-th-actions {
+    width: 1%;
+    white-space: nowrap;
+}
+
+.abk-tr {
+    transition: background 0.15s;
+    border-bottom: 1px solid var(--card-border);
+}
+
+.abk-tr:last-child {
+    border-bottom: none;
+}
+
+.abk-tr:hover {
+    background: var(--hover-bg);
+}
+
+.abk-td {
+    padding: 11px 12px;
+    vertical-align: middle;
+}
+
+.abk-td-dot {
+    width: 24px;
+    padding-right: 4px;
+    text-align: center;
+}
+
+.abk-td-mono {
+    font-family: monospace;
+    font-size: 0.85rem;
+}
+
+.abk-td-dim {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.abk-td-name {
+    font-weight: 600;
+}
+
+.abk-td-sub {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.abk-td-actions {
+    padding: 8px 10px;
+    white-space: nowrap;
+}
+
+.abk-td-dim-sm {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+/* ── lastSeen status dot ──────────────────────────────────────────────────── */
+.abk-lastseen-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+@keyframes abk-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.5); }
+    70%  { box-shadow: 0 0 0 6px rgba(40, 167, 69, 0);  }
+    100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);  }
+}
+
+.abk-dot-online {
+    animation: abk-pulse 2s infinite;
+}
+
+/* ── Status pill ──────────────────────────────────────────────────────────── */
+.abk-status-pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 20px;
+    border: 1px solid transparent;
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* ── Result badges ────────────────────────────────────────────────────────── */
+.abk-result-ok {
+    color: var(--success);
+    font-weight: 600;
+}
+
+.abk-result-fail {
+    color: var(--danger);
+    font-weight: 600;
+}
+
+.abk-result-none {
+    color: var(--text-secondary);
+}
+
+/* ── Row action buttons ───────────────────────────────────────────────────── */
+.abk-row-actions {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.abk-row-btn {
+    padding: 5px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--card-border);
+    background: var(--hover-bg);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+    transition: all 0.15s;
+}
+
+.abk-row-btn:hover {
+    background: var(--active-bg);
+}
+
+.abk-btn-backup {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+}
+
+.abk-btn-backup:hover {
+    background: var(--primary-hover);
+}
+
+.abk-btn-delete:hover {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
+}
+
+/* ── Column visibility ────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+    .abk-col-hide-sm {
+        display: none;
+    }
+}
+
+/* ── Detail panel ─────────────────────────────────────────────────────────── */
+.abk-detail-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--card-border);
+}
+
+.abk-detail-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.abk-detail-title {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.abk-detail-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.abk-detail-config-btn {
+    padding: 6px 12px;
+    background: var(--hover-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+}
+
+.abk-detail-body {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.abk-detail-section {
+    /* each section is visually separated */
+}
+
+.abk-detail-section-title {
+    margin: 0 0 12px 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.abk-section-refresh {
+    font-size: 0.75rem;
+    padding: 3px 7px;
+    background: var(--hover-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-secondary);
+}
+
+/* ── Device info grid ─────────────────────────────────────────────────────── */
+.abk-info-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.abk-info-row {
+    display: flex;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--card-border);
+    font-size: 0.88rem;
+    gap: 12px;
+}
+
+.abk-info-row:last-child {
+    border-bottom: none;
+}
+
+.abk-info-row:nth-child(even) {
+    background: var(--hover-bg);
+}
+
+.abk-info-label {
+    width: 160px;
+    flex-shrink: 0;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.abk-info-val {
+    flex: 1;
+    word-break: break-word;
+}
+
+.abk-mono {
+    font-family: monospace;
+    font-size: 0.85em;
+}
+
+.abk-info-ok {
+    color: var(--success);
+    font-weight: 600;
+}
+
+.abk-info-error {
+    color: var(--danger);
+    font-weight: 600;
+}
+
+/* ── Backup history table ─────────────────────────────────────────────────── */
+.abk-detail-history {
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.abk-detail-loading {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+}
+
+.abk-detail-empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+}
+
+.abk-history-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+
+.abk-hth {
+    text-align: left;
+    padding: 9px 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: var(--hover-bg);
+    border-bottom: 1px solid var(--card-border);
+}
+
+.abk-htr {
+    border-bottom: 1px solid var(--card-border);
+    transition: background 0.15s;
+}
+
+.abk-htr:last-child {
+    border-bottom: none;
+}
+
+.abk-htr:hover {
+    background: var(--hover-bg);
+}
+
+.abk-htd {
+    padding: 9px 12px;
+    vertical-align: middle;
+}
+
+/* ── Live log / status ────────────────────────────────────────────────────── */
+.abk-live-log {
+    background: var(--bg-main);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 14px;
+    font-size: 0.85rem;
+}
+
+.abk-live-log-status {
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.abk-live-log-output {
+    margin: 0;
+    padding: 10px;
+    background: #0d1117;
+    color: #10b981;
+    border-radius: 6px;
+    font-family: monospace;
+    font-size: 0.78rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.abk-live-log-hint {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+/* ── Logs modal ───────────────────────────────────────────────────────────── */
+.abk-logs-modal-content {
+    width: min(700px, 95vw);
+    max-height: 85vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.abk-logs-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0;
+}
+
+.abk-logs-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.abk-refresh-btn {
+    padding: 5px 12px;
+    background: var(--hover-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+}
+
+.abk-logs-status-bar {
+    padding: 8px 0;
+    font-size: 0.88rem;
+    font-weight: 600;
+    border-bottom: 1px solid var(--card-border);
+    margin-bottom: 12px;
+}
+
+.abk-logs-output {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 200px;
+    max-height: 55vh;
+}
+
+.abk-logs-pre {
+    margin: 0;
+    padding: 14px;
+    background: #0d1117;
+    color: #10b981;
+    border-radius: 6px;
+    font-family: monospace;
+    font-size: 0.8rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+    min-height: 200px;
+    max-height: 55vh;
+    overflow-y: auto;
+}
+
+.abk-logs-empty {
+    padding: 30px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+}
+
+.abk-logs-error {
+    padding: 10px 14px;
+    margin-top: 10px;
+    background: rgba(220, 53, 69, 0.1);
+    border: 1px solid rgba(220, 53, 69, 0.3);
+    border-radius: 6px;
+    color: var(--danger);
+    font-size: 0.85rem;
 }
 
 /* ========================================
@@ -11714,3 +12192,363 @@ body.fm-dragging .fm-tree-item {
     padding: 20px;
     color: var(--text-dim);
 }
+
+/* =============================================================================
+   ACTIVE BACKUP — Redesign v1.6 (stats bar, tabs, detail panel tabs, config)
+   ============================================================================= */
+
+/* ── Stats summary card ──────────────────────────────────────────────────── */
+.abk-stats-card {
+    grid-column: 1 / -1;
+}
+
+.abk-stats-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.abk-stats-title-group {
+    flex: 1;
+    min-width: 0;
+}
+
+.abk-stats-title {
+    margin: 0 0 4px 0;
+    font-size: 1.15rem;
+}
+
+.abk-stats-subtitle {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    margin: 0;
+}
+
+.abk-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+@media (max-width: 600px) {
+    .abk-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.abk-stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 14px 8px;
+    background: var(--bg-card, #161625);
+    gap: 4px;
+}
+
+.abk-stat-num {
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.abk-stat-ok   { color: var(--success); }
+.abk-stat-warn { color: var(--warning); }
+.abk-stat-dim  { color: var(--text-dim); font-size: 1rem; }
+
+.abk-stat-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+    font-weight: 600;
+}
+
+/* ── Main card with tabs ─────────────────────────────────────────────────── */
+.abk-main-card {
+    grid-column: 1 / -1;
+    padding: 0;
+    overflow: hidden;
+}
+
+.abk-tab-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-hover);
+    padding: 0 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.abk-tab-bar::-webkit-scrollbar { display: none; }
+
+.abk-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 18px;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+    position: relative;
+}
+
+.abk-tab:hover {
+    color: var(--text);
+}
+
+.abk-tab-active {
+    color: var(--accent, #6366f1);
+    border-bottom-color: var(--accent, #6366f1);
+    background: transparent;
+}
+
+.abk-tab-icon {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.abk-tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--warning);
+    color: #000;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.abk-tab-pane {
+    padding: 20px;
+}
+
+/* ── Pending empty state ─────────────────────────────────────────────────── */
+.abk-pending-pane {
+    min-height: 120px;
+}
+
+.abk-pending-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-dim);
+}
+
+.abk-pending-empty-icon {
+    font-size: 2.5rem;
+    margin-bottom: 12px;
+}
+
+.abk-pending-empty-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 8px 0;
+    color: var(--text);
+}
+
+.abk-pending-empty-sub {
+    font-size: 0.85rem;
+    margin: 0;
+    max-width: 360px;
+    margin-inline: auto;
+}
+
+/* ── Recovery pane ───────────────────────────────────────────────────────── */
+.abk-recovery-pane {
+    max-width: 680px;
+}
+
+.abk-recovery-pane-header {
+    margin-bottom: 16px;
+}
+
+.abk-recovery-pane-header .abk-recovery-title {
+    margin: 0 0 4px 0;
+}
+
+.abk-recovery-pane-header .abk-recovery-subtitle {
+    margin: 0;
+}
+
+/* ── Device detail panel — inner tab bar ─────────────────────────────────── */
+.abk-dp-tab-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--card-border, var(--border));
+    margin: 16px 0 0 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.abk-dp-tab-bar::-webkit-scrollbar { display: none; }
+
+.abk-dp-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 16px;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 0.83rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.abk-dp-tab:hover {
+    color: var(--text);
+}
+
+.abk-dp-tab-active {
+    color: var(--accent, #6366f1);
+    border-bottom-color: var(--accent, #6366f1);
+}
+
+.abk-dp-live-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    animation: abk-pulse 2s infinite;
+    flex-shrink: 0;
+}
+
+.abk-dp-pane {
+    padding-top: 18px;
+}
+
+/* ── Log tab toolbar ─────────────────────────────────────────────────────── */
+.abk-dp-log-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 10px;
+}
+
+/* ── Configuración tab ───────────────────────────────────────────────────── */
+.abk-config-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-width: 560px;
+}
+
+.abk-config-section {
+    border: 1px solid var(--card-border, var(--border));
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.abk-config-section-title {
+    margin: 0;
+    padding: 10px 16px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+    background: var(--bg-hover);
+    border-bottom: 1px solid var(--card-border, var(--border));
+}
+
+.abk-config-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--card-border, var(--border));
+}
+
+.abk-config-row:last-child {
+    border-bottom: none;
+}
+
+.abk-config-label {
+    width: 180px;
+    flex-shrink: 0;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-dim);
+}
+
+.abk-config-val-static {
+    font-size: 0.88rem;
+    color: var(--text);
+}
+
+.abk-config-input {
+    flex: 1;
+    padding: 7px 10px;
+    background: var(--bg-card, #161625);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.88rem;
+    font-family: monospace;
+    transition: border-color 0.15s;
+}
+
+.abk-config-input:focus {
+    outline: none;
+    border-color: var(--accent, #6366f1);
+}
+
+.abk-config-input-sm {
+    max-width: 90px;
+    flex: none;
+}
+
+.abk-config-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.abk-cfg-feedback {
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+/* ── Loading text placeholder ────────────────────────────────────────────── */
+.abk-loading-text {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.88rem;
+}
+
+/* Active Backup header actions */
+.abk-header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.abk-header-actions .btn-secondary { text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; background: rgba(255,255,255,0.08); color: #ccc; border: 1px solid rgba(255,255,255,0.12); transition: all 0.2s; }
+.abk-header-actions .btn-secondary:hover { background: rgba(255,255,255,0.15); color: #fff; }
+
+/* Fix: botones descarga/docs más visibles */
+.abk-header-actions .btn-secondary { background: var(--sidebar-bg); color: #fff; border: 1px solid var(--sidebar-hover); font-weight: 500; }
+.abk-header-actions .btn-secondary:hover { background: var(--sidebar-hover); color: #fff; border-color: var(--sidebar-hover); }
+
+/* Active Backup header buttons - sidebar color */
+.abk-header-actions .btn-primary.btn-sm { background: var(--sidebar-bg); color: #fff; border: 1px solid var(--sidebar-hover); width: auto; padding: 6px 12px; box-shadow: none; }
+.abk-header-actions .btn-primary.btn-sm:hover { background: var(--sidebar-hover); }
