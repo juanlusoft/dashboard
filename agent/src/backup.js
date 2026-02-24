@@ -624,11 +624,19 @@ class BackupManager {
     try { await execFileAsync('mkdir', ['-p', mountPoint]); } catch (e) {}
 
     const smbUrl = `smb://${encodeURIComponent(creds.user)}:${encodeURIComponent(creds.pass)}@${nasAddress}/${shareName}`;
-    try {
-      await execFileAsync('mount_smbfs', ['-N', smbUrl, mountPoint]);
-    } catch (e) {
-      throw new Error(`No se pudo montar el share: ${e.message}`);
-    }
+    await retry(
+      async (attempt) => {
+        if (attempt > 0) this._log(`SMB mount retry #${attempt}`);
+        await execFileAsync('mount_smbfs', ['-N', smbUrl, mountPoint]);
+      },
+      {
+        maxRetries: 5,
+        retryableErrors: NETWORK_ERRORS,
+        onRetry: (err, attempt, delay) => {
+          this._setProgress('connect', 10, `Mount failed, retry ${attempt} in ${Math.round(delay / 1000)}s...`);
+        },
+      }
+    );
 
     const hostname = os.hostname();
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -652,11 +660,19 @@ class BackupManager {
     try { await execFileAsync('mkdir', ['-p', mountPoint]); } catch (e) {}
 
     const smbUrl = `smb://${encodeURIComponent(creds.user)}:${encodeURIComponent(creds.pass)}@${nasAddress}/${shareName}`;
-    try {
-      await execFileAsync('mount_smbfs', ['-N', smbUrl, mountPoint]);
-    } catch (e) {
-      throw new Error(`No se pudo montar el share: ${e.message}`);
-    }
+    await retry(
+      async (attempt) => {
+        if (attempt > 0) this._log(`SMB mount retry #${attempt}`);
+        await execFileAsync('mount_smbfs', ['-N', smbUrl, mountPoint]);
+      },
+      {
+        maxRetries: 5,
+        retryableErrors: NETWORK_ERRORS,
+        onRetry: (err, attempt, delay) => {
+          this._setProgress('connect', 10, `Mount failed, retry ${attempt} in ${Math.round(delay / 1000)}s...`);
+        },
+      }
+    );
 
     const hostname = os.hostname();
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -672,7 +688,13 @@ class BackupManager {
 
         try {
           await execFileAsync('mkdir', ['-p', dest]);
-          await execFileAsync('rsync', ['-az', '--delete', `${srcPath}/`, `${dest}/`], { timeout: 3600000 });
+          await retry(
+            async (attempt) => {
+              if (attempt > 0) this._log(`rsync retry #${attempt} for ${folderName}`);
+              await execFileAsync('rsync', ['-az', '--delete', `${srcPath}/`, `${dest}/`], { timeout: 3600000 });
+            },
+            { maxRetries: 3, retryableErrors: NETWORK_ERRORS, baseDelayMs: 2000 }
+          );
           results.push({ path: srcPath, success: true });
         } catch (err) {
           results.push({ path: srcPath, success: false, error: err.message });
@@ -716,12 +738,24 @@ class BackupManager {
 
     try {
       this._setProgress('connect', 10, 'Mounting SMB share');
-      await execFileAsync('mount', [
-        '-t', 'cifs',
-        `//${nasAddress}/${shareName}`,
-        mountPoint,
-        '-o', `credentials=${credFile},vers=3.0`
-      ]);
+      await retry(
+        async (attempt) => {
+          if (attempt > 0) this._log(`CIFS mount retry #${attempt}`);
+          await execFileAsync('mount', [
+            '-t', 'cifs',
+            `//${nasAddress}/${shareName}`,
+            mountPoint,
+            '-o', `credentials=${credFile},vers=3.0`
+          ]);
+        },
+        {
+          maxRetries: 5,
+          retryableErrors: NETWORK_ERRORS,
+          onRetry: (err, attempt, delay) => {
+            this._setProgress('connect', 10, `Mount failed, retry ${attempt} in ${Math.round(delay / 1000)}s...`);
+          },
+        }
+      );
 
       const hostname = os.hostname();
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -791,12 +825,24 @@ class BackupManager {
 
     try {
       this._setProgress('connect', 10, 'Mounting SMB share');
-      await execFileAsync('mount', [
-        '-t', 'cifs',
-        `//${nasAddress}/${shareName}`,
-        mountPoint,
-        '-o', `credentials=${credFile},vers=3.0`
-      ]);
+      await retry(
+        async (attempt) => {
+          if (attempt > 0) this._log(`CIFS mount retry #${attempt}`);
+          await execFileAsync('mount', [
+            '-t', 'cifs',
+            `//${nasAddress}/${shareName}`,
+            mountPoint,
+            '-o', `credentials=${credFile},vers=3.0`
+          ]);
+        },
+        {
+          maxRetries: 5,
+          retryableErrors: NETWORK_ERRORS,
+          onRetry: (err, attempt, delay) => {
+            this._setProgress('connect', 10, `Mount failed, retry ${attempt} in ${Math.round(delay / 1000)}s...`);
+          },
+        }
+      );
 
       const hostname = os.hostname();
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -811,7 +857,13 @@ class BackupManager {
 
         try {
           await execFileAsync('mkdir', ['-p', dest]);
-          await execFileAsync('rsync', ['-az', '--delete', `${srcPath}/`, `${dest}/`], { timeout: 3600000 });
+          await retry(
+            async (attempt) => {
+              if (attempt > 0) this._log(`rsync retry #${attempt} for ${folderName}`);
+              await execFileAsync('rsync', ['-az', '--delete', `${srcPath}/`, `${dest}/`], { timeout: 3600000 });
+            },
+            { maxRetries: 3, retryableErrors: NETWORK_ERRORS, baseDelayMs: 2000 }
+          );
           results.push({ path: srcPath, success: true });
         } catch (err) {
           results.push({ path: srcPath, success: false, error: err.message });
