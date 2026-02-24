@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guía de Instalación — Active Backup Agent</title>
+<style>
+  :root {
+    --sidebar: #2c3e50;
+    --sidebar-hover: #34495e;
+    --primary: #0078d4;
+    --bg: #f5f7fa;
+    --card: #fff;
+    --text: #2d3748;
+    --text-muted: #718096;
+    --border: #e2e8f0;
+    --success: #48bb78;
+    --warning: #ecc94b;
+    --danger: #f56565;
+    --code-bg: #1a202c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+
+  /* Header */
+  .header { background: var(--sidebar); color: #fff; padding: 40px 0; text-align: center; }
+  .header h1 { font-size: 2rem; font-weight: 700; margin-bottom: 8px; }
+  .header p { color: rgba(255,255,255,.7); font-size: 1.05rem; }
+  .header .badge { display: inline-block; background: var(--primary); padding: 4px 14px; border-radius: 20px; font-size: .8rem; margin-top: 12px; font-weight: 600; }
+
+  /* Container */
+  .container { max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+
+  /* Progress bar */
+  .progress-bar { display: flex; justify-content: space-between; margin-bottom: 48px; position: relative; }
+  .progress-bar::before { content: ''; position: absolute; top: 20px; left: 40px; right: 40px; height: 3px; background: var(--border); z-index: 0; }
+  .progress-step { display: flex; flex-direction: column; align-items: center; z-index: 1; flex: 1; }
+  .progress-step .num { width: 40px; height: 40px; border-radius: 50%; background: var(--sidebar); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .9rem; margin-bottom: 8px; }
+  .progress-step .label { font-size: .75rem; color: var(--text-muted); text-align: center; max-width: 80px; }
+
+  /* Step sections */
+  .step { background: var(--card); border-radius: 12px; padding: 32px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border: 1px solid var(--border); }
+  .step-header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+  .step-num { width: 36px; height: 36px; border-radius: 50%; background: var(--sidebar); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .85rem; flex-shrink: 0; }
+  .step h2 { font-size: 1.25rem; font-weight: 700; color: var(--text); }
+  .step h3 { font-size: 1rem; font-weight: 600; margin: 18px 0 10px; color: var(--sidebar); }
+  .step p, .step li { font-size: .95rem; margin-bottom: 8px; }
+  .step ul, .step ol { padding-left: 24px; margin-bottom: 14px; }
+
+  /* Requirements grid */
+  .req-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+  .req-item { display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px; background: #f7fafc; border-radius: 8px; border: 1px solid var(--border); }
+  .req-item .icon { font-size: 1.3rem; flex-shrink: 0; }
+  .req-item strong { display: block; font-size: .85rem; }
+  .req-item span { font-size: .8rem; color: var(--text-muted); }
+
+  /* Code blocks */
+  pre { background: var(--code-bg); color: #e2e8f0; padding: 16px 20px; border-radius: 8px; overflow-x: auto; margin: 12px 0 16px; font-size: .85rem; line-height: 1.6; }
+  code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; }
+  p code { background: #edf2f7; padding: 2px 6px; border-radius: 4px; font-size: .85rem; color: var(--sidebar); }
+
+  /* Diagram boxes */
+  .diagram { background: #f7fafc; border: 1px solid var(--border); border-radius: 10px; padding: 24px; margin: 16px 0; text-align: center; }
+  .diagram svg { max-width: 100%; }
+
+  /* Info/warning boxes */
+  .callout { padding: 14px 18px; border-radius: 8px; margin: 14px 0; display: flex; align-items: flex-start; gap: 10px; font-size: .9rem; }
+  .callout.info { background: #ebf8ff; border-left: 4px solid var(--primary); }
+  .callout.warning { background: #fffff0; border-left: 4px solid var(--warning); }
+  .callout.success { background: #f0fff4; border-left: 4px solid var(--success); }
+  .callout.danger { background: #fff5f5; border-left: 4px solid var(--danger); }
+  .callout .icon { font-size: 1.2rem; flex-shrink: 0; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 0; margin: 16px 0 0; border-bottom: 2px solid var(--border); }
+  .tab { padding: 10px 20px; font-size: .85rem; font-weight: 600; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: .2s; }
+  .tab.active { color: var(--sidebar); border-bottom-color: var(--sidebar); }
+  .tab-content { display: none; padding: 16px 0; }
+  .tab-content.active { display: block; }
+
+  /* Flowchart */
+  .flow { display: flex; align-items: center; justify-content: center; gap: 0; margin: 20px 0; flex-wrap: wrap; }
+  .flow-step { background: var(--sidebar); color: #fff; padding: 10px 18px; border-radius: 8px; font-size: .8rem; font-weight: 600; text-align: center; min-width: 120px; }
+  .flow-arrow { color: var(--text-muted); font-size: 1.4rem; margin: 0 6px; }
+
+  /* Footer */
+  .footer { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: .8rem; }
+  .footer a { color: var(--primary); text-decoration: none; }
+
+  /* Troubleshooting accordion */
+  details { margin: 8px 0; }
+  details summary { cursor: pointer; font-weight: 600; font-size: .9rem; padding: 12px 16px; background: #f7fafc; border-radius: 8px; border: 1px solid var(--border); list-style: none; display: flex; align-items: center; gap: 8px; }
+  details summary::before { content: '▸'; transition: .2s; }
+  details[open] summary::before { content: '▾'; }
+  details .detail-body { padding: 14px 16px; border: 1px solid var(--border); border-top: 0; border-radius: 0 0 8px 8px; font-size: .9rem; }
+
+  @media (max-width: 600px) {
+    .req-grid { grid-template-columns: 1fr; }
+    .flow-step { min-width: 90px; font-size: .7rem; padding: 8px 10px; }
+    .container { padding: 20px 14px; }
+    .step { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📦 Guía de Instalación</h1>
+  <p>Active Backup Agent para Windows</p>
+  <div class="badge">HomePiNAS v1.6.0</div>
+</div>
+
+<div class="container">
+
+  <!-- Progress -->
+  <div class="progress-bar">
+    <div class="progress-step"><div class="num">1</div><div class="label">Descargar</div></div>
+    <div class="progress-step"><div class="num">2</div><div class="label">Instalar</div></div>
+    <div class="progress-step"><div class="num">3</div><div class="label">Verificar</div></div>
+    <div class="progress-step"><div class="num">4</div><div class="label">Aprobar</div></div>
+    <div class="progress-step"><div class="num">5</div><div class="label">Backup</div></div>
+  </div>
+
+  <!-- Flow overview -->
+  <div class="diagram">
+    <div class="flow">
+      <div class="flow-step">🖥️ Instalar<br>agente</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">📡 Agente<br>contacta NAS</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">✅ Admin<br>aprueba</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">🔄 Backups<br>automáticos</div>
+    </div>
+  </div>
+
+  <!-- Intro -->
+  <div class="callout info">
+    <div class="icon">💡</div>
+    <div>El agente es un <strong>servicio invisible</strong> de Windows que se ejecuta en segundo plano. No tiene interfaz gráfica — todo se controla desde el dashboard del NAS.</div>
+  </div>
+
+  <!-- Requirements -->
+  <div class="step">
+    <div class="step-header"><div class="step-num">📋</div><h2>Requisitos</h2></div>
+    <div class="req-grid">
+      <div class="req-item">
+        <div class="icon">🖥️</div>
+        <div><strong>Windows 10/11</strong><span>64-bit, cualquier edición</span></div>
+      </div>
+      <div class="req-item">
+        <div class="icon">🔑</div>
+        <div><strong>Administrador</strong><span>Permisos de admin para instalar</span></div>
+      </div>
+      <div class="req-item">
+        <div class="icon">🌐</div>
+        <div><strong>Red local</strong><span>Mismo segmento que el NAS</span></div>
+      </div>
+      <div class="req-item">
+        <div class="icon">💾</div>
+        <div><strong>Espacio en NAS</strong><span>Mínimo 50 GB libres</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 1 -->
+  <div class="step">
+    <div class="step-header"><div class="step-num">1</div><h2>Descargar el Agente</h2></div>
+    <ol>
+      <li>Abre el <strong>Dashboard de HomePiNAS</strong> en tu navegador</li>
+      <li>Ve a la sección <strong>Active Backup</strong></li>
+      <li>Haz clic en el botón <strong>⬇️ Descargar Agente</strong></li>
+    </ol>
+    <div class="diagram">
+      <svg width="500" height="80" viewBox="0 0 500 80">
+        <rect x="0" y="0" width="500" height="80" rx="10" fill="#f7fafc" stroke="#e2e8f0"/>
+        <text x="20" y="30" font-family="Segoe UI" font-size="13" font-weight="600" fill="#2c3e50">Active Backup</text>
+        <rect x="240" y="16" width="120" height="32" rx="6" fill="#2c3e50"/>
+        <text x="256" y="37" font-family="Segoe UI" font-size="11" fill="#fff">⬇️ Descargar Agente</text>
+        <rect x="370" y="16" width="110" height="32" rx="6" fill="#2c3e50"/>
+        <text x="383" y="37" font-family="Segoe UI" font-size="11" fill="#fff">📖 Guía Instalación</text>
+        <text x="20" y="60" font-family="Segoe UI" font-size="11" fill="#718096">Backups automáticos de equipos remotos</text>
+      </svg>
+    </div>
+    <p>El archivo descargado será <code>HomePiNAS-Agent-v2.tar.gz</code></p>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="step">
+    <div class="step-header"><div class="step-num">2</div><h2>Instalar el Servicio</h2></div>
+
+    <h3>Opción A — PowerShell (recomendado)</h3>
+    <ol>
+      <li>Abre <strong>PowerShell como Administrador</strong></li>
+      <li>Navega a la carpeta donde descargaste el archivo</li>
+      <li>Extrae y ejecuta el instalador:</li>
+    </ol>
+    <pre><code># Extraer
+tar -xzf HomePiNAS-Agent-v2.tar.gz
+
+# Ejecutar instalador
+cd HomePiNAS-Agent
+.\install.ps1</code></pre>
+
+    <div class="callout info">
+      <div class="icon">ℹ️</div>
+      <div>El instalador registra el servicio <code>HomePiNAS-Backup</code> y lo inicia automáticamente. No requiere reinicio.</div>
+    </div>
+
+    <h3>Opción B — Desde carpeta compartida del NAS</h3>
+    <p>Si el NAS tiene carpeta compartida accesible, puedes instalar directamente:</p>
+    <pre><code># Desde PowerShell como Admin
+\\192.168.1.100\Storage\HomePiNAS-Agent\install.ps1</code></pre>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="step">
+    <div class="step-header"><div class="step-num">3</div><h2>Verificar la Instalación</h2></div>
+    <p>Comprueba que el servicio está corriendo:</p>
+    <pre><code>Get-Service -Name "HomePiNAS-Backup"</code></pre>
+
+    <div class="diagram">
+      <svg width="440" height="80" viewBox="0 0 440 80">
+        <rect x="0" y="0" width="440" height="80" rx="8" fill="#1a202c"/>
+        <text x="16" y="28" font-family="Consolas, monospace" font-size="12" fill="#a0aec0">PS C:\&gt; Get-Service "HomePiNAS-Backup"</text>
+        <text x="16" y="52" font-family="Consolas, monospace" font-size="12" fill="#48bb78">Status   Name                DisplayName</text>
+        <text x="16" y="68" font-family="Consolas, monospace" font-size="12" fill="#e2e8f0">Running  HomePiNAS-Backup    HomePiNAS Backup Agent</text>
+      </svg>
+    </div>
+
+    <div class="callout success">
+      <div class="icon">✅</div>
+      <div>Si ves <strong>Running</strong>, el agente está funcionando y buscando tu NAS automáticamente.</div>
+    </div>
+  </div>
+
+  <!-- Step 4 -->
+  <div class="step">
+    <div class="step-header"><div class="step-num">4</div><h2>Aprobar el Equipo en el NAS</h2></div>
+    <ol>
+      <li>En el Dashboard del NAS, ve a <strong>Active Backup</strong></li>
+      <li>El nuevo equipo aparecerá en <strong>Pendientes</strong></li>
+      <li>Haz clic en <strong>Aprobar</strong></li>
+    </ol>
+
+    <div class="diagram">
+      <svg width="500" height="120" viewBox="0 0 500 120">
+        <rect x="0" y="0" width="500" height="120" rx="10" fill="#fff" stroke="#e2e8f0"/>
+        <text x="20" y="28" font-family="Segoe UI" font-size="14" font-weight="700" fill="#2c3e50">Equipos Pendientes</text>
+        <rect x="16" y="44" width="468" height="60" rx="8" fill="#f7fafc" stroke="#e2e8f0"/>
+        <text x="32" y="68" font-family="Segoe UI" font-size="12" font-weight="600" fill="#2d3748">DESKTOP-MI-PC</text>
+        <text x="32" y="88" font-family="Segoe UI" font-size="11" fill="#718096">Windows 11 Pro • 192.168.1.115 • Hace 2 min</text>
+        <rect x="370" y="58" width="80" height="30" rx="6" fill="#48bb78"/>
+        <text x="389" y="78" font-family="Segoe UI" font-size="12" font-weight="600" fill="#fff">Aprobar</text>
+      </svg>
+    </div>
+
+    <p>Opcionalmente configura la <strong>frecuencia de backup</strong> y la <strong>retención</strong> (número de versiones a guardar).</p>
+  </div>
+
+  <!-- Step 5 -->
+  <div class="step">
+    <div class="step-header"><div class="step-num">5</div><h2>¡Listo! Backups Automáticos</h2></div>
+    <p>Una vez aprobado, el agente ejecutará backups según el calendario configurado (por defecto: <strong>diario a las 3:00 AM</strong>).</p>
+
+    <div class="flow" style="margin: 24px 0;">
+      <div class="flow-step" style="background: var(--success);">✓ Agente<br>instalado</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step" style="background: var(--success);">✓ Equipo<br>aprobado</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step" style="background: var(--primary);">🔄 Backups<br>cada noche</div>
+    </div>
+
+    <div class="callout info">
+      <div class="icon">⏱️</div>
+      <div>El primer backup tarda <strong>30–90 minutos</strong> dependiendo del tamaño del disco. Los siguientes son incrementales y mucho más rápidos.</div>
+    </div>
+
+    <p>Puedes ver el progreso y el historial en <strong>Active Backup → Historial</strong> del dashboard.</p>
+  </div>
+
+  <!-- Troubleshooting -->
+  <div class="step">
+    <div class="step-header"><div class="step-num">🔧</div><h2>Solución de Problemas</h2></div>
+
+    <details>
+      <summary>🔴 El servicio no aparece o no arranca</summary>
+      <div class="detail-body">
+        <p>Abre PowerShell como Admin y ejecuta:</p>
+        <pre><code>Start-Service -Name "HomePiNAS-Backup"
+Get-Service -Name "HomePiNAS-Backup"</code></pre>
+        <p>Si el servicio no existe, vuelve a ejecutar el instalador.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>🟡 El equipo no aparece en Pendientes del NAS</summary>
+      <div class="detail-body">
+        <ol>
+          <li>Verifica conectividad: <code>ping 192.168.1.100</code></li>
+          <li>Reinicia el servicio: <code>Restart-Service "HomePiNAS-Backup"</code></li>
+          <li>Espera 30 segundos y recarga el dashboard</li>
+          <li>Revisa los logs: <code>type %LOCALAPPDATA%\HomePiNAS\agent.log</code></li>
+        </ol>
+      </div>
+    </details>
+
+    <details>
+      <summary>🟡 Error de conectividad con el NAS</summary>
+      <div class="detail-body">
+        <ul>
+          <li>Verifica que ambos equipos estén en la misma red</li>
+          <li>Comprueba que el dashboard del NAS está accesible: abre <code>https://192.168.1.100</code> en el navegador</li>
+          <li>En Windows Defender Firewall, permite <strong>HomePiNAS Backup Agent</strong> en redes privadas</li>
+        </ul>
+      </div>
+    </details>
+
+    <details>
+      <summary>🔴 "Acceso denegado" al instalar</summary>
+      <div class="detail-body">
+        <p>La instalación requiere permisos de Administrador. Haz clic derecho en PowerShell → <strong>Ejecutar como administrador</strong>.</p>
+      </div>
+    </details>
+  </div>
+
+</div>
+
+<div class="footer">
+  <p>HomePiNAS Active Backup v1.6.0 • <a href="https://homepinas.com">homepinas.com</a></p>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guía de Restauración — Active Backup HomePiNAS</title>
+<style>
+  :root {
+    --sidebar: #2c3e50;
+    --sidebar-hover: #34495e;
+    --primary: #0078d4;
+    --bg: #f5f7fa;
+    --card: #fff;
+    --text: #2d3748;
+    --text-muted: #718096;
+    --border: #e2e8f0;
+    --success: #48bb78;
+    --warning: #ecc94b;
+    --danger: #f56565;
+    --code-bg: #1a202c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+  .header { background: linear-gradient(135deg, var(--sidebar) 0%, #1a252f 100%); color: #fff; padding: 40px 0; text-align: center; }
+  .header h1 { font-size: 2rem; font-weight: 700; margin-bottom: 8px; }
+  .header p { color: rgba(255,255,255,.7); font-size: 1.05rem; }
+  .header .badge { display: inline-block; background: var(--danger); padding: 4px 14px; border-radius: 20px; font-size: .8rem; margin-top: 12px; font-weight: 600; }
+  .container { max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+  .step { background: var(--card); border-radius: 12px; padding: 32px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border: 1px solid var(--border); }
+  .step-header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+  .step-num { width: 36px; height: 36px; border-radius: 50%; background: var(--sidebar); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .85rem; flex-shrink: 0; }
+  .step h2 { font-size: 1.25rem; font-weight: 700; }
+  .step h3 { font-size: 1rem; font-weight: 600; margin: 18px 0 10px; color: var(--sidebar); }
+  .step p, .step li { font-size: .95rem; margin-bottom: 8px; }
+  .step ul, .step ol { padding-left: 24px; margin-bottom: 14px; }
+  pre { background: var(--code-bg); color: #e2e8f0; padding: 16px 20px; border-radius: 8px; overflow-x: auto; margin: 12px 0 16px; font-size: .85rem; line-height: 1.6; }
+  code { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; }
+  p code { background: #edf2f7; padding: 2px 6px; border-radius: 4px; font-size: .85rem; color: var(--sidebar); }
+  .callout { padding: 14px 18px; border-radius: 8px; margin: 14px 0; display: flex; align-items: flex-start; gap: 10px; font-size: .9rem; }
+  .callout.info { background: #ebf8ff; border-left: 4px solid var(--primary); }
+  .callout.warning { background: #fffff0; border-left: 4px solid var(--warning); }
+  .callout.success { background: #f0fff4; border-left: 4px solid var(--success); }
+  .callout.danger { background: #fff5f5; border-left: 4px solid var(--danger); }
+  .callout .icon { font-size: 1.2rem; flex-shrink: 0; }
+  .diagram { background: #f7fafc; border: 1px solid var(--border); border-radius: 10px; padding: 24px; margin: 16px 0; text-align: center; }
+  .flow { display: flex; align-items: center; justify-content: center; gap: 0; margin: 20px 0; flex-wrap: wrap; }
+  .flow-step { background: var(--sidebar); color: #fff; padding: 10px 16px; border-radius: 8px; font-size: .8rem; font-weight: 600; text-align: center; min-width: 100px; }
+  .flow-arrow { color: var(--text-muted); font-size: 1.4rem; margin: 0 6px; }
+  details { margin: 8px 0; }
+  details summary { cursor: pointer; font-weight: 600; font-size: .9rem; padding: 12px 16px; background: #f7fafc; border-radius: 8px; border: 1px solid var(--border); list-style: none; display: flex; align-items: center; gap: 8px; }
+  details summary::before { content: '▸'; transition: .2s; }
+  details[open] summary::before { content: '▾'; }
+  details .detail-body { padding: 14px 16px; border: 1px solid var(--border); border-top: 0; border-radius: 0 0 8px 8px; font-size: .9rem; }
+  .footer { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: .8rem; }
+  .footer a { color: var(--primary); text-decoration: none; }
+
+  /* Time estimate boxes */
+  .time-est { display: inline-flex; align-items: center; gap: 6px; background: #edf2f7; padding: 4px 12px; border-radius: 16px; font-size: .8rem; color: var(--sidebar); font-weight: 600; }
+
+  /* Partition diagram */
+  .partition-diagram { display: flex; gap: 4px; margin: 16px 0; border-radius: 8px; overflow: hidden; height: 50px; }
+  .partition-diagram .part { display: flex; align-items: center; justify-content: center; color: #fff; font-size: .7rem; font-weight: 600; text-align: center; line-height: 1.2; }
+  .partition-diagram .efi { background: #e53e3e; width: 60px; }
+  .partition-diagram .msr { background: #718096; width: 30px; }
+  .partition-diagram .win { background: var(--primary); flex: 1; }
+
+  @media (max-width: 600px) {
+    .container { padding: 20px 14px; }
+    .step { padding: 20px; }
+    .flow-step { min-width: 80px; font-size: .7rem; padding: 8px 10px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🔄 Guía de Restauración Windows</h1>
+  <p>Restaurar tu sistema desde un backup de Active Backup</p>
+  <div class="badge">⚠️ Bare Metal Recovery</div>
+</div>
+
+<div class="container">
+
+  <!-- When to use -->
+  <div class="step">
+    <div class="step-header"><div class="step-num">❓</div><h2>¿Cuándo necesitas esto?</h2></div>
+    <ul>
+      <li>🔴 Tu disco duro ha fallado</li>
+      <li>💀 Windows no arranca después de una actualización</li>
+      <li>🦠 Tu sistema se ha infectado con ransomware</li>
+      <li>💿 Quieres migrar a un SSD nuevo</li>
+      <li>🔄 Necesitas restaurar a una fecha anterior</li>
+    </ul>
+    <div class="callout info">
+      <div class="icon">💡</div>
+      <div>Si tu Windows aún arranca, puedes restaurar archivos individuales desde el dashboard sin necesidad de esta guía.</div>
+    </div>
+  </div>
+
+  <!-- What you need -->
+  <div class="step">
+    <div class="step-header"><div class="step-num">📋</div><h2>Lo que necesitas</h2></div>
+    <ol>
+      <li><strong>USB con Windows 11</strong> (8 GB mínimo) — créalo con <a href="https://www.microsoft.com/software-download/windows11" target="_blank">Media Creation Tool</a></li>
+      <li><strong>Cable Ethernet</strong> conectado al NAS (recomendado sobre WiFi)</li>
+      <li><strong>Datos del NAS</strong>: IP, usuario y contraseña del backup</li>
+    </ol>
+    <div class="callout warning">
+      <div class="icon">⏱️</div>
+      <div>Proceso completo: <strong>30–90 minutos</strong> dependiendo del tamaño del backup.</div>
+    </div>
+  </div>
+
+  <!-- Overview flow -->
+  <div class="diagram">
+    <p style="font-weight: 600; margin-bottom: 16px; color: var(--sidebar);">Proceso general</p>
+    <div class="flow">
+      <div class="flow-step">🔌 Boot<br>USB</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">💻 Abrir<br>cmd</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">💾 Particionar<br>disco</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">📡 Montar<br>NAS</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">🔄 Restaurar<br>imagen</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step" style="background:var(--success)">✅ Boot<br>Windows</div>
+    </div>
+  </div>
+
+  <!-- Step 1: Boot USB -->
+  <div class="step">
+    <div class="step-header"><div class="step-num">1</div><h2>Arrancar desde USB</h2></div>
+    <ol>
+      <li>Conecta el USB de Windows al equipo</li>
+      <li>Enciende y pulsa la tecla de boot (<strong>F2</strong>, <strong>F10</strong>, <strong>F12</strong>, <strong>Del</strong> o <strong>Esc</strong> según fabricante)</li>
+      <li>Selecciona el USB como dispositivo de arranque</li>
+    </ol>
+    <div class="diagram">
+      <svg width="420" height="100" viewBox="0 0 420 100">
+        <rect x="0" y="0" width="420" height="100" rx="8" fill="#1a202c"/>
+        <text x="20" y="28" font-family="Consolas" font-size="13" fill="#a0aec0">Boot Menu</text>
+        <text x="20" y="52" font-family="Consolas" font-size="12" fill="#e2e8f0">  1. UEFI: SanDisk USB</text>
+        <text x="308" y="52" font-family="Consolas" font-size="12" fill="#48bb78">◄ Seleccionar</text>
+        <text x="20" y="72" font-family="Consolas" font-size="12" fill="#718096">  2. Samsung SSD 980</text>
+        <text x="20" y="92" font-family="Consolas" font-size="12" fill="#718096">  3. Network Boot</text>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Step 2: Open CMD -->
+  <div class="step">
+    <div class="step-header"><div class="step-num">2</div><h2>Abrir Símbolo del Sistema</h2></div>
+    <p>Cuando aparezca el instalador de Windows:</p>
+    <ol>
+      <li>Selecciona idioma y haz clic en <strong>Siguiente</strong></li>
+      <li>Haz clic en <strong>Reparar el equipo</strong> (abajo a la izquierda)</li>
+      <li>Selecciona <strong>Solucionar problemas</strong> → <strong>Símbolo del sistema</strong></li>
+    </ol>
+
+    <div class="diagram">
+      <svg width="480" height="130" viewBox="0 0 480 130">
+        <!-- Windows setup screen mockup -->
+        <rect x="0" y="0" width="480" height="130" rx="8" fill="#0078d4"/>
+        <text x="30" y="35" font-family="Segoe UI" font-size="16" font-weight="600" fill="#fff">Configuración de Windows</text>
+        <text x="30" y="60" font-family="Segoe UI" font-size="12" fill="rgba(255,255,255,.8)">Idioma: Español (España)</text>
+        <text x="30" y="78" font-family="Segoe UI" font-size="12" fill="rgba(255,255,255,.8)">Teclado: Español</text>
+        <!-- Repair button -->
+        <rect x="10" y="100" width="180" height="24" rx="4" fill="rgba(255,255,255,.15)" stroke="rgba(255,255,255,.4)"/>
+        <text x="20" y="117" font-family="Segoe UI" font-size="11" fill="#fff">🔧 Reparar el equipo</text>
+        <text x="200" y="117" font-family="Segoe UI" font-size="11" fill="#fbd38d">← Haz clic aquí</text>
+        <!-- Next button -->
+        <rect x="380" y="100" width="80" height="24" rx="4" fill="rgba(255,255,255,.2)"/>
+        <text x="401" y="117" font-family="Segoe UI" font-size="11" fill="rgba(255,255,255,.5)">Siguiente</text>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Step 3: Partition -->
+  <div class="step">
+    <div class="step-header"><div class="step-num">3</div><h2>Particionar el disco</h2></div>
+    <span class="time-est">⏱️ ~2 minutos</span>
+
+    <div class="callout danger">
+      <div class="icon">⚠️</div>
+      <div><strong>Esto borrará todo el disco destino.</strong> Asegúrate de seleccionar el disco correcto.</div>
+    </div>
+
+    <p>Copia y pega estos comandos en orden:</p>
+
+    <pre><code>diskpart
+list disk
+select disk 0
+clean
+convert gpt
+create partition efi size=100
+format quick fs=fat32 label="System"
+assign letter=S
+create partition msr size=16
+create partition primary
+format quick fs=ntfs label="Windows"
+assign letter=W
+exit</code></pre>
+
+    <p>Resultado: el disco queda así:</p>
+    <div class="partition-diagram">
+      <div class="part efi">EFI<br>100 MB</div>
+      <div class="part msr">MSR<br>16 MB</div>
+      <div class="part win">Windows (NTFS)<br>Resto del disco</div>
+    </div>
+
+    <div class="callout info">
+      <div class="icon">💡</div>
+      <div>Si tienes varios discos, usa <code>list disk</code> para identificar el correcto por tamaño. El USB aparecerá como disco más pequeño.</div>
+    </div>
+  </div>
+
+  <!-- Step 4: Mount NAS -->
+  <div class="step">
+    <div class="step-header"><div class="step-num">4</div><h2>Conectar al NAS</h2></div>
+    <span class="time-est">⏱️ ~1 minuto</span>
+
+    <pre><code>net use Z: \\192.168.1.100\Storage /user:juanlu contraseña</code></pre>
+
+    <p>Verifica que puedes ver los backups:</p>
+    <pre><code>dir Z:\active-backup\</code></pre>
+
+    <div class="diagram">
+      <svg width="440" height="90" viewBox="0 0 440 90">
+        <rect x="0" y="0" width="440" height="90" rx="8" fill="#1a202c"/>
+        <text x="16" y="24" font-family="Consolas" font-size="11" fill="#a0aec0">X:\&gt; net use Z: \\192.168.1.100\Storage /user:juanlu ****</text>
+        <text x="16" y="44" font-family="Consolas" font-size="11" fill="#48bb78">El comando se completó correctamente.</text>
+        <text x="16" y="66" font-family="Consolas" font-size="11" fill="#a0aec0">X:\&gt; dir Z:\active-backup\</text>
+        <text x="16" y="82" font-family="Consolas" font-size="11" fill="#e2e8f0"> ml8cx6r0bf9p    mm0yzkjkdc8b    ...</text>
+      </svg>
+    </div>
+
+    <div class="callout warning">
+      <div class="icon">📝</div>
+      <div>Sustituye <code>juanlu</code> y <code>contraseña</code> por tus credenciales del NAS. La IP puede variar según tu red.</div>
+    </div>
+  </div>
+
+  <!-- Step 5: Restore -->
+  <div class="step">
+    <div class="step-header"><div class="step-num">5</div><h2>Restaurar la imagen</h2></div>
+    <span class="time-est">⏱️ 30–90 minutos</span>
+
+    <p>Primero, busca el backup que quieres restaurar:</p>
+    <pre><code>dir Z:\active-backup\DEVICE_ID\ImageBackup\HOSTNAME\</code></pre>
+
+    <p>Verás carpetas con fechas. Elige la que quieras restaurar y aplica la imagen:</p>
+    <pre><code>DISM /Apply-Image /ImageFile:Z:\active-backup\DEVICE_ID\ImageBackup\HOSTNAME\2026-02-24\disk.wim /Index:1 /ApplyDir:W:\</code></pre>
+
+    <div class="diagram">
+      <svg width="440" height="100" viewBox="0 0 440 100">
+        <rect x="0" y="0" width="440" height="100" rx="8" fill="#1a202c"/>
+        <text x="16" y="24" font-family="Consolas" font-size="11" fill="#a0aec0">X:\&gt; DISM /Apply-Image /ImageFile:Z:\...\disk.wim /Index:1 /ApplyDir:W:\</text>
+        <text x="16" y="46" font-family="Consolas" font-size="11" fill="#e2e8f0">Deployment Image Servicing and Management tool</text>
+        <text x="16" y="64" font-family="Consolas" font-size="11" fill="#e2e8f0">Applying image...</text>
+        <!-- Progress bar -->
+        <rect x="16" y="76" width="300" height="10" rx="4" fill="#2d3748"/>
+        <rect x="16" y="76" width="195" height="10" rx="4" fill="#0078d4"/>
+        <text x="326" y="85" font-family="Consolas" font-size="11" fill="#48bb78">65.0%</text>
+      </svg>
+    </div>
+
+    <div class="callout info">
+      <div class="icon">ℹ️</div>
+      <div>También puedes usar <code>wimapply</code> (de wimlib) en lugar de DISM — es más rápido. DISM viene incluido en el USB de Windows.</div>
+    </div>
+  </div>
+
+  <!-- Step 6: Fix boot -->
+  <div class="step">
+    <div class="step-header"><div class="step-num">6</div><h2>Reparar el arranque</h2></div>
+    <span class="time-est">⏱️ ~1 minuto</span>
+
+    <pre><code>bcdboot W:\Windows /s S: /f UEFI</code></pre>
+
+    <div class="callout success">
+      <div class="icon">✅</div>
+      <div>Deberías ver: <strong>"Se crearon correctamente los archivos de arranque."</strong></div>
+    </div>
+  </div>
+
+  <!-- Step 7: Reboot -->
+  <div class="step">
+    <div class="step-header"><div class="step-num">7</div><h2>Reiniciar</h2></div>
+    <ol>
+      <li>Desconecta el NAS: <code>net use Z: /delete</code></li>
+      <li>Retira el USB</li>
+      <li>Reinicia: <code>wpeutil reboot</code></li>
+    </ol>
+
+    <div class="callout success">
+      <div class="icon">🎉</div>
+      <div><strong>¡Windows debería arrancar normalmente!</strong> El primer arranque puede tardar unos minutos mientras detecta el hardware.</div>
+    </div>
+  </div>
+
+  <!-- Quick reference -->
+  <div class="step" style="background: var(--code-bg); color: #e2e8f0; border-color: #2d3748;">
+    <div class="step-header"><div class="step-num" style="background: var(--primary);">⚡</div><h2 style="color: #fff;">Referencia Rápida — Todos los comandos</h2></div>
+    <p style="color: #a0aec0; font-size: .85rem;">Para quien ya sabe lo que hace — todos los comandos seguidos:</p>
+    <pre style="border: 1px solid #2d3748;"><code>:: 1. Particionar
+diskpart
+  select disk 0 → clean → convert gpt
+  create partition efi size=100 → format quick fs=fat32 → assign letter=S
+  create partition msr size=16
+  create partition primary → format quick fs=ntfs → assign letter=W
+  exit
+
+:: 2. Montar NAS
+net use Z: \\192.168.1.100\Storage /user:juanlu PASSWORD
+
+:: 3. Restaurar imagen
+DISM /Apply-Image /ImageFile:Z:\active-backup\DEVICE\ImageBackup\HOST\DATE\disk.wim /Index:1 /ApplyDir:W:\
+
+:: 4. Reparar boot
+bcdboot W:\Windows /s S: /f UEFI
+
+:: 5. Limpiar y reiniciar
+net use Z: /delete
+wpeutil reboot</code></pre>
+  </div>
+
+  <!-- Troubleshooting -->
+  <div class="step">
+    <div class="step-header"><div class="step-num">🔧</div><h2>Solución de Problemas</h2></div>
+
+    <details>
+      <summary>🔴 "net use" da error de acceso denegado</summary>
+      <div class="detail-body">
+        <ul>
+          <li>Verifica IP: <code>ping 192.168.1.100</code></li>
+          <li>Verifica credenciales (usuario/contraseña del NAS)</li>
+          <li>Si no hay red, configura IP manual:
+            <pre><code>netsh interface ip set address "Ethernet" static 192.168.1.50 255.255.255.0 192.168.1.1</code></pre>
+          </li>
+        </ul>
+      </div>
+    </details>
+
+    <details>
+      <summary>🔴 Windows no arranca después de restaurar</summary>
+      <div class="detail-body">
+        <ol>
+          <li>Vuelve a bootear desde USB → Reparar → cmd</li>
+          <li>Ejecuta de nuevo: <code>bcdboot W:\Windows /s S: /f UEFI</code></li>
+          <li>Si S: no existe, asígnala: <code>diskpart → select volume 0 → assign letter=S → exit</code></li>
+        </ol>
+      </div>
+    </details>
+
+    <details>
+      <summary>🟡 DISM tarda mucho o se queda en un porcentaje</summary>
+      <div class="detail-body">
+        <p>Es normal. Imágenes de 20+ GB pueden tardar 60-90 minutos. <strong>No interrumpas el proceso.</strong> Si realmente se atasca (mismo % durante >30 min), prueba con wimlib:</p>
+        <pre><code>wimapply Z:\...\disk.wim 1 W:\</code></pre>
+      </div>
+    </details>
+
+    <details>
+      <summary>🟡 Windows pide reactivación</summary>
+      <div class="detail-body">
+        <p>Normal si cambiaste hardware (placa base, disco). Ve a <strong>Configuración → Sistema → Activación</strong> y usa tu clave de licencia o activa por teléfono.</p>
+      </div>
+    </details>
+  </div>
+
+</div>
+
+<div class="footer">
+  <p>HomePiNAS Active Backup v1.6.0 • <a href="https://homepinas.com">homepinas.com</a></p>
+</div>
+
+</body>
+</html>
