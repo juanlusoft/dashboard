@@ -251,6 +251,8 @@ app.use('/api/cloud-backup', cloudBackupRoutes);
 // This prevents exposure of backend source, config, package.json, etc.
 app.use('/frontend', express.static(path.join(__dirname, '../frontend')));
 app.use('/icons', express.static(path.join(__dirname, '../icons')));
+app.use('/downloads', express.static(path.join(__dirname, '../public/downloads')));
+app.use('/docs', express.static(path.join(__dirname, '../docs')));
 
 // Serve only specific root-level files needed by the browser
 const allowedRootFiles = ['index.html', 'manifest.json', 'service-worker.js'];
