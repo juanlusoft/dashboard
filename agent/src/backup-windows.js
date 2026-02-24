@@ -171,7 +171,7 @@ async function robocopyWithRetry(srcPath, dest, folderName, pct, mgr) {
       async (attempt) => {
         if (attempt > 0) mgr._log(`robocopy retry #${attempt} for ${folderName}`);
         await execFileAsync('robocopy', [
-          srcPath, dest, '/MIR', '/R:2', '/W:5', '/NP', '/NFL', '/NDL', '/MT:8',
+          srcPath, dest, '/MIR', '/COPY:DT', '/DCOPY:T', '/R:2', '/W:5', '/NP', '/NFL', '/NDL', '/MT:8',
         ], { timeout: 3600000, windowsHide: true, shell: false });
       },
       {
