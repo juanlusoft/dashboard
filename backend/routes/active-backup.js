@@ -461,21 +461,32 @@ function getImageFiles(deviceId) {
   
   return fs.readdirSync(dir)
     .filter(f => {
-      const ext = f.toLowerCase();
-      return ext.endsWith('.vhd') || ext.endsWith('.vhdx') || ext.endsWith('.img') || 
-             ext.endsWith('.img.gz') || ext.endsWith('.pcl.gz') || ext.endsWith('.xml') ||
-             f === 'WindowsImageBackup' || f.startsWith('backup-');
+      const fPath = path.join(dir, f);
+      try {
+        const stat = fs.statSync(fPath);
+        if (stat.isDirectory()) {
+          // Date-stamped backup folders (2026-02-24_23-09) or legacy formats
+          return /^\d{4}-\d{2}-\d{2}/.test(f) || f === 'WIMBackup' || f.startsWith('backup-');
+        }
+        // Loose image files
+        const ext = f.toLowerCase();
+        return ext.endsWith('.wim') || ext.endsWith('.vhd') || ext.endsWith('.vhdx') || 
+               ext.endsWith('.img') || ext.endsWith('.img.gz');
+      } catch(e) { return false; }
     })
     .map(f => {
       const fPath = path.join(dir, f);
-      const stat = fs.statSync(fPath);
-      return {
-        name: f,
-        size: stat.isDirectory() ? getDirSize(fPath) : stat.size,
-        modified: stat.mtime,
-        type: stat.isDirectory() ? 'directory' : 'file',
-      };
+      try {
+        const stat = fs.statSync(fPath);
+        return {
+          name: f,
+          size: stat.isDirectory() ? getDirSize(fPath) : stat.size,
+          modified: stat.mtime,
+          type: stat.isDirectory() ? 'directory' : 'file',
+        };
+      } catch(e) { return null; }
     })
+    .filter(Boolean)
     .sort((a, b) => new Date(b.modified) - new Date(a.modified));
 }
 
