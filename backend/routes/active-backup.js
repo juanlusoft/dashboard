@@ -134,6 +134,7 @@ router.get('/agent/poll', (req, res) => {
   // Include Samba config for image backups (credentials only sent once on first poll after approval)
   if (device.backupType === 'image' && device.sambaShare) {
     response.config.sambaShare = device.sambaShare;
+    response.config.backupDir = (device.name || device.id).replace(/[^a-zA-Z0-9_.-]/g, '_');
     response.config.nasAddress = getLocalIPs()[0] || req.hostname;
     // Only send credentials if agent hasn't received them yet
     if (true) { // Always send credentials — agent may have reset config
@@ -224,9 +225,19 @@ async function ensureSSHKey() {
 }
 
 // ── Helper: get device backup dir ──
-function deviceDir(deviceId) {
-  // Sanitize deviceId
-  const safe = deviceId.replace(/[^a-zA-Z0-9_-]/g, '');
+function deviceDir(deviceIdOrName) {
+  // Sanitize to safe filesystem name
+  const safe = deviceIdOrName.replace(/[^a-zA-Z0-9_.-]/g, '_');
+  return path.join(BACKUP_BASE, safe);
+}
+
+/**
+ * Get backup directory for a device - prefers hostname for readability
+ * Falls back to deviceId if hostname not available
+ */
+function deviceBackupDir(device) {
+  const name = (device.name || device.id || '').trim();
+  const safe = name.replace(/[^a-zA-Z0-9_.-]/g, '_');
   return path.join(BACKUP_BASE, safe);
 }
 
@@ -345,7 +356,7 @@ async function ensureSambaUser(username, password) {
 
 async function createImageBackupShare(device, username) {
   const shareName = device.sambaShare;
-  const sharePath = deviceDir(device.id);
+  const sharePath = deviceBackupDir(device);
   const sambaUser = username || 'homepinas';
   
   // Ensure directory exists with right permissions
@@ -480,11 +491,11 @@ router.get('/devices', (req, res) => {
   const ab = data.activeBackup || { devices: [] };
   
   const devices = ab.devices.map(d => {
-    const dir = deviceDir(d.id);
+    const dir = deviceBackupDir(d);
     const isImage = d.backupType === 'image';
     
     if (isImage) {
-      const images = getImageFiles(d.id);
+      const images = getImageFiles(d.name || d.id);
       return {
         ...d,
         backupCount: images.length,
@@ -492,7 +503,7 @@ router.get('/devices', (req, res) => {
         images,
       };
     } else {
-      const versions = getVersions(d.id);
+      const versions = getVersions(d.name || d.id);
       return {
         ...d,
         backupCount: versions.length,
@@ -518,8 +529,8 @@ router.get('/devices/:id/images', (req, res) => {
   const device = data.activeBackup.devices.find(d => d.id === req.params.id);
   if (!device) return res.status(404).json({ error: 'Device not found' });
   
-  const images = getImageFiles(device.id);
-  const dir = deviceDir(device.id);
+  const images = getImageFiles(device.name || device.id);
+  const dir = deviceBackupDir(device);
   
   // Also list WindowsImageBackup subdirectories
   const wibPath = path.join(dir, 'WindowsImageBackup');
@@ -624,7 +635,7 @@ router.post('/devices', async (req, res) => {
     saveData(data);
 
     // Create device backup directory
-    const dir = deviceDir(deviceId);
+    const dir = deviceDir(device.name || deviceId);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
     // For image backups: create a Samba share for this device
@@ -711,7 +722,7 @@ router.delete('/devices/:id', (req, res) => {
 
   // Delete backup data if requested
   if (req.query.deleteData === 'true') {
-    const dir = deviceDir(req.params.id);
+    const dir = deviceDir(device ? device.name : req.params.id);
     if (fs.existsSync(dir)) {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -791,12 +802,12 @@ async function runBackup(device) {
   const backupState = { startedAt: new Date().toISOString(), output: '' };
   runningBackups.set(device.id, backupState);
 
-  const dir = deviceDir(device.id);
+  const dir = deviceBackupDir(device);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-  const vNum = nextVersion(device.id);
+  const vNum = nextVersion(device.name || device.id);
   const vDir = path.join(dir, `v${vNum}`);
-  const versions = getVersions(device.id);
+  const versions = getVersions(device.name || device.id);
   const prevDir = versions.length > 0 ? path.join(dir, versions[versions.length - 1]) : null;
 
   try {
@@ -903,8 +914,8 @@ async function runBackup(device) {
  * GET /devices/:id/versions - List backup versions
  */
 router.get('/devices/:id/versions', (req, res) => {
-  const versions = getVersions(req.params.id);
-  const dir = deviceDir(req.params.id);
+  const versions = getVersions(((getData()).activeBackup.devices.find(d => d.id === req.params.id) || {}).name || req.params.id);
+  const dir = deviceDir(((data || getData()).activeBackup.devices.find(d => d.id === req.params.id) || {}).name || req.params.id);
 
   const result = versions.map(v => {
     const vPath = path.join(dir, v);
