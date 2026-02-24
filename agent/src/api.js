@@ -92,7 +92,15 @@ class NASApi {
   }
 
   async testConnection(address, port) {
-    return this._request('GET', address, port, '/system/stats');
+    // Use a lightweight HEAD request to check the server is reachable
+    // Don't use /system/stats as it requires authentication
+    // Instead, try the login endpoint which is always public
+    return this._request('POST', address, port, '/login', {}, { username: '', password: '' })
+      .catch(err => {
+        // "Invalid credentials" means the server IS reachable — that's a success
+        if (err.message && err.message.includes('Invalid')) return { reachable: true };
+        throw err;
+      });
   }
 
   async authenticate(address, port, username, password) {
