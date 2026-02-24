@@ -8010,9 +8010,8 @@ body.fm-dragging .fm-tree-item {
 }
 
 .abk-devices-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 16px;
+    display: block;
+    overflow-x: auto;
 }
 
 .abk-detail-panel {
@@ -8792,6 +8791,485 @@ body.fm-dragging .fm-tree-item {
     background: var(--accent);
     border-radius: 2px;
     animation: pulse 2s infinite;
+}
+
+/* =============================================================================
+   ACTIVE BACKUP — TABLE VIEW & DETAIL PANEL (v1.6)
+   ============================================================================= */
+
+/* ── Device table ─────────────────────────────────────────────────────────── */
+.abk-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.abk-th-row {
+    background: var(--hover-bg);
+}
+
+.abk-th {
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--card-border);
+}
+
+.abk-th-dot {
+    width: 24px;
+    padding-right: 4px;
+}
+
+.abk-th-actions {
+    width: 1%;
+    white-space: nowrap;
+}
+
+.abk-tr {
+    transition: background 0.15s;
+    border-bottom: 1px solid var(--card-border);
+}
+
+.abk-tr:last-child {
+    border-bottom: none;
+}
+
+.abk-tr:hover {
+    background: var(--hover-bg);
+}
+
+.abk-td {
+    padding: 11px 12px;
+    vertical-align: middle;
+}
+
+.abk-td-dot {
+    width: 24px;
+    padding-right: 4px;
+    text-align: center;
+}
+
+.abk-td-mono {
+    font-family: monospace;
+    font-size: 0.85rem;
+}
+
+.abk-td-dim {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.abk-td-name {
+    font-weight: 600;
+}
+
+.abk-td-sub {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.abk-td-actions {
+    padding: 8px 10px;
+    white-space: nowrap;
+}
+
+.abk-td-dim-sm {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+/* ── lastSeen status dot ──────────────────────────────────────────────────── */
+.abk-lastseen-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+@keyframes abk-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.5); }
+    70%  { box-shadow: 0 0 0 6px rgba(40, 167, 69, 0);  }
+    100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);  }
+}
+
+.abk-dot-online {
+    animation: abk-pulse 2s infinite;
+}
+
+/* ── Status pill ──────────────────────────────────────────────────────────── */
+.abk-status-pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 20px;
+    border: 1px solid transparent;
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* ── Result badges ────────────────────────────────────────────────────────── */
+.abk-result-ok {
+    color: var(--success);
+    font-weight: 600;
+}
+
+.abk-result-fail {
+    color: var(--danger);
+    font-weight: 600;
+}
+
+.abk-result-none {
+    color: var(--text-secondary);
+}
+
+/* ── Row action buttons ───────────────────────────────────────────────────── */
+.abk-row-actions {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.abk-row-btn {
+    padding: 5px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--card-border);
+    background: var(--hover-bg);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+    transition: all 0.15s;
+}
+
+.abk-row-btn:hover {
+    background: var(--active-bg);
+}
+
+.abk-btn-backup {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+}
+
+.abk-btn-backup:hover {
+    background: var(--primary-hover);
+}
+
+.abk-btn-delete:hover {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
+}
+
+/* ── Column visibility ────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+    .abk-col-hide-sm {
+        display: none;
+    }
+}
+
+/* ── Detail panel ─────────────────────────────────────────────────────────── */
+.abk-detail-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--card-border);
+}
+
+.abk-detail-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.abk-detail-title {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.abk-detail-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.abk-detail-config-btn {
+    padding: 6px 12px;
+    background: var(--hover-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+}
+
+.abk-detail-body {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.abk-detail-section {
+    /* each section is visually separated */
+}
+
+.abk-detail-section-title {
+    margin: 0 0 12px 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.abk-section-refresh {
+    font-size: 0.75rem;
+    padding: 3px 7px;
+    background: var(--hover-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-secondary);
+}
+
+/* ── Device info grid ─────────────────────────────────────────────────────── */
+.abk-info-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.abk-info-row {
+    display: flex;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--card-border);
+    font-size: 0.88rem;
+    gap: 12px;
+}
+
+.abk-info-row:last-child {
+    border-bottom: none;
+}
+
+.abk-info-row:nth-child(even) {
+    background: var(--hover-bg);
+}
+
+.abk-info-label {
+    width: 160px;
+    flex-shrink: 0;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.abk-info-val {
+    flex: 1;
+    word-break: break-word;
+}
+
+.abk-mono {
+    font-family: monospace;
+    font-size: 0.85em;
+}
+
+.abk-info-ok {
+    color: var(--success);
+    font-weight: 600;
+}
+
+.abk-info-error {
+    color: var(--danger);
+    font-weight: 600;
+}
+
+/* ── Backup history table ─────────────────────────────────────────────────── */
+.abk-detail-history {
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.abk-detail-loading {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+}
+
+.abk-detail-empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+}
+
+.abk-history-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+
+.abk-hth {
+    text-align: left;
+    padding: 9px 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: var(--hover-bg);
+    border-bottom: 1px solid var(--card-border);
+}
+
+.abk-htr {
+    border-bottom: 1px solid var(--card-border);
+    transition: background 0.15s;
+}
+
+.abk-htr:last-child {
+    border-bottom: none;
+}
+
+.abk-htr:hover {
+    background: var(--hover-bg);
+}
+
+.abk-htd {
+    padding: 9px 12px;
+    vertical-align: middle;
+}
+
+/* ── Live log / status ────────────────────────────────────────────────────── */
+.abk-live-log {
+    background: var(--bg-main);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 14px;
+    font-size: 0.85rem;
+}
+
+.abk-live-log-status {
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.abk-live-log-output {
+    margin: 0;
+    padding: 10px;
+    background: #0d1117;
+    color: #10b981;
+    border-radius: 6px;
+    font-family: monospace;
+    font-size: 0.78rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.abk-live-log-hint {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+/* ── Logs modal ───────────────────────────────────────────────────────────── */
+.abk-logs-modal-content {
+    width: min(700px, 95vw);
+    max-height: 85vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.abk-logs-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0;
+}
+
+.abk-logs-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.abk-refresh-btn {
+    padding: 5px 12px;
+    background: var(--hover-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+}
+
+.abk-logs-status-bar {
+    padding: 8px 0;
+    font-size: 0.88rem;
+    font-weight: 600;
+    border-bottom: 1px solid var(--card-border);
+    margin-bottom: 12px;
+}
+
+.abk-logs-output {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 200px;
+    max-height: 55vh;
+}
+
+.abk-logs-pre {
+    margin: 0;
+    padding: 14px;
+    background: #0d1117;
+    color: #10b981;
+    border-radius: 6px;
+    font-family: monospace;
+    font-size: 0.8rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+    min-height: 200px;
+    max-height: 55vh;
+    overflow-y: auto;
+}
+
+.abk-logs-empty {
+    padding: 30px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+}
+
+.abk-logs-error {
+    padding: 10px 14px;
+    margin-top: 10px;
+    background: rgba(220, 53, 69, 0.1);
+    border: 1px solid rgba(220, 53, 69, 0.3);
+    border-radius: 6px;
+    color: var(--danger);
+    font-size: 0.85rem;
 }
 
 /* ========================================
