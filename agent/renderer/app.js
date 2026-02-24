@@ -122,7 +122,7 @@ document.getElementById('btn-discover').addEventListener('click', async () => {
 
 document.getElementById('btn-connect').addEventListener('click', () => {
   const addr = document.getElementById('nas-address').value.trim();
-  const port = parseInt(document.getElementById('nas-port').value) || 3001;
+  const port = parseInt(document.getElementById('nas-port').value) || 443;
   if (!addr) return;
   if (port < 1 || port > 65535) {
     alert('Puerto inválido (debe ser entre 1 y 65535)');
