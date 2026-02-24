@@ -89,6 +89,7 @@ build_rootfs() {
             grub-efi-amd64-bin \
             grub-pc-bin \
             wimtools \
+            python3 \
             pciutils \
             usbutils \
             dmidecode \
@@ -126,6 +127,10 @@ install_recovery_scripts() {
     # Copy the NAS discovery script
     sudo cp "${SCRIPT_DIR}/nas-discover.sh" "${ROOTFS}/usr/local/bin/nas-discover"
     sudo chmod +x "${ROOTFS}/usr/local/bin/nas-discover"
+    
+    # Copy the Windows BCD repair tool (autonomous boot repair)
+    sudo cp "${SCRIPT_DIR}/fix-windows-bcd.sh" "${ROOTFS}/usr/local/bin/fix-windows-bcd.sh"
+    sudo chmod +x "${ROOTFS}/usr/local/bin/fix-windows-bcd.sh"
     
     # Auto-start recovery tool on login
     sudo tee "${ROOTFS}/etc/profile.d/homepinas-recovery.sh" > /dev/null << 'PROFILE'

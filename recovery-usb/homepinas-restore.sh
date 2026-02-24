@@ -1113,34 +1113,51 @@ restore_image_windows() {
         mkdir -p "$efi_mount"
         mount "$efi_part" "$efi_mount"
 
-        # Restore EFI boot from backup or rebuild
-        if [ -n "$efi_img" ]; then
-            local efi_dl_path
-            efi_dl_path=$(echo "$efi_img" | sed 's|^/||')
-            curl -sk \
-                -H "X-Session-Id: ${SESSION_ID}" \
-                "${API_BASE}/active-backup/devices/${device_id}/download?version=${version}&path=${efi_dl_path}" 2>/dev/null \
-                | tar -xzf - -C "$efi_mount" 2>/dev/null
+        # Restore EFI boot + BCD repair (autonomous)
+        umount "$efi_mount" 2>/dev/null
+        umount "$win_mount" 2>/dev/null
+
+        echo "85"
+        echo "XXX"
+        echo "Reparando bootloader Windows (BCD)...\nEsto hace que Windows arranque en el disco nuevo."
+        echo "XXX"
+
+        # Use fix-windows-bcd.sh for fully autonomous boot repair
+        local bcd_script="${SCRIPT_DIR}/fix-windows-bcd.sh"
+        if [ ! -f "$bcd_script" ]; then
+            bcd_script="/usr/local/bin/fix-windows-bcd.sh"
+        fi
+
+        if [ -f "$bcd_script" ]; then
+            bash "$bcd_script" "$efi_part" "$win_part" >>"$RESTORE_LOG" 2>&1
+            if [ $? -eq 0 ]; then
+                log "BCD repair successful"
+            else
+                log "BCD repair failed — manual repair may be needed"
+            fi
         else
-            # Try to rebuild boot files from the Windows installation
-            mkdir -p "$efi_mount/EFI/Microsoft/Boot"
-            if [ -f "$win_mount/Windows/Boot/EFI/bootmgfw.efi" ]; then
-                cp "$win_mount/Windows/Boot/EFI/bootmgfw.efi" "$efi_mount/EFI/Microsoft/Boot/"
-                cp "$win_mount/Windows/Boot/EFI/bootmgfw.efi" "$efi_mount/EFI/boot/bootx64.efi" 2>/dev/null
+            # Fallback: inline BCD repair
+            log "fix-windows-bcd.sh not found, attempting inline repair..."
+            
+            mount "$efi_part" "$efi_mount"
+            mount "$win_part" "$win_mount" 2>/dev/null || ntfs-3g "$win_part" "$win_mount"
+
+            # Copy boot files
+            mkdir -p "$efi_mount/EFI/Microsoft/Boot" "$efi_mount/EFI/Boot"
+            if [ -d "$win_mount/Windows/Boot/EFI" ]; then
+                cp -r "$win_mount/Windows/Boot/EFI/"* "$efi_mount/EFI/Microsoft/Boot/"
+                [ -f "$efi_mount/EFI/Microsoft/Boot/bootmgfw.efi" ] && \
+                    cp "$efi_mount/EFI/Microsoft/Boot/bootmgfw.efi" "$efi_mount/EFI/Boot/bootx64.efi"
             fi
-            # Create BCD store
-            if command -v bcdboot &>/dev/null; then
-                bcdboot "$win_mount/Windows" --s "$efi_mount" --l es-ES 2>>"$RESTORE_LOG"
-            fi
+
+            umount "$efi_mount" 2>/dev/null
+            umount "$win_mount" 2>/dev/null
         fi
 
         echo "90"
         echo "XXX"
         echo "Limpiando y sincronizando..."
         echo "XXX"
-
-        umount "$efi_mount" 2>/dev/null
-        umount "$win_mount" 2>/dev/null
         rm -f "$wim_tmp"
         sync
 
