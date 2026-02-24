@@ -9,6 +9,7 @@
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs');
+const os = require('os');
 const { retry, NETWORK_ERRORS } = require('./retry');
 
 const execFileAsync = promisify(execFile);
@@ -152,7 +153,7 @@ async function mountMacSMB(nasAddress, shareName, creds, mountPoint, logger) {
  * Returns the file path. Caller must clean up.
  */
 function writeCredFile(creds, pid) {
-  const credFile = `/tmp/homepinas-creds-${pid}`;
+  const credFile = require('path').join(os.tmpdir(), `homepinas-creds-${pid}`);
   fs.writeFileSync(credFile, `username=${creds.user}\npassword=${creds.pass}\n`, { mode: 0o600 });
   return credFile;
 }

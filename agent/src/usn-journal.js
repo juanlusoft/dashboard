@@ -210,7 +210,7 @@ class USNJournalTracker {
       /\\hiberfil\.sys$/i,
       /\\pagefile\.sys$/i,
       /\\.pst$/i,  // Outlook cache
-      /\\.ostis$/i,
+      /\\.ost$/i,  // Outlook OST cache (corrected from .ostis typo)
     ];
 
     const patterns = [...defaultExcludes, ...excludePatterns];
