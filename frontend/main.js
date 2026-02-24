@@ -10050,21 +10050,80 @@ async function openABImageBrowse(device) {
         list.style.cssText = 'border: 1px solid var(--border); border-radius: 8px; overflow: hidden;';
 
         const header = document.createElement('div');
-        header.style.cssText = 'display: grid; grid-template-columns: 1fr 120px 160px 80px; padding: 10px 15px; background: var(--bg-hover); font-weight: 600; font-size: 0.8rem; color: var(--text-dim);';
-        header.innerHTML = '<span>Nombre</span><span>Tamaño</span><span>Fecha</span><span>Tipo</span>';
+        header.style.cssText = 'display: grid; grid-template-columns: 1fr 100px 160px 90px; padding: 10px 16px; background: var(--bg-hover); font-weight: 600; font-size: 0.8rem; color: var(--text-dim);';
+        header.innerHTML = '<span>Backup</span><span style="text-align:right">Tama\u00f1o</span><span style="text-align:center">Fecha</span><span style="text-align:center">Acciones</span>';
         list.appendChild(header);
 
         allItems.forEach(item => {
             const row = document.createElement('div');
-            row.style.cssText = 'display: grid; grid-template-columns: 1fr 120px 160px 80px; padding: 10px 15px; align-items: center; border-top: 1px solid var(--border);';
+            row.style.cssText = 'display: grid; grid-template-columns: 1fr 100px 160px 90px; padding: 12px 16px; align-items: center; border-top: 1px solid var(--border); transition: background .15s;';
+            row.onmouseenter = () => row.style.background = 'var(--bg-hover)';
+            row.onmouseleave = () => row.style.background = '';
 
-            const icon = item.type === 'windows-image' ? '🪟' : item.type === 'directory' ? '📁' : '💾';
+            const icon = item.type === 'windows-image' ? '\ud83e\ude9f' : item.type === 'directory' ? '\ud83d\udcc1' : '\ud83d\udcbe';
+            const typeLabel = item.type === 'windows-image' ? 'Windows Image' : item.type === 'directory' ? 'Imagen completa' : item.name.split('.').pop().toUpperCase();
+            const dateStr = new Date(item.modified).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
             row.innerHTML = `
-                <span class="abk-backup-item-name">${icon} ${escapeHtml(item.name)}</span>
-                <span class="abk-backup-item-size">${formatABSize(item.size)}</span>
-                <span class="abk-backup-item-size">${new Date(item.modified).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                <span style="font-size: 0.8rem; padding: 2px 8px; border-radius: 8px; background: rgba(99,102,241,0.15); color: #6366f1;">${item.type === 'windows-image' ? 'WIM' : item.name.split('.').pop()}</span>
+                <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+                    <span style="font-size:1.3rem;flex-shrink:0;">${icon}</span>
+                    <div style="min-width:0;">
+                        <div style="font-weight:600;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>
+                        <div style="font-size:0.75rem;color:var(--text-dim);margin-top:2px;">${typeLabel}</div>
+                    </div>
+                </div>
+                <span style="text-align:right;font-size:0.85rem;font-weight:500;">${formatABSize(item.size)}</span>
+                <span style="text-align:center;font-size:0.85rem;color:var(--text-dim);">${dateStr}</span>
+                <div style="display:flex;gap:4px;justify-content:center;"></div>
             `;
+
+            // Add action buttons
+            const actDiv = row.querySelector('div:last-child');
+
+            const browseBtn = document.createElement('button');
+            browseBtn.title = 'Ver contenido';
+            browseBtn.innerHTML = '\ud83d\udcc2';
+            browseBtn.style.cssText = 'padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);cursor:pointer;font-size:0.9rem;transition:all .15s;';
+            browseBtn.onmouseenter = () => browseBtn.style.background = 'var(--bg-hover)';
+            browseBtn.onmouseleave = () => browseBtn.style.background = 'var(--bg)';
+            browseBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                try {
+                    const resp = await abFetch(`/devices/${device.id}/browse?path=${encodeURIComponent(item.name)}`);
+                    if (resp.files) {
+                        let html = '<ul style="list-style:none;padding:0;margin:0;">';
+                        resp.files.forEach(f => {
+                            const fIcon = f.type === 'directory' ? '\ud83d\udcc1' : '\ud83d\udcc4';
+                            html += `<li style="padding:6px 0;font-size:0.85rem;border-bottom:1px solid var(--border);">${fIcon} ${escapeHtml(f.name)} <span style="color:var(--text-dim);float:right;">${formatABSize(f.size)}</span></li>`;
+                        });
+                        html += '</ul>';
+                        showInfoModal('\ud83d\udcc2 ' + escapeHtml(item.name), html);
+                    }
+                } catch(err) {
+                    showInfoModal('Error', 'No se pudo abrir: ' + err.message);
+                }
+            });
+            actDiv.appendChild(browseBtn);
+
+            const delBtn = document.createElement('button');
+            delBtn.title = 'Eliminar backup';
+            delBtn.innerHTML = '\ud83d\uddd1\ufe0f';
+            delBtn.style.cssText = 'padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);cursor:pointer;font-size:0.9rem;transition:all .15s;';
+            delBtn.onmouseenter = () => { delBtn.style.background = 'rgba(239,68,68,0.1)'; delBtn.style.borderColor = 'rgba(239,68,68,0.4)'; };
+            delBtn.onmouseleave = () => { delBtn.style.background = 'var(--bg)'; delBtn.style.borderColor = 'var(--border)'; };
+            delBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const ok = await showConfirmModal('Eliminar backup', `\u00bfEliminar el backup "${escapeHtml(item.name)}" (${formatABSize(item.size)})? Esta acci\u00f3n no se puede deshacer.`);
+                if (!ok) return;
+                try {
+                    await abFetch(`/devices/${device.id}/images/${encodeURIComponent(item.name)}`, { method: 'DELETE' });
+                    showImageDetail(device);
+                } catch(err) {
+                    showInfoModal('Error', 'No se pudo eliminar: ' + err.message);
+                }
+            });
+            actDiv.appendChild(delBtn);
+
             list.appendChild(row);
         });
 

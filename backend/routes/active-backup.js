@@ -1392,4 +1392,81 @@ router.post('/devices/:id/trigger', (req, res) => {
   res.json({ success: true, message: `Backup triggered for "${device.name}". Agent will start on next poll.` });
 });
 
+
+/**
+ * DELETE /devices/:id/images/:name - Delete a specific backup
+ */
+router.delete('/devices/:id/images/:name', (req, res) => {
+  const data = getData();
+  if (!data.activeBackup) return res.status(404).json({ error: 'Not configured' });
+
+  const device = data.activeBackup.devices.find(d => d.id === req.params.id);
+  if (!device) return res.status(404).json({ error: 'Device not found' });
+
+  const backupName = req.params.name.replace(/[^a-zA-Z0-9_.\-TZ]/g, '');
+  if (!backupName) return res.status(400).json({ error: 'Invalid backup name' });
+
+  const dir = deviceBackupDir(device);
+  const targetPath = path.join(dir, backupName);
+
+  // Security: ensure target is inside the device dir
+  if (!targetPath.startsWith(dir)) {
+    return res.status(400).json({ error: 'Invalid path' });
+  }
+
+  if (!fs.existsSync(targetPath)) {
+    return res.status(404).json({ error: 'Backup not found' });
+  }
+
+  try {
+    fs.rmSync(targetPath, { recursive: true, force: true });
+    logSecurityEvent('active_backup_image_deleted', req.user.username, { device: device.name, backup: backupName });
+    res.json({ success: true, message: `Backup "${backupName}" eliminado` });
+  } catch (e) {
+    res.status(500).json({ error: 'Error al eliminar: ' + e.message });
+  }
+});
+
+/**
+ * GET /devices/:id/browse - Browse backup folder contents
+ */
+router.get('/devices/:id/browse', (req, res) => {
+  const data = getData();
+  if (!data.activeBackup) return res.status(404).json({ error: 'Not configured' });
+
+  const device = data.activeBackup.devices.find(d => d.id === req.params.id);
+  if (!device) return res.status(404).json({ error: 'Device not found' });
+
+  const subPath = (req.query.path || '').replace(/\.\./g, '');
+  const dir = deviceBackupDir(device);
+  const targetPath = path.join(dir, subPath);
+
+  if (!targetPath.startsWith(dir)) {
+    return res.status(400).json({ error: 'Invalid path' });
+  }
+
+  if (!fs.existsSync(targetPath)) {
+    return res.status(404).json({ error: 'Path not found' });
+  }
+
+  try {
+    const files = fs.readdirSync(targetPath).map(f => {
+      const fPath = path.join(targetPath, f);
+      try {
+        const stat = fs.statSync(fPath);
+        return {
+          name: f,
+          size: stat.isDirectory() ? getDirSize(fPath) : stat.size,
+          type: stat.isDirectory() ? 'directory' : 'file',
+          modified: stat.mtime,
+        };
+      } catch(e) { return null; }
+    }).filter(Boolean);
+
+    res.json({ success: true, path: subPath, files });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
