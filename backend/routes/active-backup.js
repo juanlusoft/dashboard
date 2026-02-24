@@ -361,7 +361,7 @@ async function createImageBackupShare(device, username) {
 
   // Add share to smb.conf with the actual user
   const smbConfPath = '/etc/samba/smb.conf';
-  const shareBlock = `\n[${shareName}]\n   path = ${sharePath}\n   browseable = no\n   writable = yes\n   guest ok = no\n   valid users = ${sambaUser}\n   create mask = 0660\n   directory mask = 0770\n   comment = HomePiNAS Image Backup - ${device.name}\n`;
+  const shareBlock = `\n[${shareName}]\n   path = ${sharePath}\n   browseable = no\n   writable = yes\n   guest ok = no\n   valid users = ${sambaUser} ${username}\n   create mask = 0664\n   directory mask = 0775\n   force group = sambashare\n   comment = HomePiNAS Image Backup - ${device.name}\n`;
 
   try {
     const currentConf = fs.readFileSync(smbConfPath, 'utf8');
