@@ -13,6 +13,9 @@ const { promisify } = require('util');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { CheckpointManager } = require('./checkpoint');
+const { generateManifest, hashFile } = require('./integrity');
+const { retry, NETWORK_ERRORS } = require('./retry');
 
 const execFileAsync = promisify(execFile);
 
@@ -23,6 +26,7 @@ class BackupManager {
     this._progress = null;
     this._logLines = [];
     this._logFile = null;
+    this._checkpoint = new CheckpointManager();
   }
 
   get progress() { return this._progress; }
@@ -68,8 +72,24 @@ class BackupManager {
     this._progress = null;
     this._initLog();
 
+    // Check for existing checkpoint (resume support)
+    const cpId = this._checkpoint.checkpointId(config.deviceId || 'default', config.backupType || 'full');
+    const existingCp = this._checkpoint.load(cpId);
+    if (existingCp) {
+      this._log(`Resuming from checkpoint: phase=${existingCp.phase}, processedBytes=${existingCp.processedBytes}`);
+    } else {
+      this._checkpoint.create(cpId, {
+        deviceId: config.deviceId,
+        backupType: config.backupType,
+        startedAt: Date.now(),
+      });
+    }
+
     try {
       let result;
+      // Store cpId for use in sub-methods
+      this._cpId = cpId;
+
       if (this.platform === 'win32') {
         result = await this._runWindowsBackup(config);
       } else if (this.platform === 'darwin') {
@@ -79,12 +99,17 @@ class BackupManager {
       } else {
         throw new Error(`Plataforma no soportada: ${this.platform}`);
       }
+
+      // Clear checkpoint on success
+      this._checkpoint.clear(cpId);
+
       this._log(`=== Backup completed successfully ===`);
       result.log = this.logContent;
       this._flushLog();
       return result;
     } catch (err) {
-      this._log(`=== Backup FAILED: ${err.message} ===`);
+      // Checkpoint is preserved for resume on next attempt
+      this._log(`=== Backup FAILED: ${err.message} (checkpoint preserved for resume) ===`);
       this._flushLog();
       err.backupLog = this.logContent;
       throw err;
@@ -124,15 +149,24 @@ class BackupManager {
       this._setProgress('admin', 5, 'Checking administrator privileges');
       await this._checkAdminPrivileges();
 
-      // Phase 2: Connect SMB share
+      // Phase 2: Connect SMB share (with retry + backoff)
       this._setProgress('connect', 10, 'Connecting to NAS share');
       await this._cleanSMBConnections(server, sharePath);
-      try {
-        await execFileAsync('net', ['use', sharePath, `/user:${creds.user}`, creds.pass, '/persistent:no'], { shell: false });
-      } catch (e) {
-        throw new Error(`No se pudo conectar al share ${sharePath}: ${e.message}`);
-      }
+      await retry(
+        async (attempt) => {
+          if (attempt > 0) this._log(`SMB connect retry #${attempt}`);
+          await execFileAsync('net', ['use', sharePath, `/user:${creds.user}`, creds.pass, '/persistent:no'], { shell: false });
+        },
+        {
+          maxRetries: 5,
+          retryableErrors: NETWORK_ERRORS,
+          onRetry: (err, attempt, delay) => {
+            this._setProgress('connect', 10, `Connection failed, retry ${attempt} in ${Math.round(delay / 1000)}s...`);
+          },
+        }
+      );
       this._log(`Connected to ${sharePath}`);
+      if (this._cpId) this._checkpoint.update(this._cpId, 'connected', { sharePath });
 
       // Phase 3: Capture disk metadata
       this._setProgress('metadata', 15, 'Capturing disk metadata');
@@ -177,6 +211,18 @@ class BackupManager {
       // Phase 8: Write manifest via temp file
       this._setProgress('manifest', 85, 'Writing backup manifest');
       await this._writeManifest(destDir, metadata);
+
+      // Phase 9: Generate integrity checksums
+      this._setProgress('integrity', 90, 'Generating integrity checksums (SHA256)');
+      try {
+        const integrityManifest = await generateManifest(destDir, (file, i, total) => {
+          const pct = 90 + Math.round((i / total) * 8);
+          this._setProgress('integrity', pct, `Checksumming: ${file}`);
+        });
+        this._log(`Integrity manifest: ${integrityManifest.totalFiles} files, ${Math.round(integrityManifest.totalBytes / 1048576)}MB`);
+      } catch (e) {
+        this._log(`WARNING: Integrity manifest generation failed (non-fatal): ${e.message}`);
+      }
 
       this._setProgress('done', 100, 'Backup complete');
       return { type: 'image', timestamp: new Date().toISOString() };
@@ -489,11 +535,19 @@ class BackupManager {
 
     this._setProgress('connect', 10, 'Connecting to NAS share');
     try { await execFileAsync('net', ['use', 'Z:', '/delete', '/y'], { shell: false }); } catch (e) {}
-    try {
-      await execFileAsync('net', ['use', 'Z:', sharePath, `/user:${creds.user}`, creds.pass, '/persistent:no'], { shell: false });
-    } catch (e) {
-      throw new Error(`No se pudo conectar al share ${sharePath}: ${e.message}`);
-    }
+    await retry(
+      async (attempt) => {
+        if (attempt > 0) this._log(`SMB connect retry #${attempt}`);
+        await execFileAsync('net', ['use', 'Z:', sharePath, `/user:${creds.user}`, creds.pass, '/persistent:no'], { shell: false });
+      },
+      {
+        maxRetries: 5,
+        retryableErrors: NETWORK_ERRORS,
+        onRetry: (err, attempt, delay) => {
+          this._setProgress('connect', 10, `Connection failed, retry ${attempt} in ${Math.round(delay / 1000)}s...`);
+        },
+      }
+    );
 
     const results = [];
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -508,10 +562,22 @@ class BackupManager {
       this._log(`robocopy: ${srcPath} -> ${dest}`);
 
       try {
-        await execFileAsync('robocopy', [
-          srcPath, dest,
-          '/MIR', '/R:2', '/W:5', '/NP', '/NFL', '/NDL', '/MT:8'
-        ], { timeout: 3600000, windowsHide: true, shell: false });
+        await retry(
+          async (attempt) => {
+            if (attempt > 0) this._log(`robocopy retry #${attempt} for ${folderName}`);
+            await execFileAsync('robocopy', [
+              srcPath, dest,
+              '/MIR', '/R:2', '/W:5', '/NP', '/NFL', '/NDL', '/MT:8'
+            ], { timeout: 3600000, windowsHide: true, shell: false });
+          },
+          {
+            maxRetries: 3,
+            retryableErrors: NETWORK_ERRORS,
+            onRetry: (err, attempt, delay) => {
+              this._setProgress('copy', pct, `${folderName}: retry ${attempt} in ${Math.round(delay / 1000)}s...`);
+            },
+          }
+        );
         results.push({ path: srcPath, success: true });
       } catch (err) {
         const exitCode = err.code || 0;

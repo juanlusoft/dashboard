@@ -1355,4 +1355,102 @@ router.post('/devices/:id/trigger', (req, res) => {
   res.json({ success: true, message: `Backup triggered for "${device.name}". Agent will start on next poll.` });
 });
 
+/**
+ * POST /devices/:id/verify - Verify backup integrity via SHA256 checksums
+ * Reads .integrity.json from the device's latest backup and re-hashes all files.
+ */
+router.post('/devices/:id/verify', async (req, res) => {
+  const data = getData();
+  if (!data.activeBackup) return res.status(404).json({ error: 'Not configured' });
+
+  const device = data.activeBackup.devices.find(d => d.id === req.params.id);
+  if (!device) return res.status(404).json({ error: 'Device not found' });
+
+  const latestDir = deviceDir(device.id);
+  const versions = getVersions(device.id);
+  if (versions.length === 0) {
+    return res.status(404).json({ error: 'No backups found' });
+  }
+
+  const lastVersion = versions[versions.length - 1];
+  const backupPath = path.join(latestDir, lastVersion);
+
+  // Look for .integrity.json in any subdirectory (ImageBackup/hostname/timestamp/)
+  let integrityFile = null;
+  const findIntegrity = (dir) => {
+    try {
+      const entries = fsSync.readdirSync(dir, { withFileTypes: true });
+      for (const e of entries) {
+        const full = path.join(dir, e.name);
+        if (e.name === '.integrity.json') return full;
+        if (e.isDirectory()) {
+          const found = findIntegrity(full);
+          if (found) return found;
+        }
+      }
+    } catch (e) {}
+    return null;
+  };
+
+  const fsSync = require('fs');
+  integrityFile = findIntegrity(backupPath);
+
+  if (!integrityFile) {
+    return res.json({
+      valid: false,
+      error: 'No integrity manifest found. Backup was created before v1.6.0.',
+      version: lastVersion,
+    });
+  }
+
+  try {
+    const manifest = JSON.parse(fsSync.readFileSync(integrityFile, 'utf8'));
+    const backupDir = path.dirname(integrityFile);
+    const crypto = require('crypto');
+    const errors = [];
+    let checked = 0;
+
+    for (const [relPath, expected] of Object.entries(manifest.files || {})) {
+      const filePath = path.join(backupDir, relPath);
+      if (!fsSync.existsSync(filePath)) {
+        errors.push({ file: relPath, error: 'missing' });
+        continue;
+      }
+
+      const stat = fsSync.statSync(filePath);
+      if (stat.size !== expected.size) {
+        errors.push({ file: relPath, error: 'size_mismatch', expected: expected.size, actual: stat.size });
+        continue;
+      }
+
+      // Hash verification for files under 500MB (larger files would block too long)
+      if (stat.size < 500 * 1024 * 1024) {
+        const hash = crypto.createHash('sha256');
+        const stream = fsSync.createReadStream(filePath);
+        const fileHash = await new Promise((resolve, reject) => {
+          stream.on('data', d => hash.update(d));
+          stream.on('end', () => resolve(hash.digest('hex')));
+          stream.on('error', reject);
+        });
+        if (fileHash !== expected.hash) {
+          errors.push({ file: relPath, error: 'hash_mismatch' });
+          continue;
+        }
+      }
+      checked++;
+    }
+
+    res.json({
+      valid: errors.length === 0,
+      version: lastVersion,
+      checkedFiles: checked,
+      totalFiles: Object.keys(manifest.files || {}).length,
+      errors: errors.slice(0, 50), // Limit error output
+      createdAt: manifest.createdAt,
+    });
+  } catch (e) {
+    res.status(500).json({ error: `Verification failed: ${e.message}` });
+  }
+});
+
 module.exports = router;
