@@ -79,13 +79,28 @@ function pollAgent(req, res) {
   }
 
   const tasks = getPendingTasks(data, agent.id);
+
+  // Update lastSeen
+  agent.lastSeen = new Date().toISOString();
+  agent.ip = req.ip?.replace('::ffff:', '') || agent.ip;
+  saveData(data);
+
   res.json({
     success: true,
     agentId: agent.id,
     tasks,
     config: {
-      hostname: agent.hostname,
-      backupPath: agent.backupPath || '/mnt/backup',
+      deviceId: agent.id,
+      deviceName: agent.name,
+      backupType: agent.backupType || 'image',
+      schedule: agent.schedule || '0 3 * * *',
+      retention: agent.retention || 3,
+      paths: agent.paths || [],
+      enabled: agent.enabled !== false,
+      sambaShare: agent.sambaShare,
+      sambaUser: agent.sambaUser,
+      sambaPass: agent.sambaPass,
+      nasAddress: req.hostname || '192.168.1.100',
     },
   });
 }
