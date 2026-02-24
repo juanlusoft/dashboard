@@ -12192,3 +12192,350 @@ body.fm-dragging .fm-tree-item {
     padding: 20px;
     color: var(--text-dim);
 }
+
+/* =============================================================================
+   ACTIVE BACKUP — Redesign v1.6 (stats bar, tabs, detail panel tabs, config)
+   ============================================================================= */
+
+/* ── Stats summary card ──────────────────────────────────────────────────── */
+.abk-stats-card {
+    grid-column: 1 / -1;
+}
+
+.abk-stats-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.abk-stats-title-group {
+    flex: 1;
+    min-width: 0;
+}
+
+.abk-stats-title {
+    margin: 0 0 4px 0;
+    font-size: 1.15rem;
+}
+
+.abk-stats-subtitle {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    margin: 0;
+}
+
+.abk-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+@media (max-width: 600px) {
+    .abk-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.abk-stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 14px 8px;
+    background: var(--bg-card, #161625);
+    gap: 4px;
+}
+
+.abk-stat-num {
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.abk-stat-ok   { color: var(--success); }
+.abk-stat-warn { color: var(--warning); }
+.abk-stat-dim  { color: var(--text-dim); font-size: 1rem; }
+
+.abk-stat-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+    font-weight: 600;
+}
+
+/* ── Main card with tabs ─────────────────────────────────────────────────── */
+.abk-main-card {
+    grid-column: 1 / -1;
+    padding: 0;
+    overflow: hidden;
+}
+
+.abk-tab-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-hover);
+    padding: 0 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.abk-tab-bar::-webkit-scrollbar { display: none; }
+
+.abk-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 18px;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+    position: relative;
+}
+
+.abk-tab:hover {
+    color: var(--text);
+}
+
+.abk-tab-active {
+    color: var(--accent, #6366f1);
+    border-bottom-color: var(--accent, #6366f1);
+    background: transparent;
+}
+
+.abk-tab-icon {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.abk-tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--warning);
+    color: #000;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.abk-tab-pane {
+    padding: 20px;
+}
+
+/* ── Pending empty state ─────────────────────────────────────────────────── */
+.abk-pending-pane {
+    min-height: 120px;
+}
+
+.abk-pending-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-dim);
+}
+
+.abk-pending-empty-icon {
+    font-size: 2.5rem;
+    margin-bottom: 12px;
+}
+
+.abk-pending-empty-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 8px 0;
+    color: var(--text);
+}
+
+.abk-pending-empty-sub {
+    font-size: 0.85rem;
+    margin: 0;
+    max-width: 360px;
+    margin-inline: auto;
+}
+
+/* ── Recovery pane ───────────────────────────────────────────────────────── */
+.abk-recovery-pane {
+    max-width: 680px;
+}
+
+.abk-recovery-pane-header {
+    margin-bottom: 16px;
+}
+
+.abk-recovery-pane-header .abk-recovery-title {
+    margin: 0 0 4px 0;
+}
+
+.abk-recovery-pane-header .abk-recovery-subtitle {
+    margin: 0;
+}
+
+/* ── Device detail panel — inner tab bar ─────────────────────────────────── */
+.abk-dp-tab-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--card-border, var(--border));
+    margin: 16px 0 0 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.abk-dp-tab-bar::-webkit-scrollbar { display: none; }
+
+.abk-dp-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 16px;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 0.83rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.abk-dp-tab:hover {
+    color: var(--text);
+}
+
+.abk-dp-tab-active {
+    color: var(--accent, #6366f1);
+    border-bottom-color: var(--accent, #6366f1);
+}
+
+.abk-dp-live-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    animation: abk-pulse 2s infinite;
+    flex-shrink: 0;
+}
+
+.abk-dp-pane {
+    padding-top: 18px;
+}
+
+/* ── Log tab toolbar ─────────────────────────────────────────────────────── */
+.abk-dp-log-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 10px;
+}
+
+/* ── Configuración tab ───────────────────────────────────────────────────── */
+.abk-config-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-width: 560px;
+}
+
+.abk-config-section {
+    border: 1px solid var(--card-border, var(--border));
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.abk-config-section-title {
+    margin: 0;
+    padding: 10px 16px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+    background: var(--bg-hover);
+    border-bottom: 1px solid var(--card-border, var(--border));
+}
+
+.abk-config-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--card-border, var(--border));
+}
+
+.abk-config-row:last-child {
+    border-bottom: none;
+}
+
+.abk-config-label {
+    width: 180px;
+    flex-shrink: 0;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-dim);
+}
+
+.abk-config-val-static {
+    font-size: 0.88rem;
+    color: var(--text);
+}
+
+.abk-config-input {
+    flex: 1;
+    padding: 7px 10px;
+    background: var(--bg-card, #161625);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.88rem;
+    font-family: monospace;
+    transition: border-color 0.15s;
+}
+
+.abk-config-input:focus {
+    outline: none;
+    border-color: var(--accent, #6366f1);
+}
+
+.abk-config-input-sm {
+    max-width: 90px;
+    flex: none;
+}
+
+.abk-config-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.abk-cfg-feedback {
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+/* ── Loading text placeholder ────────────────────────────────────────────── */
+.abk-loading-text {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.88rem;
+}
