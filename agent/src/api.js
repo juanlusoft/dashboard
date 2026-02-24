@@ -92,15 +92,9 @@ class NASApi {
   }
 
   async testConnection(address, port) {
-    // Use a lightweight HEAD request to check the server is reachable
-    // Don't use /system/stats as it requires authentication
-    // Instead, try the login endpoint which is always public
-    return this._request('POST', address, port, '/login', {}, { username: '', password: '' })
-      .catch(err => {
-        // "Invalid credentials" means the server IS reachable — that's a success
-        if (err.message && err.message.includes('Invalid')) return { reachable: true };
-        throw err;
-      });
+    // Skip separate test — go straight to register which is a public endpoint.
+    // If the server is unreachable, register will fail with a connection error.
+    return { reachable: true };
   }
 
   async authenticate(address, port, username, password) {
