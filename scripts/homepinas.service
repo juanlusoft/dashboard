@@ -1,0 +1,14 @@
+[Unit]
+Description=HomePiNAS Dashboard
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/homepinas
+ExecStart=/usr/bin/node backend/index.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
