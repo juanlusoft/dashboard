@@ -1,5 +1,5 @@
 {
-  "version": "2.2.0",
+  "version": "2.3.0",
   "apps": [
     {
       "id": "jellyfin",
@@ -110,8 +110,8 @@
         "arm"
       ],
       "ports": {
-        "8080": "8080",
-        "6881": "6881"
+        "6881": "6881",
+        "8080": "8080"
       },
       "volumes": {
         "/config": "/opt/homepinas/apps/qbittorrent/config",
@@ -449,8 +449,8 @@
         "arm"
       ],
       "ports": {
-        "8053": "80",
-        "53": "53/udp"
+        "53": "53/udp",
+        "8053": "80"
       },
       "volumes": {
         "/etc/pihole": "/opt/homepinas/apps/pihole/etc",
@@ -475,9 +475,9 @@
         "arm"
       ],
       "ports": {
-        "3003": "3000",
         "53": "53/udp",
-        "853": "853"
+        "853": "853",
+        "3003": "3000"
       },
       "volumes": {
         "/opt/adguardhome/work": "/opt/homepinas/apps/adguard/work",
@@ -657,8 +657,8 @@
         "arm64"
       ],
       "ports": {
-        "3333": "3000",
-        "2222": "22"
+        "2222": "22",
+        "3333": "3000"
       },
       "volumes": {
         "/data": "/opt/homepinas/apps/gitea/data"
@@ -843,8 +843,8 @@
         "amd64"
       ],
       "ports": {
-        "6080": "6080",
-        "5900": "5900"
+        "5900": "5900",
+        "6080": "6080"
       },
       "volumes": {
         "/config": "/opt/homepinas/apps/nicotineplus/config",
@@ -1152,8 +1152,8 @@
         "arm64"
       ],
       "ports": {
-        "443": "443",
-        "80": "80"
+        "80": "80",
+        "443": "443"
       },
       "volumes": {
         "/config": "/opt/homepinas/apps/swag/config"
@@ -1415,6 +1415,58 @@
       "webUI": 8080,
       "docs": "https://github.com/linuxserver/docker-speedtest-tracker",
       "notes": "Credenciales por defecto: admin@example.com / password"
+    },
+    {
+      "id": "navidrome",
+      "name": "Navidrome",
+      "description": "Servidor de música y streaming personal. Compatible con Subsonic/Airsonic. Apps móviles, transcoding, playlists y scrobbling.",
+      "category": "media",
+      "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/navidrome.png",
+      "image": "deluan/navidrome:latest",
+      "arch": [
+        "amd64",
+        "arm64",
+        "arm"
+      ],
+      "ports": {
+        "4533": "4533"
+      },
+      "volumes": {
+        "/data": "/opt/homepinas/apps/navidrome/data",
+        "/music": "/mnt/storage/media/music"
+      },
+      "env": {
+        "ND_SCANSCHEDULE": "1h",
+        "ND_LOGLEVEL": "info",
+        "ND_BASEURL": ""
+      },
+      "webUI": 4533,
+      "docs": "https://www.navidrome.org/docs/"
+    },
+    {
+      "id": "nginx-proxy-manager",
+      "name": "Nginx Proxy Manager",
+      "description": "Reverse proxy con interfaz gráfica. Gestión visual de proxies, certificados SSL Let's Encrypt y redirecciones.",
+      "category": "network",
+      "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/nginx-proxy-manager.png",
+      "image": "jc21/nginx-proxy-manager:latest",
+      "arch": [
+        "amd64",
+        "arm64"
+      ],
+      "ports": {
+        "80": "80",
+        "81": "81",
+        "443": "443"
+      },
+      "volumes": {
+        "/data": "/opt/homepinas/apps/nginx-proxy-manager/data",
+        "/etc/letsencrypt": "/opt/homepinas/apps/nginx-proxy-manager/letsencrypt"
+      },
+      "env": {},
+      "webUI": 81,
+      "docs": "https://nginxproxymanager.com/guide/",
+      "notes": "Credenciales por defecto: admin@example.com / changeme"
     }
   ],
   "categories": {
