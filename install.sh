@@ -5,7 +5,7 @@
 # Version: 2.0.0 (Homelabs.club Edition)
 
 # Version - CHANGE THIS FOR EACH RELEASE
-APP_VERSION="2.9.8"
+APP_VERSION="2.10.0"
 
 # Parse command line arguments
 CLEAN_INSTALL=false
