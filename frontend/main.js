@@ -1186,10 +1186,19 @@ setupForm.addEventListener('submit', async (e) => {
             body: JSON.stringify({ username, password })
         });
 
-        const data = await res.json();
+        let data;
+        try {
+            data = await res.json();
+        } catch (parseErr) {
+            const text = await res.text().catch(() => '');
+            alert(`Error del servidor (${res.status}): ${text || 'Respuesta no válida'}`);
+            btn.disabled = false;
+            btn.textContent = t('auth.initializeGateway', 'Inicializar Sistema');
+            return;
+        }
 
         if (!res.ok) {
-            alert(data.message || t('common.error', 'Error en la configuración'));
+            alert(data.message || `Error ${res.status}: ${t('common.error', 'Error en la configuración')}`);
             btn.disabled = false;
             btn.textContent = t('auth.initializeGateway', 'Inicializar Sistema');
             return;
@@ -1206,7 +1215,7 @@ setupForm.addEventListener('submit', async (e) => {
         initStorageSetup();
     } catch (e) {
         console.error('Setup error:', e);
-        alert(t('common.error', 'Error de conexión con hardware'));
+        alert(`Error de conexión: ${e.message || 'No se pudo conectar con el servidor'}`);
         btn.disabled = false;
         btn.textContent = t('auth.initializeGateway', 'Inicializar Sistema');
     }
