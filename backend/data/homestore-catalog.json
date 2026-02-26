@@ -1474,9 +1474,7 @@
       "description": "Agente IA personal multi-canal. Conecta con Telegram, WhatsApp, Discord y más. Tu propio asistente con acceso a herramientas, memoria y automatización.",
       "category": "ai",
       "icon": "https://docs.openclaw.ai/img/logo.svg",
-      "image": null,
-      "installType": "script",
-      "installScript": "npm install -g openclaw && openclaw init",
+      "image": "alpine/openclaw:latest",
       "arch": [
         "amd64",
         "arm64"
@@ -1484,11 +1482,15 @@
       "ports": {
         "18789": "18789"
       },
-      "volumes": {},
-      "env": {},
+      "volumes": {
+        "/app/.openclaw": "/opt/homepinas/apps/openclaw/data"
+      },
+      "env": {
+        "OPENCLAW_ACCEPT_TOS": "yes"
+      },
       "webUI": 18789,
       "docs": "https://docs.openclaw.ai",
-      "notes": "Requiere Node.js 20+. Tras instalar, ejecuta openclaw init para configurar tu agente. Necesitas una API key de Anthropic o usar suscripción Claude."
+      "notes": "Tras instalar, accede a http://IP:18789 para configurar tu agente. Necesitas una API key de Anthropic o suscripción Claude Pro."
     }
   ],
   "categories": {
