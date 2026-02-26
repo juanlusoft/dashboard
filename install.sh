@@ -5,7 +5,7 @@
 # Version: 2.0.0 (Homelabs.club Edition)
 
 # Version - CHANGE THIS FOR EACH RELEASE
-VERSION="2.9.8"
+APP_VERSION="2.9.8"
 
 # Parse command line arguments
 CLEAN_INSTALL=false
@@ -51,7 +51,7 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 echo -e "${BLUE}=========================================${NC}"
-echo -e "${BLUE}   HomePiNAS v${VERSION} Universal Installer  ${NC}"
+echo -e "${BLUE}   HomePiNAS v${APP_VERSION} Universal Installer  ${NC}"
 echo -e "${BLUE}   Homelabs.club Edition                ${NC}"
 echo -e "${BLUE}=========================================${NC}"
 
@@ -617,7 +617,7 @@ if command -v avahi-daemon &> /dev/null; then
 <!--
   HomePiNAS mDNS/Zeroconf Service Configuration
   This file announces HomePiNAS on the local network as homepinas.local
-  Version: ${VERSION}
+  Version: ${APP_VERSION}
 -->
 <service-group>
   <name replace-wildcards="yes">HomePiNAS on %h</name>
@@ -627,7 +627,7 @@ if command -v avahi-daemon &> /dev/null; then
     <type>_http._tcp</type>
     <port>80</port>
     <txt-record>path=/</txt-record>
-    <txt-record>version=${VERSION}</txt-record>
+    <txt-record>version=${APP_VERSION}</txt-record>
     <txt-record>product=HomePiNAS</txt-record>
   </service>
 
@@ -636,7 +636,7 @@ if command -v avahi-daemon &> /dev/null; then
     <type>_https._tcp</type>
     <port>443</port>
     <txt-record>path=/</txt-record>
-    <txt-record>version=${VERSION}</txt-record>
+    <txt-record>version=${APP_VERSION}</txt-record>
     <txt-record>product=HomePiNAS</txt-record>
   </service>
 
@@ -798,7 +798,7 @@ elif [ -n "$STACKS_BACKUP" ]; then
 fi
 
 # Update package.json version to match installer
-sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"${VERSION}\"/" package.json 2>/dev/null || true
+sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"${APP_VERSION}\"/" package.json 2>/dev/null || true
 
 # CRITICAL CHECK: Verify structure
 if [ ! -d "backend" ]; then
@@ -1438,7 +1438,7 @@ systemctl enable homepinas-snapraid-sync.timer || true
 
 echo -e "${GREEN}=========================================${NC}"
 echo -e "${GREEN}    SECURE INSTALLATION COMPLETE!       ${NC}"
-echo -e "${GREEN}      HomePiNAS v${VERSION}                  ${NC}"
+echo -e "${GREEN}      HomePiNAS v${APP_VERSION}                  ${NC}"
 echo -e "${GREEN}=========================================${NC}"
 echo -e ""
 IP_ADDR=$(hostname -I | awk '{print $1}')
