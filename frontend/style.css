@@ -6235,7 +6235,12 @@ body.fm-dragging .fm-tree-item {
 .homestore-port-input { width: 100px; padding: 10px 12px; background: rgba(255,255,255,0.1); border: 1px solid var(--border, #3a3a5e); border-radius: 8px; color: var(--text, #fff); font-family: monospace; }
 .homestore-port-arrow { color: var(--text-secondary); }
 .homestore-config-env { margin-bottom: 12px; }
-.homestore-env-input { width: 100%; padding: 10px 12px; background: rgba(255,255,255,0.1); border: 1px solid var(--border, #3a3a5e); border-radius: 8px; color: var(--text, #fff); font-family: monospace; font-size: 0.9rem; }
+.homestore-env-input { width: 100%; padding: 10px 12px; background: rgba(255,255,255,0.1); border: 1px solid var(--border, #3a3a5e); border-radius: 8px; color: #fff !important; font-family: monospace; font-size: 0.9rem; }
+.homestore-env-input::placeholder { color: rgba(255,255,255,0.4); }
+.homestore-port-input { color: #fff !important; }
+.homestore-port-input::placeholder { color: rgba(255,255,255,0.4); }
+.homestore-volume-input { color: #fff !important; }
+.homestore-volume-input::placeholder { color: rgba(255,255,255,0.4); }
 
 /* Config modal footer */
 .homestore-modal-footer { padding: 16px 24px; border-top: 1px solid var(--border, #3a3a5e); display: flex; justify-content: flex-end; gap: 12px; background: var(--bg-card, #1a1a2e); }
