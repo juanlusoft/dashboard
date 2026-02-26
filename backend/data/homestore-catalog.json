@@ -1483,14 +1483,15 @@
         "18789": "18789"
       },
       "volumes": {
-        "/app/.openclaw": "/opt/homepinas/apps/openclaw/data"
+        "/home/node/.openclaw": "/opt/homepinas/apps/openclaw/data"
       },
       "env": {
+        "OPENCLAW_HOST": "0.0.0.0",
         "OPENCLAW_ACCEPT_TOS": "yes"
       },
       "webUI": 18789,
       "docs": "https://docs.openclaw.ai",
-      "notes": "Tras instalar, accede a http://IP:18789 para configurar tu agente. Necesitas una API key de Anthropic o suscripción Claude Pro."
+      "notes": "Tras instalar:\n1. Mira los logs del contenedor para obtener el TOKEN\n2. Abre http://IP:18789 en el navegador\n3. Pega el token en Settings\n4. Configura tu proveedor IA (Anthropic API key)\n5. Conecta canales (Telegram, WhatsApp, etc.)"
     }
   ],
   "categories": {
