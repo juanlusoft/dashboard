@@ -1467,31 +1467,6 @@
       "webUI": 81,
       "docs": "https://nginxproxymanager.com/guide/",
       "notes": "Credenciales por defecto: admin@example.com / changeme"
-    },
-    {
-      "id": "openclaw",
-      "name": "OpenClaw",
-      "description": "Agente IA personal multi-canal. Conecta con Telegram, WhatsApp, Discord y más. Tu propio asistente con acceso a herramientas, memoria y automatización.",
-      "category": "ai",
-      "icon": "https://docs.openclaw.ai/img/logo.svg",
-      "image": "alpine/openclaw:latest",
-      "arch": [
-        "amd64",
-        "arm64"
-      ],
-      "ports": {
-        "18789": "18789"
-      },
-      "volumes": {
-        "/home/node/.openclaw": "/opt/homepinas/apps/openclaw/data"
-      },
-      "env": {
-        "OPENCLAW_HOST": "0.0.0.0",
-        "OPENCLAW_ACCEPT_TOS": "yes"
-      },
-      "webUI": 18789,
-      "docs": "https://docs.openclaw.ai",
-      "notes": "Tras instalar:\n1. Mira los logs del contenedor para obtener el TOKEN\n2. Abre http://IP:18789 en el navegador\n3. Pega el token en Settings\n4. Configura tu proveedor IA (Anthropic API key)\n5. Conecta canales (Telegram, WhatsApp, etc.)"
     }
   ],
   "categories": {
