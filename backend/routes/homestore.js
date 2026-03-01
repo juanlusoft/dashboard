@@ -86,13 +86,12 @@ async function checkDocker() {
     });
 }
 
-// Helper: Get container status
-async function getContainerStatus(appId) {
+// Helper: Get container status - check both HomePiNAS containers and external ones
+async function getContainerStatus(appId, appImage = null) {
     return new Promise((resolve) => {
+        // First try the standard HomePiNAS naming
         execFile('docker', ['ps', '-a', '--filter', `name=homestore-${appId}`, '--format', '{{.Status}}'], (err, stdout) => {
-            if (err || !stdout.trim()) {
-                resolve(null);
-            } else {
+            if (!err && stdout.trim()) {
                 const status = stdout.trim().toLowerCase();
                 if (status.includes('up')) {
                     resolve('running');
@@ -101,7 +100,62 @@ async function getContainerStatus(appId) {
                 } else {
                     resolve('unknown');
                 }
+            } else {
+                // If not found, try to detect external containers by image or app name
+                checkExternalContainer(appId, appImage).then(resolve);
             }
+        });
+    });
+}
+
+// Helper: Check for external containers by image name or app name
+async function checkExternalContainer(appId, appImage) {
+    return new Promise((resolve) => {
+        if (!appImage) {
+            resolve(null);
+            return;
+        }
+        
+        // Extract image name without tag for more flexible matching
+        const imageName = appImage.split(':')[0];
+        
+        // Check containers using the same image
+        execFile('docker', ['ps', '-a', '--format', '{{.Status}}\t{{.Image}}\t{{.Names}}'], (err, stdout) => {
+            if (err || !stdout.trim()) {
+                resolve(null);
+                return;
+            }
+            
+            const lines = stdout.trim().split('\n');
+            for (const line of lines) {
+                const [status, image, names] = line.split('\t');
+                
+                // Match by image name
+                if (image.includes(imageName) || image.includes(appId)) {
+                    if (status.toLowerCase().includes('up')) {
+                        resolve('running');
+                    } else if (status.toLowerCase().includes('exited')) {
+                        resolve('stopped');
+                    } else {
+                        resolve('unknown');
+                    }
+                    return;
+                }
+                
+                // Match by container name containing app name
+                if (names.toLowerCase().includes(appId.toLowerCase())) {
+                    if (status.toLowerCase().includes('up')) {
+                        resolve('running');
+                    } else if (status.toLowerCase().includes('exited')) {
+                        resolve('stopped');
+                    } else {
+                        resolve('unknown');
+                    }
+                    return;
+                }
+            }
+            
+            resolve(null);
         });
     });
 }
@@ -128,16 +182,20 @@ router.get('/catalog', requireAuth, async (req, res) => {
         
         // Enrich apps with install status and saved config
         const apps = await Promise.all(catalog.apps.map(async (app) => {
-            const status = await getContainerStatus(app.id);
+            const status = await getContainerStatus(app.id, app.image);
             const savedConfig = await loadAppConfig(app.id);
             const installInfo = installed.apps[app.id];
             
+            // If container is found externally but not in our installed list, mark as installed
+            const isExternallyInstalled = status && !installInfo;
+            
             return {
                 ...app,
-                installed: !!installInfo,
+                installed: !!installInfo || isExternallyInstalled,
                 status: status,
-                installedAt: installInfo?.installedAt,
-                config: savedConfig || installInfo?.config || null
+                installedAt: installInfo?.installedAt || (isExternallyInstalled ? 'external' : undefined),
+                config: savedConfig || installInfo?.config || null,
+                external: isExternallyInstalled
             };
         }));
         
@@ -172,7 +230,7 @@ router.get('/installed', requireAuth, async (req, res) => {
         const apps = await Promise.all(
             Object.keys(installed.apps).map(async (appId) => {
                 const appDef = catalog.apps.find(a => a.id === appId);
-                const status = await getContainerStatus(appId);
+                const status = await getContainerStatus(appId, appDef?.image);
                 const stats = status === 'running' ? await getContainerStats(appId) : null;
                 const savedConfig = await loadAppConfig(appId);
                 
@@ -207,7 +265,7 @@ router.get('/app/:id', requireAuth, async (req, res) => {
             return res.status(404).json({ success: false, error: 'App not found' });
         }
         
-        const status = await getContainerStatus(id);
+        const status = await getContainerStatus(id, app.image);
         const stats = status === 'running' ? await getContainerStats(id) : null;
         const savedConfig = await loadAppConfig(id);
         
