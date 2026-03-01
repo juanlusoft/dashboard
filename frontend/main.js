@@ -4701,12 +4701,127 @@ if (headerUserMenu) {
 
 // Simple notification center function
 function showNotificationCenter() {
-    showNotification('Centro de notificaciones - Próximamente disponible', 'info');
+    // Create notification center modal if it doesn't exist
+    let modal = document.getElementById('notification-center-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'notification-center-modal';
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <header class="modal-header">
+                    <h3>Centro de Notificaciones</h3>
+                    <button class="modal-close" onclick="this.closest('.modal').classList.remove('active')">&times;</button>
+                </header>
+                <div class="modal-body">
+                    <div class="notification-list">
+                        <div class="empty-state">
+                            <div class="empty-icon">🔔</div>
+                            <p>No hay notificaciones</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    modal.classList.add('active');
 }
 
 // Simple user menu function
 function showUserMenu() {
-    showNotification('Menú de usuario - Próximamente disponible', 'info');
+    // Create user menu dropdown if it doesn't exist
+    let dropdown = document.getElementById('user-menu-dropdown');
+    if (!dropdown) {
+        dropdown = document.createElement('div');
+        dropdown.id = 'user-menu-dropdown';
+        dropdown.className = 'user-menu-dropdown';
+        dropdown.innerHTML = `
+            <div class="user-menu-option" onclick="showUserProfile()">
+                <span class="user-menu-icon">👤</span>
+                <span>Perfil de Usuario</span>
+            </div>
+            <div class="user-menu-option" onclick="showUserSettings()">
+                <span class="user-menu-icon">⚙️</span>
+                <span>Configuración</span>
+            </div>
+            <div class="user-menu-divider"></div>
+            <div class="user-menu-option" onclick="showChangePassword()">
+                <span class="user-menu-icon">🔑</span>
+                <span>Cambiar Contraseña</span>
+            </div>
+        `;
+        
+        // Position dropdown relative to user menu
+        const userMenu = document.getElementById('header-user-menu');
+        userMenu.style.position = 'relative';
+        userMenu.appendChild(dropdown);
+    }
+    
+    // Toggle dropdown visibility
+    dropdown.classList.toggle('show');
+    
+    // Close dropdown when clicking outside
+    setTimeout(() => {
+        document.addEventListener('click', function closeUserMenu(e) {
+            if (!dropdown.contains(e.target) && !document.getElementById('header-user-menu').contains(e.target)) {
+                dropdown.classList.remove('show');
+                document.removeEventListener('click', closeUserMenu);
+            }
+        });
+    }, 0);
+}
+
+// User menu helper functions
+function showUserProfile() {
+    showNotification('Perfil de usuario - Funcionalidad en desarrollo', 'info');
+    document.getElementById('user-menu-dropdown').classList.remove('show');
+}
+
+function showUserSettings() {
+    showNotification('Configuración de usuario - Funcionalidad en desarrollo', 'info');
+    document.getElementById('user-menu-dropdown').classList.remove('show');
+}
+
+function showChangePassword() {
+    // Create change password modal
+    let modal = document.getElementById('change-password-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'change-password-modal';
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <header class="modal-header">
+                    <h3>Cambiar Contraseña</h3>
+                    <button class="modal-close" onclick="this.closest('.modal').classList.remove('active')">&times;</button>
+                </header>
+                <div class="modal-body">
+                    <form id="change-password-form">
+                        <div class="input-group">
+                            <input type="password" id="current-password" required placeholder=" ">
+                            <label for="current-password">Contraseña Actual</label>
+                        </div>
+                        <div class="input-group">
+                            <input type="password" id="new-password" required placeholder=" ">
+                            <label for="new-password">Nueva Contraseña</label>
+                        </div>
+                        <div class="input-group">
+                            <input type="password" id="confirm-password" required placeholder=" ">
+                            <label for="confirm-password">Confirmar Nueva Contraseña</label>
+                        </div>
+                        <div class="modal-actions">
+                            <button type="button" onclick="this.closest('.modal').classList.remove('active')">Cancelar</button>
+                            <button type="submit">Cambiar Contraseña</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    modal.classList.add('active');
+    document.getElementById('user-menu-dropdown').classList.remove('show');
 }
 
 // =============================================================================
@@ -4894,9 +5009,28 @@ function openTerminal(command = 'bash', title = 'Terminal') {
 
         terminalWs = new WebSocket(wsUrl);
 
+        // Add connection timeout
+        const connectionTimeout = setTimeout(() => {
+            if (terminalWs && terminalWs.readyState !== WebSocket.OPEN) {
+                terminalWs.close();
+                statusEl.textContent = t('terminal.timeout', 'Conexión expiró');
+                document.querySelector('.terminal-status').classList.add('disconnected');
+                terminal.write('\r\n\x1b[31m[Error: Timeout de conexión]\x1b[0m\r\n');
+                terminal.write('\x1b[33mEl servidor no respondió en el tiempo esperado.\x1b[0m\r\n');
+                terminal.write('\x1b[33mVerifica que el comando sea válido y el servicio funcione correctamente.\x1b[0m\r\n');
+                terminal.write('\x1b[36mComando que se intentó ejecutar: ' + command + '\x1b[0m\r\n');
+            }
+        }, 10000); // 10 second timeout
+
         terminalWs.onopen = () => {
+            clearTimeout(connectionTimeout);
             statusEl.textContent = t('terminal.connected', 'Conectado');
             document.querySelector('.terminal-status').classList.remove('disconnected');
+            
+            // Show initial command info for shortcuts
+            if (command !== 'bash') {
+                terminal.write('\x1b[36m[Ejecutando: ' + command + ']\x1b[0m\r\n');
+            }
         };
 
         terminalWs.onmessage = (event) => {
@@ -4915,22 +5049,43 @@ function openTerminal(command = 'bash', title = 'Terminal') {
         };
 
         terminalWs.onclose = (event) => {
+            clearTimeout(connectionTimeout);
             statusEl.textContent = t('terminal.disconnected', 'Desconectado');
             document.querySelector('.terminal-status').classList.add('disconnected');
             
             // Show helpful message if connection failed immediately
             if (event.code === 1006) {
                 terminal.write('\r\n\x1b[31m[Error: No se pudo conectar al servidor de terminal]\x1b[0m\r\n');
-                terminal.write('\x1b[33mPosibles causas:\x1b[0m\r\n');
-                terminal.write('  - El módulo node-pty no está instalado correctamente\r\n');
-                terminal.write('  - El servidor necesita reiniciarse después de la instalación\r\n');
-                terminal.write('\x1b[33mSolución: sudo systemctl restart homepinas\x1b[0m\r\n');
+                
+                // More specific error for command shortcuts
+                if (command !== 'bash') {
+                    terminal.write('\x1b[33mError ejecutando comando desde acceso directo:\x1b[0m\r\n');
+                    terminal.write('\x1b[36m' + command + '\x1b[0m\r\n');
+                    terminal.write('\x1b[33mPosibles causas:\x1b[0m\r\n');
+                    terminal.write('  - El comando no existe o no está en el PATH\r\n');
+                    terminal.write('  - Permisos insuficientes para ejecutar el comando\r\n');
+                    terminal.write('  - El servicio de terminal necesita reiniciarse\r\n');
+                    terminal.write('\x1b[33mSolución: Verifica el comando o usa el terminal manual\x1b[0m\r\n');
+                } else {
+                    terminal.write('\x1b[33mPosibles causas:\x1b[0m\r\n');
+                    terminal.write('  - El módulo node-pty no está instalado correctamente\r\n');
+                    terminal.write('  - El servidor necesita reiniciarse después de la instalación\r\n');
+                    terminal.write('\x1b[33mSolución: sudo systemctl restart homepinas\x1b[0m\r\n');
+                }
             }
         };
 
         terminalWs.onerror = (err) => {
             console.error('Terminal WebSocket error:', err);
+            clearTimeout(connectionTimeout);
             statusEl.textContent = t('terminal.error', 'Error de conexión');
+            document.querySelector('.terminal-status').classList.add('disconnected');
+            
+            // Show error details in terminal
+            terminal.write('\r\n\x1b[31m[Error de WebSocket]\x1b[0m\r\n');
+            if (command !== 'bash') {
+                terminal.write('\x1b[33mError al conectar con el servidor para ejecutar: ' + command + '\x1b[0m\r\n');
+            }
         };
 
         // Send input to WebSocket
