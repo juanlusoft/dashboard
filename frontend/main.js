@@ -4681,6 +4681,34 @@ if (powerBtn && powerDropdown) {
     });
 }
 
+// Header notifications and user menu handlers
+const headerNotifications = document.getElementById("header-notifications");
+const headerUserMenu = document.getElementById("header-user-menu");
+
+if (headerNotifications) {
+    headerNotifications.addEventListener("click", () => {
+        // Show notifications dropdown or modal
+        showNotificationCenter();
+    });
+}
+
+if (headerUserMenu) {
+    headerUserMenu.addEventListener("click", (e) => {
+        e.stopPropagation();
+        showUserMenu();
+    });
+}
+
+// Simple notification center function
+function showNotificationCenter() {
+    showNotification('Centro de notificaciones - Próximamente disponible', 'info');
+}
+
+// Simple user menu function
+function showUserMenu() {
+    showNotification('Menú de usuario - Próximamente disponible', 'info');
+}
+
 // =============================================================================
 // TERMINAL VIEW
 // =============================================================================
@@ -6385,6 +6413,8 @@ async function createNewFolder() {
         });
         if (!res.ok) throw new Error('Failed');
         await loadFiles(currentFilePath);
+        // Update folder tree to show new folder
+        await loadFolderTree();
     } catch (e) {
         alert('Error al crear carpeta');
     }
@@ -7336,6 +7366,9 @@ async function deleteTask(id) {
 let currentLogTab = 'system';
 
 async function renderLogsView() {
+    // Clear existing content first to prevent duplication
+    dashboardContent.innerHTML = '';
+    
     const container = document.createElement('div');
     container.style.cssText = 'display: contents;';
 
@@ -7384,12 +7417,32 @@ async function renderLogsView() {
         if (n === 100) opt.selected = true;
         linesSelect.appendChild(opt);
     });
+    
+    // Add event listener for automatic refresh when changing lines
+    linesSelect.addEventListener('change', () => {
+        fetchLogs();
+    });
 
     const filterInput = document.createElement('input');
     filterInput.type = 'text';
     filterInput.id = 'log-filter';
     filterInput.placeholder = 'Filtrar...';
     filterInput.style.cssText = 'padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); flex: 1; min-width: 150px;';
+    
+    // Add event listeners for real-time filtering
+    let filterTimeout;
+    filterInput.addEventListener('input', () => {
+        clearTimeout(filterTimeout);
+        filterTimeout = setTimeout(() => {
+            fetchLogs();
+        }, 300); // Debounce 300ms
+    });
+    filterInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            clearTimeout(filterTimeout);
+            fetchLogs();
+        }
+    });
 
     const refreshBtn = document.createElement('button');
     refreshBtn.className = 'btn-primary btn-sm';
