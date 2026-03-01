@@ -32,13 +32,17 @@ const COMMAND_PACKAGES = {
     'docker': 'docker.io'
 };
 
-// SECURITY: Only allow exact command names, no arguments, no paths
+// SECURITY: Validate command and arguments
 function validateCommand(cmd) {
     if (!cmd || typeof cmd !== 'string') return false;
-    // Only allow a single command name - no spaces, no paths, no arguments
     const trimmed = cmd.trim();
-    if (trimmed.includes(' ') || trimmed.includes('/')) return false;
-    return ALLOWED_COMMANDS.includes(trimmed);
+    // Don't allow paths
+    if (trimmed.includes('/')) return false;
+    
+    // Parse command and check if base command is allowed
+    const parts = trimmed.split(' ');
+    const baseCmd = parts[0];
+    return ALLOWED_COMMANDS.includes(baseCmd);
 }
 
 // Check if command exists (safe - no shell interpolation)
@@ -106,9 +110,13 @@ function setupTerminalWebSocket(server) {
         // Create PTY process
         let ptyProcess;
         try {
-            // SECURITY: Only spawn the exact validated command, no "bash -c" bypass
-            // command was already validated to be a single word in ALLOWED_COMMANDS
-            ptyProcess = pty.spawn(command, [], {
+            // Parse command and arguments
+            const cmdParts = command.trim().split(' ');
+            const cmd = cmdParts[0];
+            const args = cmdParts.slice(1);
+            
+            // SECURITY: Only spawn the exact validated command
+            ptyProcess = pty.spawn(cmd, args, {
                 name: 'xterm-256color',
                 cols: 80,
                 rows: 24,
