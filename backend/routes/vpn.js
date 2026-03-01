@@ -272,15 +272,35 @@ async function generateServerConfig(vpnConfig, serverPrivateKey, netInterface, p
  * Generar configuración de cliente.
  * La clave privada del cliente se lee del archivo en disco, no de data.json.
  */
-function generateClientConfig(vpnConfig, clientPrivateKey, clientAddress, clientPresharedKey) {
+async function generateClientConfig(vpnConfig, clientPrivateKey, clientAddress, clientPresharedKey) {
     const serverAddress = vpnConfig.endpoint || getServerLocalIP();
+    
+    // Ensure we have the server public key - critical for client connection
+    let serverPublicKey = vpnConfig.serverPublicKey;
+    if (!serverPublicKey) {
+        // Try to recover public key from server's private key
+        const serverPrivateKey = await readServerPrivateKey();
+        if (serverPrivateKey) {
+            serverPublicKey = await getServerPublicKeyFromPrivate(serverPrivateKey);
+            if (serverPublicKey) {
+                // Save it back to config
+                vpnConfig.serverPublicKey = serverPublicKey;
+                saveVpnConfig(vpnConfig);
+            }
+        }
+    }
+    
+    if (!serverPublicKey) {
+        throw new Error('Server public key not found. VPN server may not be properly configured.');
+    }
+    
     let config = '[Interface]\n';
     config += `PrivateKey = ${clientPrivateKey}\n`;
     config += `Address = ${clientAddress}/32\n`;
     config += `DNS = ${vpnConfig.dns}\n`;
     config += '\n';
     config += '[Peer]\n';
-    config += `PublicKey = ${vpnConfig.serverPublicKey}\n`;
+    config += `PublicKey = ${serverPublicKey}\n`;
     config += `PresharedKey = ${clientPresharedKey}\n`;
     config += `Endpoint = ${serverAddress}:${vpnConfig.port}\n`;
     config += 'AllowedIPs = 0.0.0.0/0, ::/0\n';
@@ -347,6 +367,18 @@ async function deleteClientConfFile(clientName) {
         } catch {
             // Archivo puede no existir → ok
         }
+    }
+}
+
+/**
+ * Extraer la clave pública del servidor desde su clave privada
+ */
+async function getServerPublicKeyFromPrivate(privateKey) {
+    try {
+        const stdout = await spawnWithStdin('wg', ['pubkey'], privateKey + '\n');
+        return stdout.trim();
+    } catch {
+        return null;
     }
 }
 
@@ -940,7 +972,7 @@ router.post('/clients', async (req, res) => {
         }
 
         // Generar configuración del cliente (con clave privada)
-        const clientConf = generateClientConfig(vpnConfig, clientKeys.privateKey, clientIP, presharedKey);
+        const clientConf = await generateClientConfig(vpnConfig, clientKeys.privateKey, clientIP, presharedKey);
 
         // Guardar .conf del cliente en disco (clave privada solo aquí)
         await saveClientConfFile(safeName, clientConf);
