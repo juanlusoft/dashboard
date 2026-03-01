@@ -2,6 +2,27 @@
 
 All notable changes to HomePiNAS are documented in this file.
 
+## [2.9.10] - 2026-03-01
+
+### Fixed
+- **Header notifications** — Notification center icon now opens functional notification modal (issue #3)
+- **Header user menu** — User menu icon now displays dropdown with profile options (issue #4)
+- **File Manager tree refresh** — Folder tree now updates correctly when creating new directories (issue #5)
+- **Terminal shortcuts connection** — Enhanced error handling for command shortcuts with detailed connection timeout and error messages (issue #9)
+
+### Added
+- **Notification Center** — Modal interface for system notifications (placeholder for future expansion)
+- **User Menu Dropdown** — Profile access, settings, and password change functionality
+- **Password Change Modal** — Built-in password change form accessible from user menu
+- **Terminal error diagnostics** — Better debugging information for failed WebSocket connections
+- **Command argument support** — Terminal now properly handles commands with arguments while maintaining security
+
+### Security
+- **Enhanced command validation** — Improved backend validation for terminal commands and arguments
+- **Path traversal prevention** — Stricter validation prevents path-based command execution
+
+---
+
 ## [2.5.0] - 2025-02-05
 
 ### Added
