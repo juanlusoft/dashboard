@@ -32,7 +32,11 @@ const ALLOWED_COMMANDS = [
 function validateCommand(cmd) {
     if (!cmd || typeof cmd !== 'string') return false;
     
-    const baseCmd = cmd.split(' ')[0].split('/').pop();
+    // Don't allow paths
+    if (cmd.includes('/')) return false;
+    
+    const parts = cmd.trim().split(' ');
+    const baseCmd = parts[0];
     return ALLOWED_COMMANDS.includes(baseCmd);
 }
 
