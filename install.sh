@@ -2,10 +2,10 @@
 
 # HomePiNAS - Premium Dashboard for Raspberry Pi / Debian / Ubuntu
 # Universal Installer with automatic OS detection
-# Version: 2.10.7 (Homelabs.club Edition)
+# Version: 2.10.8 (Homelabs.club Edition)
 
 # Version - CHANGE THIS FOR EACH RELEASE
-APP_VERSION="2.10.7"
+APP_VERSION="2.10.8"
 
 # Parse command line arguments
 CLEAN_INSTALL=false
@@ -348,6 +348,7 @@ echo -e "${BLUE}Installing system packages...${NC}"
 install_package_safe "git" ""
 install_package_safe "build-essential" "base-devel"
 install_package_safe "smartmontools" ""
+install_package_safe "i2c-tools" ""
 install_package_safe "lm-sensors" "sensors"
 install_package_safe "pigz" ""
 install_package_safe "samba" ""
@@ -946,12 +947,22 @@ fi
 echo -e "${BLUE}Creating fan control script with hysteresis...${NC}"
 cat > "$FANCTL_SCRIPT" <<'FANEOF'
 #!/bin/bash
-# HomePiNAS Fan Control Script for EMC2305
-# Controls PWM fans based on CPU and disk temperatures
-# Version 1.5.5: Added hysteresis to prevent fan speed oscillation
+# HomePiNAS Fan Control Script
+# Controls PWM fans via sysfs (pwmfan) + I2C (EMC2305)
+# Version 2.0.0: Multi-backend support (sysfs + i2c)
+#
+# PWM1 curve → EMC2305 fans (case/disk fans) via I2C
+# PWM2 curve → pwmfan (RPi CPU fan) via sysfs
 
 CONFIG_FILE="/usr/local/bin/homepinas-fanctl.conf"
 STATE_FILE="/tmp/homepinas-fanctl.state"
+
+# I2C settings for EMC2305
+EMC_BUS=10
+EMC_ADDR=0x2e
+EMC_FAN1_REG=0x30
+EMC_FAN2_REG=0x40
+I2CSET=/usr/sbin/i2cset
 
 # Default values (BALANCED)
 MIN_PWM1=65
@@ -967,15 +978,14 @@ PWM2_T60=170
 PWM2_TMAX=255
 
 # Hysteresis settings (degrees Celsius)
-# Fan speed only decreases when temp drops below threshold minus hysteresis
 HYST_TEMP=3
 
-# Load config if exists (use . instead of source for POSIX compatibility)
+# Load config if exists
 if [ -f "$CONFIG_FILE" ]; then
     . "$CONFIG_FILE"
 fi
 
-# Load previous state (last PWM values and temps)
+# Load previous state
 LAST_PWM1=0
 LAST_PWM2=0
 LAST_TEMP1=0
@@ -984,18 +994,31 @@ if [ -f "$STATE_FILE" ]; then
     . "$STATE_FILE"
 fi
 
-# Find EMC2305 hwmon path
-HWMON=""
+# Detect available fan backends
+HAS_EMC=0
+HAS_PWMFAN=""
+
+# Check EMC2305 on I2C
+if [ -x "$I2CSET" ] && [ -e "/dev/i2c-${EMC_BUS}" ]; then
+    # Quick probe: try reading product ID register
+    if /usr/sbin/i2cget -y $EMC_BUS $EMC_ADDR 0xFD > /dev/null 2>&1; then
+        HAS_EMC=1
+    fi
+fi
+
+# Check pwmfan via sysfs (RPi cooling fan)
 for hw in /sys/class/hwmon/hwmon*; do
     name=$(cat "$hw/name" 2>/dev/null)
-    if [ "$name" = "emc2305" ]; then
-        HWMON=$hw
+    if [ "$name" = "pwmfan" ]; then
+        if [ -f "$hw/pwm1" ]; then
+            HAS_PWMFAN="$hw/pwm1"
+        fi
         break
     fi
 done
 
-if [ -z "$HWMON" ]; then
-    echo "EMC2305 not found"
+if [ "$HAS_EMC" -eq 0 ] && [ -z "$HAS_PWMFAN" ]; then
+    echo "No fan controllers found (no EMC2305 on i2c, no pwmfan in sysfs)"
     exit 0
 fi
 
@@ -1007,7 +1030,6 @@ CPU_TEMP=$((CPU_TEMP / 1000))
 DISK_TEMP=0
 for disk in /dev/sd[a-z] /dev/nvme[0-9]n1; do
     if [ -b "$disk" ]; then
-        # Parse SMART attribute 194 (Temperature_Celsius) - value is in column 10
         t=$(smartctl -A "$disk" 2>/dev/null | grep -E "^194|Temperature_Celsius" | awk '{print $10}')
         if [ -n "$t" ] && [ "$t" -gt 0 ] && [ "$t" -lt 100 ] 2>/dev/null; then
             if [ "$t" -gt "$DISK_TEMP" ]; then
@@ -1023,7 +1045,7 @@ if [ "$CPU_TEMP" -gt "$TEMP1" ]; then
     TEMP1=$CPU_TEMP
 fi
 
-# Function to calculate PWM1 based on temperature
+# PWM1 curve (disk/case fans — EMC2305)
 calc_pwm1() {
     local temp=$1
     if [ "$temp" -ge 45 ]; then
@@ -1039,7 +1061,7 @@ calc_pwm1() {
     fi
 }
 
-# Function to calculate PWM2 based on CPU temperature
+# PWM2 curve (CPU fan — pwmfan sysfs)
 calc_pwm2() {
     local temp=$1
     if [ "$temp" -ge 70 ]; then
@@ -1059,44 +1081,47 @@ calc_pwm2() {
 TARGET_PWM1=$(calc_pwm1 $TEMP1)
 TARGET_PWM2=$(calc_pwm2 $CPU_TEMP)
 
-# Apply hysteresis: only allow decrease if temperature dropped significantly
-# For PWM1 (disk/general fan)
+# Apply hysteresis for PWM1
 if [ "$TARGET_PWM1" -lt "$LAST_PWM1" ]; then
-    # Temperature is suggesting lower speed - check hysteresis
     TEMP1_WITH_HYST=$((TEMP1 + HYST_TEMP))
     HYST_PWM1=$(calc_pwm1 $TEMP1_WITH_HYST)
     if [ "$HYST_PWM1" -ge "$LAST_PWM1" ]; then
-        # Temperature hasn't dropped enough, keep current speed
         TARGET_PWM1=$LAST_PWM1
     fi
 fi
 
-# For PWM2 (CPU fan)
+# Apply hysteresis for PWM2
 if [ "$TARGET_PWM2" -lt "$LAST_PWM2" ]; then
-    # Temperature is suggesting lower speed - check hysteresis
     CPU_TEMP_WITH_HYST=$((CPU_TEMP + HYST_TEMP))
     HYST_PWM2=$(calc_pwm2 $CPU_TEMP_WITH_HYST)
     if [ "$HYST_PWM2" -ge "$LAST_PWM2" ]; then
-        # Temperature hasn't dropped enough, keep current speed
         TARGET_PWM2=$LAST_PWM2
     fi
 fi
 
-# Ensure minimum values
+# Enforce minimums
 PWM1=$TARGET_PWM1
 PWM2=$TARGET_PWM2
-if [ "$PWM1" -lt "$MIN_PWM1" ]; then
-    PWM1=$MIN_PWM1
-fi
-if [ "$PWM2" -lt "$MIN_PWM2" ]; then
-    PWM2=$MIN_PWM2
+[ "$PWM1" -lt "$MIN_PWM1" ] && PWM1=$MIN_PWM1
+[ "$PWM2" -lt "$MIN_PWM2" ] && PWM2=$MIN_PWM2
+
+# Apply PWM1 to EMC2305 via I2C (both fan channels)
+EMC_STATUS=""
+if [ "$HAS_EMC" -eq 1 ]; then
+    HEX_PWM1=$(printf "0x%02x" $PWM1)
+    $I2CSET -y $EMC_BUS $EMC_ADDR $EMC_FAN1_REG $HEX_PWM1 2>/dev/null && \
+    $I2CSET -y $EMC_BUS $EMC_ADDR $EMC_FAN2_REG $HEX_PWM1 2>/dev/null && \
+    EMC_STATUS="ok" || EMC_STATUS="err"
 fi
 
-# Apply PWM values to hardware
-echo $PWM1 > "$HWMON/pwm1" 2>/dev/null
-echo $PWM2 > "$HWMON/pwm2" 2>/dev/null
+# Apply PWM2 to pwmfan via sysfs (RPi CPU fan)
+PWMFAN_STATUS=""
+if [ -n "$HAS_PWMFAN" ]; then
+    echo $PWM2 > "$HAS_PWMFAN" 2>/dev/null && \
+    PWMFAN_STATUS="ok" || PWMFAN_STATUS="err"
+fi
 
-# Save state for next iteration
+# Save state
 cat > "$STATE_FILE" <<EOF
 LAST_PWM1=$PWM1
 LAST_PWM2=$PWM2
@@ -1104,13 +1129,7 @@ LAST_TEMP1=$TEMP1
 LAST_CPU_TEMP=$CPU_TEMP
 EOF
 
-# Log output (with hysteresis indicator if applied)
-HYST_IND1=""
-HYST_IND2=""
-[ "$PWM1" -eq "$LAST_PWM1" ] && [ "$TARGET_PWM1" -ne "$LAST_PWM1" ] 2>/dev/null && HYST_IND1=" [H]"
-[ "$PWM2" -eq "$LAST_PWM2" ] && [ "$TARGET_PWM2" -ne "$LAST_PWM2" ] 2>/dev/null && HYST_IND2=" [H]"
-
-echo "CPU: ${CPU_TEMP}C, Disk: ${DISK_TEMP}C -> PWM1: ${PWM1}${HYST_IND1}, PWM2: ${PWM2}${HYST_IND2}"
+echo "CPU:${CPU_TEMP}C Disk:${DISK_TEMP}C | EMC2305:PWM1=${PWM1}(${EMC_STATUS:-n/a}) | pwmfan:PWM2=${PWM2}(${PWMFAN_STATUS:-n/a})"
 FANEOF
 
 if [ -f "$FANCTL_SCRIPT" ]; then
@@ -1208,6 +1227,8 @@ $REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/class/hwmon/hwmon[0-9][0-9]/pwm
 $REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /usr/local/bin/homepinas-fanctl.conf
 $REAL_USER ALL=(ALL) NOPASSWD: /bin/cp /tmp/homepinas-fanctl-temp.conf /usr/local/bin/homepinas-fanctl.conf
 $REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart homepinas-fanctl
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/i2cset
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/i2cget
 
 # Storage configuration (restricted to specific config files)
 $REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/snapraid.conf

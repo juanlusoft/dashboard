@@ -19,6 +19,15 @@ const { validateFanId, validateFanMode } = require('../utils/sanitize');
 
 // Fan mode presets configuration (v1.5.5 with hysteresis)
 const FANCTL_CONF = '/usr/local/bin/homepinas-fanctl.conf';
+
+// EMC2305 I2C constants
+const EMC2305_I2C_BUS = 10;
+const EMC2305_I2C_ADDR = '0x2e';
+const EMC2305_FAN1_REG = '0x30';
+const EMC2305_FAN2_REG = '0x40';
+const I2CSET_PATH = '/usr/sbin/i2cset';
+const I2CGET_PATH = '/usr/sbin/i2cget';
+
 const FAN_PRESETS = {
     silent: `# =========================================
 # HomePinas Fan Control - SILENT preset
@@ -153,6 +162,40 @@ router.get('/stats', requireAuth, async (req, res) => {
                     }
                 }
             } catch (e) {}
+            // Detect EMC2305 fans via I2C (driver may not create hwmon entries)
+            if (fs.existsSync(I2CGET_PATH) && fs.existsSync(`/dev/i2c-${EMC2305_I2C_BUS}`)) {
+                try {
+                    // Check if emc2305 responds on i2c bus
+                    execFileSync(I2CGET_PATH, ['-y', String(EMC2305_I2C_BUS), EMC2305_I2C_ADDR, '0x00'], {
+                        encoding: 'utf8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe']
+                    });
+                    // Read tachometer registers for RPM (registers 0x46-0x47 fan1, 0x48-0x49 fan2)
+                    const emc2305FanRegs = [
+                        { name: 'EMC2305 Fan 1', highReg: '0x46', lowReg: '0x47' },
+                        { name: 'EMC2305 Fan 2', highReg: '0x48', lowReg: '0x49' }
+                    ];
+                    // Check if already listed via hwmon (avoid duplicates)
+                    const hasEmc = fanList.some(f => f.name.includes('emc2305') || f.name.includes('EMC2305'));
+                    if (!hasEmc) {
+                        for (const fan of emc2305FanRegs) {
+                            try {
+                                const highByte = parseInt(execFileSync(I2CGET_PATH, ['-y', String(EMC2305_I2C_BUS), EMC2305_I2C_ADDR, fan.highReg], {
+                                    encoding: 'utf8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe']
+                                }).trim(), 16) || 0;
+                                const lowByte = parseInt(execFileSync(I2CGET_PATH, ['-y', String(EMC2305_I2C_BUS), EMC2305_I2C_ADDR, fan.lowReg], {
+                                    encoding: 'utf8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe']
+                                }).trim(), 16) || 0;
+                                // EMC2305 tach: RPM = 3932160 / (high<<8 | low) when non-zero
+                                const tachCount = (highByte << 8) | lowByte;
+                                const rpm = tachCount > 0 ? Math.round(3932160 / tachCount) : 0;
+                                fanList.push({ id: fanList.length + 1, name: fan.name, rpm });
+                            } catch (e) {}
+                        }
+                    }
+                } catch (e) {
+                    // EMC2305 not present or not responding on i2c bus
+                }
+            }
             fans = fanList;
         } catch (e) {
             fans = [];
@@ -239,7 +282,7 @@ router.post('/fan', requireAuth, (req, res) => {
             }
         }
 
-        // Method 2: RPi cooling fan
+        // Method 2: RPi cooling fan (pwmfan via sysfs)
         if (!found) {
             try {
                 const rpiFanBase = '/sys/devices/platform/cooling_fan/hwmon/';
@@ -262,7 +305,25 @@ router.post('/fan', requireAuth, (req, res) => {
             } catch (e) {}
         }
 
-        // Method 3: Thermal cooling device
+        // Method 3: EMC2305 via I2C (when kernel driver doesn't expose hwmon)
+        if (!found && fs.existsSync(I2CSET_PATH) && fs.existsSync(`/dev/i2c-${EMC2305_I2C_BUS}`)) {
+            try {
+                // fanNum 1 → reg 0x30, fanNum 2 → reg 0x40
+                const regMap = { 1: EMC2305_FAN1_REG, 2: EMC2305_FAN2_REG };
+                const reg = regMap[fanNum];
+                if (reg) {
+                    const hexValue = '0x' + pwmValue.toString(16).padStart(2, '0');
+                    execFileSync('sudo', [I2CSET_PATH, '-y', String(EMC2305_I2C_BUS), EMC2305_I2C_ADDR, reg, hexValue], {
+                        encoding: 'utf8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe']
+                    });
+                    found = true;
+                }
+            } catch (e) {
+                console.error('EMC2305 i2c fan control error:', e.message);
+            }
+        }
+
+        // Method 4: Thermal cooling device
         if (!found) {
             const coolingStatePath = '/sys/class/thermal/cooling_device0/cur_state';
             const coolingMaxPath = '/sys/class/thermal/cooling_device0/max_state';

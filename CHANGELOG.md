@@ -2,6 +2,15 @@
 
 All notable changes to HomePiNAS are documented in this file.
 
+## [2.10.8] - 2026-03-04
+
+### Fixed
+- **Fan control: profiles not applied after reboot** — fanctl script required EMC2305 hwmon (never created by kernel driver), now uses I2C directly (`i2cset` on bus 10, addr 0x2e)
+- **Fan control: pwmfan (RPi CPU fan) never controlled** — script now also manages the pwmfan sysfs device
+- **Fan speed detection**: dashboard now reads EMC2305 fan RPMs via I2C tachometer registers when hwmon is unavailable
+- **Individual fan control**: POST `/system/fan` now falls back to I2C for EMC2305 fans
+- Added `i2c-tools` as install dependency, `i2cset`/`i2cget` to sudoers
+
 ## [2.10.5] - 2026-03-02
 ## [2.10.6] - 2026-03-02
 ## [2.10.7] - 2026-03-02
