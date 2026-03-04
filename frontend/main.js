@@ -2854,6 +2854,153 @@ async function renderStorageDashboard() {
         arrayCard.appendChild(mountsGrid);
         dashboardContent.appendChild(arrayCard);
 
+        // =================================================================
+        // DISK HEALTH PANEL - Global health status for all disks
+        // =================================================================
+        try {
+            const healthRes = await authFetch(`${API_BASE}/storage/disks/health`);
+            if (healthRes.ok) {
+                const healthData = await healthRes.json();
+                
+                // Create health panel card
+                const healthCard = document.createElement('div');
+                healthCard.className = 'glass-card dash-overview-full';
+                healthCard.style.marginTop = '20px';
+                
+                // Header with summary badge
+                const healthHeader = document.createElement('div');
+                healthHeader.className = 'storage-array-header';
+                const summaryBadge = healthData.summary.warning > 0 || healthData.summary.critical > 0
+                    ? `<span class="health-summary-badge ${healthData.summary.critical > 0 ? 'critical' : 'warning'}">${healthData.summary.healthy} OK · ${healthData.summary.warning + healthData.summary.critical} Atención</span>`
+                    : `<span class="health-summary-badge ok">${healthData.summary.healthy} OK</span>`;
+                healthHeader.innerHTML = `<h3>🏥 ${t('diskHealth.title', 'Salud de Discos')}</h3>${summaryBadge}`;
+                healthCard.appendChild(healthHeader);
+                
+                // Check if no disks detected
+                if (healthData.disks.length === 0) {
+                    const noDiskMsg = document.createElement('p');
+                    noDiskMsg.style.cssText = 'text-align: center; color: var(--text-dim); padding: 20px;';
+                    noDiskMsg.textContent = t('diskHealth.noDisks', 'No se detectaron discos');
+                    healthCard.appendChild(noDiskMsg);
+                } else {
+                    // Disk health grid
+                    const healthGrid = document.createElement('div');
+                    healthGrid.className = 'disk-health-grid';
+                    healthGrid.style.cssText = 'display: flex; flex-direction: column; gap: 12px; margin-top: 15px;';
+                    
+                    for (const disk of healthData.disks) {
+                        const diskRow = document.createElement('div');
+                        diskRow.className = 'disk-health-row';
+                        diskRow.style.cssText = 'display: grid; grid-template-columns: auto 1fr auto auto auto; gap: 15px; align-items: center; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border-left: 3px solid var(--health-color);';
+                        
+                        // Set health color CSS variable
+                        const healthColors = { ok: '#4ade80', warning: '#fbbf24', critical: '#ef4444' };
+                        diskRow.style.setProperty('--health-color', healthColors[disk.health.status] || '#888');
+                        
+                        // Icon + Model + Serial
+                        const diskIcon = disk.type === 'nvme' ? '🔌' : (disk.type === 'ssd' ? '⚡' : '💿');
+                        const infoDiv = document.createElement('div');
+                        infoDiv.style.cssText = 'display: flex; flex-direction: column;';
+                        infoDiv.innerHTML = `
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 1.3rem;">${diskIcon}</span>
+                                <div>
+                                    <div style="font-weight: 600;">${escapeHtml(disk.model)}</div>
+                                    <div style="font-size: 0.85rem; color: var(--text-dim);">${escapeHtml(disk.id)} · SN: ${escapeHtml(disk.serial.substring(0, 12)) || 'N/A'}</div>
+                                </div>
+                            </div>
+                        `;
+                        diskRow.appendChild(infoDiv);
+                        
+                        // Health status indicator
+                        const healthIndicator = document.createElement('div');
+                        healthIndicator.style.cssText = 'display: flex; align-items: center; gap: 6px;';
+                        const healthIcons = { ok: '🟢', warning: '🟡', critical: '🔴' };
+                        const healthTexts = { 
+                            ok: t('diskHealth.healthy', 'Saludable'),
+                            warning: t('diskHealth.warning', 'Atención'),
+                            critical: t('diskHealth.critical', 'Crítico')
+                        };
+                        healthIndicator.innerHTML = `
+                            <span>${healthIcons[disk.health.status] || '⚪'}</span>
+                            <span class="health-${disk.health.status}">${healthTexts[disk.health.status] || 'Unknown'}</span>
+                        `;
+                        diskRow.appendChild(healthIndicator);
+                        
+                        // Metrics (type-specific)
+                        const metricsDiv = document.createElement('div');
+                        metricsDiv.style.cssText = 'display: flex; gap: 15px; font-size: 0.9rem;';
+                        
+                        if (disk.type === 'hdd' && disk.sectors) {
+                            metricsDiv.innerHTML = `
+                                <div><span style="color: var(--text-dim);">${t('diskHealth.reallocated', 'Sectores reasignados')}:</span> <strong>${disk.sectors.reallocated}</strong></div>
+                                <div><span style="color: var(--text-dim);">${t('diskHealth.pending', 'Pendientes')}:</span> <strong>${disk.sectors.pending}</strong></div>
+                            `;
+                        } else if (disk.ssdLife) {
+                            metricsDiv.innerHTML = `
+                                <div><span style="color: var(--text-dim);">${t('diskHealth.tbw', 'TBW')}:</span> <strong>${disk.ssdLife.tbw} TB</strong></div>
+                                <div><span style="color: var(--text-dim);">${t('diskHealth.lifeRemaining', 'Vida')}:</span> <strong>${disk.ssdLife.lifeRemainingFormatted}</strong></div>
+                            `;
+                        }
+                        
+                        metricsDiv.innerHTML += `
+                            <div><span style="color: var(--text-dim);">${t('diskHealth.powerOn', 'Encendido')}:</span> <strong>${escapeHtml(disk.powerOnTime.formatted)}</strong></div>
+                            <div><span style="color: var(--text-dim);">${t('diskHealth.temperature', 'Temp')}:</span> <strong class="temp-${disk.temperature.status}">${disk.temperature.current}°C</strong></div>
+                        `;
+                        diskRow.appendChild(metricsDiv);
+                        
+                        // Test button
+                        const testBtn = document.createElement('button');
+                        testBtn.className = 'disk-health-test-btn';
+                        testBtn.style.cssText = 'padding: 6px 12px; border-radius: 6px; background: rgba(78, 205, 196, 0.2); color: #4ecdc4; border: 1px solid rgba(78, 205, 196, 0.3); cursor: pointer; font-size: 0.85rem; white-space: nowrap;';
+                        
+                        if (disk.testInProgress) {
+                            testBtn.textContent = `${t('diskHealth.testRunning', 'Test en curso')} ${100 - disk.testProgress}%`;
+                            testBtn.disabled = true;
+                            testBtn.style.opacity = '0.6';
+                        } else {
+                            testBtn.textContent = t('diskHealth.runTest', 'Ejecutar Test');
+                            testBtn.addEventListener('click', async () => {
+                                testBtn.disabled = true;
+                                testBtn.textContent = '⏳';
+                                try {
+                                    const res = await authFetch(`${API_BASE}/storage/smart/${disk.id}/test`, {
+                                        method: 'POST',
+                                        body: JSON.stringify({ type: 'short' })
+                                    });
+                                    const result = await res.json();
+                                    if (res.ok && result.success) {
+                                        showNotification(`Test SMART iniciado en ${disk.id}`, 'success');
+                                        // Re-render after 2s to show test in progress
+                                        setTimeout(() => renderStorageDashboard(), 2000);
+                                    } else {
+                                        showNotification(result.error || 'Error al iniciar test', 'error');
+                                        testBtn.disabled = false;
+                                        testBtn.textContent = t('diskHealth.runTest', 'Ejecutar Test');
+                                    }
+                                } catch (e) {
+                                    showNotification(`Error: ${e.message}`, 'error');
+                                    testBtn.disabled = false;
+                                    testBtn.textContent = t('diskHealth.runTest', 'Ejecutar Test');
+                                }
+                            });
+                        }
+                        
+                        diskRow.appendChild(testBtn);
+                        healthGrid.appendChild(diskRow);
+                    }
+                    
+                    healthCard.appendChild(healthGrid);
+                }
+                
+                dashboardContent.appendChild(healthCard);
+            }
+        } catch (e) {
+            console.error('Disk health panel error:', e);
+            // Continue rendering without health panel if it fails
+        }
+        // =================================================================
+
         // Disk cards grid (detailed view)
         const grid = document.createElement('div');
         grid.className = 'telemetry-grid dash-telemetry-grid';

@@ -12671,3 +12671,108 @@ body.fm-dragging .fm-tree-item {
     transform: translateY(-1px);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
+
+/* ========== DISK HEALTH PANEL ========== */
+.health-ok {
+    color: #4ade80;
+}
+
+.health-warning {
+    color: #fbbf24;
+}
+
+.health-critical {
+    color: #ef4444;
+}
+
+.health-summary-badge {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    background: rgba(74, 222, 128, 0.2);
+    color: #4ade80;
+    border: 1px solid rgba(74, 222, 128, 0.3);
+}
+
+.health-summary-badge.warning {
+    background: rgba(251, 191, 36, 0.2);
+    color: #fbbf24;
+    border-color: rgba(251, 191, 36, 0.3);
+}
+
+.health-summary-badge.critical {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.disk-health-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 15px;
+}
+
+.disk-health-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto auto;
+    gap: 15px;
+    align-items: center;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    border-left: 3px solid var(--health-color);
+    transition: all 0.2s ease;
+}
+
+.disk-health-row:hover {
+    background: rgba(255, 255, 255, 0.06);
+    transform: translateX(2px);
+}
+
+.disk-health-test-btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: rgba(78, 205, 196, 0.2);
+    color: #4ecdc4;
+    border: 1px solid rgba(78, 205, 196, 0.3);
+    cursor: pointer;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+}
+
+.disk-health-test-btn:hover:not(:disabled) {
+    background: rgba(78, 205, 196, 0.3);
+    transform: translateY(-1px);
+}
+
+.disk-health-test-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.temp-ok {
+    color: #4ade80;
+}
+
+.temp-warm {
+    color: #fbbf24;
+}
+
+.temp-hot {
+    color: #ef4444;
+}
+
+/* Responsive adjustments for disk health panel */
+@media (max-width: 768px) {
+    .disk-health-row {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    
+    .disk-health-row > div {
+        width: 100%;
+    }
+}

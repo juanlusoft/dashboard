@@ -521,5 +521,24 @@
     "completedTitle": "¡Pool Creado Exitosamente!",
     "completedSubtitle": "Tu almacenamiento está listo para usar",
     "goToDashboard": "Ir al Dashboard →"
+  },
+  "diskHealth": {
+    "title": "Salud de Discos",
+    "healthy": "Saludable",
+    "warning": "Atención",
+    "critical": "Crítico",
+    "reallocated": "Sectores reasignados",
+    "pending": "Sectores pendientes",
+    "uncorrectable": "Incorregibles",
+    "powerOn": "Tiempo encendido",
+    "temperature": "Temperatura",
+    "tbw": "TBW escritos",
+    "lifeRemaining": "Vida restante",
+    "runTest": "Ejecutar Test",
+    "testRunning": "Test en curso...",
+    "testShort": "Test rápido (~2 min)",
+    "testLong": "Test completo",
+    "smartNotAvailable": "SMART no disponible",
+    "noDisks": "No se detectaron discos"
   }
 }

@@ -1839,4 +1839,236 @@ router.get('/smart/:device/status', requireAuth, async (req, res) => {
     }
 });
 
+// =============================================================================
+// DISK HEALTH PANEL - Global health status for all disks
+// =============================================================================
+
+/**
+ * Helper: Format power-on hours into human-readable string
+ */
+function formatPowerOnHours(hours) {
+    if (hours < 24) return `${hours} horas`;
+    const days = Math.floor(hours / 24);
+    const remainHours = hours % 24;
+    if (days < 30) return `${days} días, ${remainHours} horas`;
+    const months = Math.floor(days / 30);
+    const remainDays = days % 30;
+    if (months < 12) return `${months} meses, ${remainDays} días`;
+    const years = Math.floor(months / 12);
+    const remainMonths = months % 12;
+    return `${years} año${years > 1 ? 's' : ''}, ${remainMonths} mes${remainMonths !== 1 ? 'es' : ''}`;
+}
+
+/**
+ * Helper: Calculate health status based on SMART data
+ */
+function calculateHealthStatus(diskData) {
+    // CRITICAL conditions
+    if (!diskData.health.smartPassed) return 'critical';
+    if (diskData.sectors && diskData.sectors.reallocated > 10) return 'critical';
+    if (diskData.sectors && diskData.sectors.pending > 0) return 'critical';
+    if (diskData.ssdLife && diskData.ssdLife.lifeRemaining < 10) return 'critical';
+    
+    // WARNING conditions
+    if (diskData.sectors && diskData.sectors.reallocated > 0 && diskData.sectors.reallocated <= 10) return 'warning';
+    if (diskData.ssdLife && diskData.ssdLife.lifeRemaining >= 10 && diskData.ssdLife.lifeRemaining <= 20) return 'warning';
+    if (diskData.temperature && diskData.temperature.current > 50) return 'warning';
+    
+    return 'ok';
+}
+
+/**
+ * GET /storage/disks/health - Get comprehensive health status for all disks
+ */
+router.get('/disks/health', requireAuth, async (req, res) => {
+    try {
+        // Detect all block devices
+        const lsblkJson = execFileSync('lsblk', ['-J', '-d', '-o', 'NAME,TYPE,SIZE,MODEL,ROTA,TRAN'], { 
+            encoding: 'utf8', 
+            timeout: 10000 
+        });
+        
+        const lsblk = JSON.parse(lsblkJson);
+        const devices = (lsblk.blockdevices || []).filter(dev => {
+            // Filter out non-disk devices
+            if (dev.type !== 'disk') return false;
+            if (dev.name.startsWith('loop') || dev.name.startsWith('zram') || dev.name.startsWith('ram')) return false;
+            if (dev.name.startsWith('mmcblk')) return false; // Skip SD cards (usually boot)
+            return true;
+        });
+
+        const disks = [];
+        
+        for (const device of devices) {
+            const diskId = device.name;
+            const devicePath = `/dev/${diskId}`;
+            
+            // Determine disk type
+            let diskType = 'hdd';
+            if (diskId.startsWith('nvme')) {
+                diskType = 'nvme';
+            } else if (device.rota === 0) {
+                diskType = 'ssd';
+            }
+            
+            // For NVMe, smartctl needs the namespace (nvme0n1, not nvme0)
+            const smartPath = diskType === 'nvme' && !diskId.includes('n') ? `${devicePath}n1` : devicePath;
+            
+            const diskInfo = {
+                id: diskId,
+                model: device.model || 'Unknown',
+                serial: '',
+                type: diskType,
+                capacity: formatSize(Math.round((device.size || 0) / 1073741824)),
+                transport: device.tran || 'unknown',
+                health: {
+                    status: 'ok',
+                    smartPassed: true,
+                    smartAvailable: true
+                },
+                sectors: null,
+                ssdLife: null,
+                powerOnTime: { hours: 0, formatted: 'N/A' },
+                temperature: { current: 0, status: 'ok' },
+                lastTest: null,
+                testInProgress: false,
+                testProgress: 0
+            };
+
+            // Get SMART data
+            try {
+                const smartJson = execFileSync('sudo', ['smartctl', '-j', '-a', smartPath], { 
+                    encoding: 'utf8',
+                    timeout: 10000,
+                    stdio: ['pipe', 'pipe', 'ignore']
+                });
+                
+                const smart = JSON.parse(smartJson);
+                
+                // Serial number
+                diskInfo.serial = smart.serial_number || '';
+                
+                // SMART health
+                if (smart.smart_status && smart.smart_status.passed !== undefined) {
+                    diskInfo.health.smartPassed = smart.smart_status.passed;
+                }
+                
+                // Handle NVMe vs SATA/SAS differently
+                if (diskType === 'nvme') {
+                    const nvmeHealth = smart.nvme_smart_health_information_log;
+                    if (nvmeHealth) {
+                        // Power-on hours
+                        diskInfo.powerOnTime.hours = nvmeHealth.power_on_hours || 0;
+                        diskInfo.powerOnTime.formatted = formatPowerOnHours(diskInfo.powerOnTime.hours);
+                        
+                        // Temperature
+                        diskInfo.temperature.current = nvmeHealth.temperature || 0;
+                        if (diskInfo.temperature.current > 55) {
+                            diskInfo.temperature.status = 'hot';
+                        } else if (diskInfo.temperature.current >= 45) {
+                            diskInfo.temperature.status = 'warm';
+                        }
+                        
+                        // SSD life for NVMe
+                        const dataUnitsWritten = nvmeHealth.data_units_written || 0;
+                        const tbw = (dataUnitsWritten * 512000) / 1e12;
+                        const percentageUsed = nvmeHealth.percentage_used || 0;
+                        const lifeRemaining = Math.max(0, 100 - percentageUsed);
+                        
+                        diskInfo.ssdLife = {
+                            tbw: parseFloat(tbw.toFixed(2)),
+                            lifeRemaining: lifeRemaining,
+                            lifeRemainingFormatted: `${lifeRemaining}%`
+                        };
+                    }
+                } else {
+                    // SATA/SAS HDD or SSD
+                    const attrs = smart.ata_smart_attributes;
+                    if (attrs && attrs.table) {
+                        const getAttribute = (id) => {
+                            const attr = attrs.table.find(a => a.id === id);
+                            return attr ? attr.raw.value : 0;
+                        };
+                        
+                        // Power-on hours (attribute 9)
+                        diskInfo.powerOnTime.hours = getAttribute(9);
+                        diskInfo.powerOnTime.formatted = formatPowerOnHours(diskInfo.powerOnTime.hours);
+                        
+                        // Temperature (attribute 194)
+                        diskInfo.temperature.current = getAttribute(194);
+                        if (diskInfo.temperature.current > 55) {
+                            diskInfo.temperature.status = 'hot';
+                        } else if (diskInfo.temperature.current >= 45) {
+                            diskInfo.temperature.status = 'warm';
+                        }
+                        
+                        if (diskType === 'hdd') {
+                            // HDD sectors
+                            diskInfo.sectors = {
+                                reallocated: getAttribute(5),
+                                pending: getAttribute(197),
+                                uncorrectable: getAttribute(198)
+                            };
+                        } else {
+                            // SSD life
+                            const tbwAttr = getAttribute(241); // Total LBAs Written
+                            const tbw = (tbwAttr * 512) / 1e12; // Assuming 512-byte sectors
+                            const lifeRemaining = getAttribute(231) || getAttribute(233) || 100;
+                            
+                            diskInfo.ssdLife = {
+                                tbw: parseFloat(tbw.toFixed(2)),
+                                lifeRemaining: lifeRemaining,
+                                lifeRemainingFormatted: `${lifeRemaining}%`
+                            };
+                        }
+                    }
+                }
+                
+                // Last test
+                if (smart.ata_smart_data && smart.ata_smart_data.self_test && smart.ata_smart_data.self_test.status) {
+                    const testStatus = smart.ata_smart_data.self_test.status;
+                    if (testStatus.passed !== undefined) {
+                        diskInfo.lastTest = {
+                            type: testStatus.string || 'unknown',
+                            status: testStatus.passed ? 'completed' : 'failed',
+                            timestamp: new Date().toISOString() // smartctl JSON doesn't always have timestamp
+                        };
+                    }
+                    
+                    // Test in progress
+                    if (testStatus.string && testStatus.string.includes('in progress')) {
+                        diskInfo.testInProgress = true;
+                        const progressMatch = testStatus.string.match(/(\d+)%/);
+                        diskInfo.testProgress = progressMatch ? parseInt(progressMatch[1]) : 0;
+                    }
+                }
+                
+            } catch (e) {
+                // SMART not available or command failed
+                diskInfo.health.smartAvailable = false;
+                console.log(`SMART unavailable for ${diskId}:`, e.message);
+            }
+            
+            // Calculate overall health status
+            diskInfo.health.status = calculateHealthStatus(diskInfo);
+            
+            disks.push(diskInfo);
+        }
+        
+        // Calculate summary
+        const summary = {
+            total: disks.length,
+            healthy: disks.filter(d => d.health.status === 'ok').length,
+            warning: disks.filter(d => d.health.status === 'warning').length,
+            critical: disks.filter(d => d.health.status === 'critical').length
+        };
+        
+        res.json({ disks, summary });
+        
+    } catch (error) {
+        console.error('Disk health error:', error);
+        res.status(500).json({ error: 'Failed to get disk health: ' + error.message });
+    }
+});
+
 module.exports = router;

@@ -2,41 +2,20 @@
 
 All notable changes to HomePiNAS are documented in this file.
 
-## [2.10.5] - 2026-03-02
-## [2.10.6] - 2026-03-02
-## [2.10.7] - 2026-03-02
-
-### Fixed
-- **CRITICAL: remove ALL `-R` flags from chown/chmod sambashare** — Recursive permission changes could destroy system when pool not mounted (active-backup.js, install.sh sudoers)
-- Sudoers now allows chown/chmod only on `/mnt/storage` and `/mnt/storage/*` (no recursive)
-- active-backup share creation uses setgid (2775) on top dir only
 
 ---
 
-
-### Fixed
-- **CRITICAL: sudo broken after setup** — `chown -R :sambashare` and `chmod -R 2775` on `/mnt/storage` propagated to entire filesystem when pool wasn't mounted, breaking sudo permissions on `/usr/bin/sudo` and `/etc/` (auth.js, storage.js)
-- Now checks mountpoint before setting permissions, and never uses `-R` flag
-
----
-
-
-### Merged
-- **Full sync main ↔ develop** — All 421 commits from develop merged into main
-- Includes all fixes from v2.9.10 (issues #1-#9)
-- Active Backup styles and UI improvements
-- APP_VERSION fix in install.sh (no more collision with /etc/os-release)
+## [2.10.8] - 2026-03-04
 
 ### Added
-- **HomeStore enhancements** — External Docker app detection (#6)
-- **SMART tests** — View and relaunch SMART diagnostics (#8)
-- **WireGuard** — Public key included in client export (#7)
-
-### Fixed
-- **Logs** — Duplicate filter boxes and broken search (#1, #2)
-- **Header** — Notification icon and user menu functional (#3, #4)
-- **File Manager** — Folder tree refresh on new directory (#5)
-- **Terminal** — Better error handling for disconnected shortcuts (#9)
+- **Disk Health Panel** — Comprehensive disk health monitoring in Storage view
+  - Auto-detects HDD/SSD/NVMe via `lsblk` + `smartctl -j` (JSON native)
+  - Shows: SMART status, reallocated/pending/uncorrectable sectors (HDD), TBW + life remaining (SSD/NVMe)
+  - Power-on hours formatted as years/months/days
+  - Temperature with traffic light indicators
+  - Run SMART tests (short/long) with progress tracking
+  - Summary badge: X OK · Y Warning · Z Critical
+  - Full i18n support (ES/EN)
 
 ---
 
