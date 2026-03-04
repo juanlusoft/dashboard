@@ -1894,6 +1894,9 @@ router.get('/disks/health', requireAuth, async (req, res) => {
             if (dev.type !== 'disk') return false;
             if (dev.name.startsWith('loop') || dev.name.startsWith('zram') || dev.name.startsWith('ram')) return false;
             if (dev.name.startsWith('mmcblk')) return false; // Skip SD cards (usually boot)
+            // Skip devices with size 0B or null (empty USB adapters, card readers, etc.)
+            const sizeStr = String(dev.size || '0');
+            if (sizeStr === '0' || sizeStr === '0B') return false;
             return true;
         });
 
@@ -1919,7 +1922,7 @@ router.get('/disks/health', requireAuth, async (req, res) => {
                 model: device.model || 'Unknown',
                 serial: '',
                 type: diskType,
-                capacity: formatSize(Math.round((device.size || 0) / 1073741824)),
+                capacity: device.size || 'N/A',
                 transport: device.tran || 'unknown',
                 health: {
                     status: 'ok',
@@ -1937,16 +1940,44 @@ router.get('/disks/health', requireAuth, async (req, res) => {
 
             // Get SMART data
             try {
-                const smartJson = execFileSync('sudo', ['smartctl', '-j', '-a', smartPath], { 
-                    encoding: 'utf8',
-                    timeout: 10000,
-                    stdio: ['pipe', 'pipe', 'ignore']
-                });
+                let smartJson;
+                try {
+                    smartJson = execFileSync('sudo', ['smartctl', '-j', '-a', smartPath], { 
+                        encoding: 'utf8',
+                        timeout: 10000,
+                        stdio: ['pipe', 'pipe', 'pipe']
+                    });
+                } catch (execErr) {
+                    // smartctl exits non-zero for various reasons but may still output valid JSON
+                    smartJson = execErr.stdout ? execErr.stdout.toString() : null;
+                    if (!smartJson) throw execErr;
+                }
                 
                 const smart = JSON.parse(smartJson);
                 
+                // Model from SMART (more reliable than lsblk for some USB adapters)
+                if (smart.model_name) {
+                    diskInfo.model = smart.model_name;
+                }
+                
                 // Serial number
                 diskInfo.serial = smart.serial_number || '';
+                
+                // Capacity from SMART (more reliable for USB-connected disks)
+                if (smart.user_capacity && smart.user_capacity.bytes) {
+                    const gb = smart.user_capacity.bytes / 1073741824;
+                    diskInfo.capacity = formatSize(Math.round(gb));
+                }
+                
+                // Temperature from top-level field (more reliable than raw attr 194 which can be compound)
+                if (smart.temperature && smart.temperature.current) {
+                    diskInfo.temperature.current = smart.temperature.current;
+                    if (diskInfo.temperature.current > 55) {
+                        diskInfo.temperature.status = 'hot';
+                    } else if (diskInfo.temperature.current >= 45) {
+                        diskInfo.temperature.status = 'warm';
+                    }
+                }
                 
                 // SMART health
                 if (smart.smart_status && smart.smart_status.passed !== undefined) {
@@ -1994,12 +2025,16 @@ router.get('/disks/health', requireAuth, async (req, res) => {
                         diskInfo.powerOnTime.hours = getAttribute(9);
                         diskInfo.powerOnTime.formatted = formatPowerOnHours(diskInfo.powerOnTime.hours);
                         
-                        // Temperature (attribute 194)
-                        diskInfo.temperature.current = getAttribute(194);
-                        if (diskInfo.temperature.current > 55) {
-                            diskInfo.temperature.status = 'hot';
-                        } else if (diskInfo.temperature.current >= 45) {
-                            diskInfo.temperature.status = 'warm';
+                        // Temperature from attr 194 as fallback (only if not already set from top-level)
+                        if (!diskInfo.temperature.current) {
+                            const tempRaw = getAttribute(194);
+                            // Attr 194 raw can be compound (e.g. 214749347857) — use only lower 16 bits
+                            diskInfo.temperature.current = tempRaw > 1000 ? (tempRaw & 0xFFFF) : tempRaw;
+                            if (diskInfo.temperature.current > 55) {
+                                diskInfo.temperature.status = 'hot';
+                            } else if (diskInfo.temperature.current >= 45) {
+                                diskInfo.temperature.status = 'warm';
+                            }
                         }
                         
                         if (diskType === 'hdd') {
