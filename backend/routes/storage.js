@@ -13,6 +13,7 @@ const { execFileSync, spawn } = require('child_process');
 
 const { requireAuth } = require('../middleware/auth');
 const { logSecurityEvent } = require('../utils/security');
+const { notifyBadblocksComplete } = require('../utils/health-monitor');
 const { getData, saveData } = require('../utils/data');
 const { validateSession } = require('../utils/session');
 const { sanitizeDiskId, validateDiskConfig } = require('../utils/sanitize');
@@ -1934,6 +1935,10 @@ router.post('/badblocks/:device', requireAuth, async (req, res) => {
                 badBlocks: session.badBlocks.length,
                 result: session.result
             }, '');
+            
+            // Send Telegram notification
+            notifyBadblocksComplete(device, session.result, session.badBlocks.length, session.endTime - session.startTime)
+                .catch(e => console.error('Badblocks notification error:', e.message));
         });
         
         bbProcess.on('error', (err) => {
