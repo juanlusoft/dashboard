@@ -1759,10 +1759,16 @@ router.post('/smart/:device/test', requireAuth, async (req, res) => {
         const devicePath = `/dev/${device}`;
         
         // Check if a test is already running
-        const currentStatus = execFileSync('sudo', ['smartctl', '-a', devicePath], { 
-            encoding: 'utf8',
-            timeout: 10000
-        });
+        let currentStatus = '';
+        try {
+            currentStatus = execFileSync('sudo', ['smartctl', '-a', devicePath], { 
+                encoding: 'utf8',
+                timeout: 10000
+            });
+        } catch (e) {
+            // smartctl exits non-zero on some disks but still outputs useful text
+            currentStatus = e.stdout ? e.stdout.toString() : '';
+        }
         
         if (currentStatus.includes('Self-test routine in progress')) {
             return res.status(409).json({ 
@@ -1772,10 +1778,18 @@ router.post('/smart/:device/test', requireAuth, async (req, res) => {
         }
         
         // Start the test
-        execFileSync('sudo', ['smartctl', '-t', testType, devicePath], { 
-            encoding: 'utf8',
-            timeout: 5000
-        });
+        try {
+            execFileSync('sudo', ['smartctl', '-t', testType, devicePath], { 
+                encoding: 'utf8',
+                timeout: 5000
+            });
+        } catch (e) {
+            // smartctl may exit non-zero but still start the test successfully
+            const output = e.stdout ? e.stdout.toString() : '';
+            if (!output.includes('Testing has begun')) {
+                throw e;
+            }
+        }
         
         logSecurityEvent('SMART_TEST_STARTED', { 
             device, 
