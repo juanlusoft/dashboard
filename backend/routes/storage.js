@@ -752,8 +752,12 @@ router.get('/disks/detect', requireAuth, async (req, res) => {
             // Skip phantom disks (SATA ports without drives)
             try { fs.statSync(`/dev/${dev.name}`); } catch { continue; }
             // Skip ghost devices with numeric-only or missing model names (e.g. "456")
-            const devModel = (dev.model || '').trim();
-            if (!devModel || /^\d+$/.test(devModel)) continue;
+            // NVMe devices are always real — no phantom ports
+            const isNvme = dev.name.includes('nvme') || (dev.interfaceType || '').toLowerCase() === 'nvme';
+            if (!isNvme) {
+                const devModel = (dev.model || '').trim();
+                if (!devModel || /^\d+$/.test(devModel)) continue;
+            }
 
             const diskInfo = {
                 id: dev.name,

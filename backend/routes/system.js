@@ -457,8 +457,12 @@ router.get('/disks', async (req, res) => {
                 if (!lsblkData[dev.name]) return false;
                 try { fs.statSync(`/dev/${dev.name}`); } catch { return false; }
                 // Filter ghost SATA devices with numeric-only or missing model names
-                const devModel = (lsblkData[dev.name].model || dev.model || '').trim();
-                if (!devModel || /^\d+$/.test(devModel)) return false;
+                // NVMe devices are always real (no phantom ports), skip this filter for them
+                const isNvme = dev.name.includes('nvme') || (lsblkData[dev.name].transport === 'nvme');
+                if (!isNvme) {
+                    const devModel = (lsblkData[dev.name].model || dev.model || '').trim();
+                    if (!devModel || /^\d+$/.test(devModel)) return false;
+                }
                 return true;
             })
             .map(dev => {
