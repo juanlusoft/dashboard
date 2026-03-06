@@ -1280,6 +1280,87 @@ function clearWizardState() {
 function initStorageSetup() {
     console.log('[Wizard] Initializing storage setup wizard');
     
+    // Setup network config toggle in wizard
+    const netToggle = document.getElementById('wizard-net-toggle');
+    const netForm = document.getElementById('wizard-network-form');
+    if (netToggle && netForm) {
+        netToggle.addEventListener('click', async () => {
+            const isOpen = netForm.style.display !== 'none';
+            netForm.style.display = isOpen ? 'none' : 'block';
+            netToggle.textContent = isOpen ? '🌐 Configurar Red (opcional) ▸' : '🌐 Configurar Red (opcional) ▾';
+            if (!isOpen && !netForm.dataset.loaded) {
+                try {
+                    const res = await authFetch(`${API_BASE}/network/interfaces`);
+                    if (res.ok) {
+                        const ifaces = await res.json();
+                        const container = document.getElementById('wizard-net-iface-container');
+                        if (container && ifaces.length > 0) {
+                            const iface = ifaces[0]; // Primary interface
+                            const isDhcp = iface.dhcp !== false;
+                            container.innerHTML = `
+                                <div class="input-group">
+                                    <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                                        <input type="checkbox" id="wizard-net-dhcp" ${isDhcp ? 'checked' : ''}>
+                                        DHCP (automático)
+                                    </label>
+                                </div>
+                                <div id="wizard-net-static" style="display:${isDhcp ? 'none' : 'block'}">
+                                    <div class="input-group"><input type="text" id="wizard-net-ip" value="${escapeHtml(iface.ip || '')}" placeholder=" "><label>IP</label></div>
+                                    <div class="input-group"><input type="text" id="wizard-net-subnet" value="${escapeHtml(iface.subnet || '255.255.255.0')}" placeholder=" "><label>Máscara</label></div>
+                                    <div class="input-group"><input type="text" id="wizard-net-gw" value="${escapeHtml(iface.gateway || '')}" placeholder=" "><label>Puerta de Enlace</label></div>
+                                    <div class="input-group"><input type="text" id="wizard-net-dns" value="${escapeHtml(iface.dns || '')}" placeholder=" "><label>DNS</label></div>
+                                </div>
+                                <button class="wizard-btn wizard-btn-next" id="wizard-net-save" style="margin-top:10px;">💾 Aplicar</button>
+                                <span id="wizard-net-status" style="margin-left:10px;"></span>
+                            `;
+                            document.getElementById('wizard-net-dhcp').addEventListener('change', (e) => {
+                                document.getElementById('wizard-net-static').style.display = e.target.checked ? 'none' : 'block';
+                            });
+                            document.getElementById('wizard-net-save').addEventListener('click', async () => {
+                                const statusEl = document.getElementById('wizard-net-status');
+                                const isDhcpChecked = document.getElementById('wizard-net-dhcp').checked;
+                                const config = { dhcp: isDhcpChecked };
+                                if (!isDhcpChecked) {
+                                    config.ip = document.getElementById('wizard-net-ip').value.trim();
+                                    config.subnet = document.getElementById('wizard-net-subnet').value.trim();
+                                    config.gateway = document.getElementById('wizard-net-gw').value.trim();
+                                    config.dns = document.getElementById('wizard-net-dns').value.trim();
+                                }
+                                try {
+                                    statusEl.textContent = '⏳ Aplicando...';
+                                    const r = await authFetch(`${API_BASE}/network/configure`, {
+                                        method: 'POST',
+                                        body: JSON.stringify({ id: iface.id, config })
+                                    });
+                                    const d = await r.json();
+                                    if (r.ok) {
+                                        statusEl.textContent = '✅ Aplicado';
+                                        if (!isDhcpChecked && config.ip && config.ip !== window.location.hostname) {
+                                            setTimeout(() => {
+                                                if (confirm('IP cambiada a ' + config.ip + '. ¿Ir a la nueva dirección?')) {
+                                                    const url = new URL(window.location);
+                                                    url.hostname = config.ip;
+                                                    window.location.href = url.toString();
+                                                }
+                                            }, 1000);
+                                        }
+                                    } else {
+                                        statusEl.textContent = '❌ ' + (d.error || 'Error');
+                                    }
+                                } catch (err) {
+                                    statusEl.textContent = '❌ ' + err.message;
+                                }
+                            });
+                            netForm.dataset.loaded = '1';
+                        }
+                    }
+                } catch (e) {
+                    console.error('Wizard network load error:', e);
+                }
+            }
+        });
+    }
+
     // Load any saved state
     const hasSavedState = loadWizardState();
     
@@ -2913,6 +2994,21 @@ async function renderStorageDashboard() {
                 </div>
             ` : '';
 
+            const moverHtml = cacheStatus.mover ? `
+                <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center;">
+                    <span style="font-size: 0.8rem; padding: 4px 10px; background: ${cacheStatus.mover.enabled ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'}; border-radius: 6px; color: ${cacheStatus.mover.enabled ? '#10b981' : '#ef4444'};">
+                        ${cacheStatus.mover.enabled ? '🔄 Mover activo' : '⏸️ Mover inactivo'}
+                    </span>
+                    ${cacheStatus.mover.ageMinutes ? `<span style="font-size: 0.8rem; color: var(--text-dim);">Mueve archivos >${Math.floor(cacheStatus.mover.ageMinutes / 60)}h a HDD</span>` : ''}
+                    ${cacheStatus.mover.usageThreshold ? `<span style="font-size: 0.8rem; color: var(--text-dim);">Emergencia al ${cacheStatus.mover.usageThreshold}%</span>` : ''}
+                </div>
+                ${cacheStatus.mover.lastLog && cacheStatus.mover.lastLog.length > 0 ? `
+                    <div style="margin-top: 8px; font-size: 0.75rem; color: var(--text-dim); font-family: monospace; max-height: 60px; overflow-y: auto;">
+                        ${cacheStatus.mover.lastLog.map(l => escapeHtml(l)).join('<br>')}
+                    </div>
+                ` : ''}
+            ` : '';
+
             cacheCard.innerHTML = `
                 <div style="margin-bottom: 15px;">
                     <h3 style="margin: 0 0 4px 0;">⚡ Estado de la Caché</h3>
@@ -2921,6 +3017,7 @@ async function renderStorageDashboard() {
                 ${cacheDiskHtml}
                 ${fileCountHtml}
                 ${policyHtml}
+                ${moverHtml}
             `;
 
             dashboardContent.appendChild(cacheCard);
@@ -6008,6 +6105,30 @@ function renderFilesList(container, files, filePath) {
 
         container.appendChild(row);
     });
+
+    // Lazy-load file location badges (only if path is within /mnt/storage)
+    if (filePath.startsWith('/mnt/storage') || filePath === '/') {
+        const filePaths = files.filter(f => f.type !== 'directory').map(f => filePath + '/' + f.name);
+        if (filePaths.length > 0) {
+            authFetch(`${API_BASE}/storage/file-locations`, {
+                method: 'POST',
+                body: JSON.stringify({ paths: filePaths })
+            }).then(r => r.json()).then(data => {
+                if (!data.locations) return;
+                container.querySelectorAll('.fm-row').forEach(row => {
+                    const loc = data.locations[row.dataset.path];
+                    if (loc) {
+                        const badge = document.createElement('span');
+                        badge.className = 'fm-location-badge fm-location-' + loc.diskType;
+                        badge.title = loc.physicalLocation || '';
+                        badge.textContent = loc.diskType === 'cache' ? '⚡' : '💿';
+                        const nameEl = row.querySelector('.fm-file-name');
+                        if (nameEl) nameEl.appendChild(badge);
+                    }
+                });
+            }).catch(() => {}); // Silently fail if endpoint not available
+        }
+    }
 }
 
 // ── Render grid view ──

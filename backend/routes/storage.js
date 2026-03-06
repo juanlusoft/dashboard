@@ -1015,6 +1015,52 @@ router.get('/file-location', requireAuth, async (req, res) => {
     }
 });
 
+/**
+ * POST /file-locations - Batch get physical locations for multiple files
+ * Body: { paths: ["/mnt/storage/file1", "/mnt/storage/file2", ...] }
+ * Returns: { locations: { "/mnt/storage/file1": { diskType: "cache"|"data", physicalLocation: "..." }, ... } }
+ */
+router.post('/file-locations', requireAuth, async (req, res) => {
+    try {
+        const { paths } = req.body;
+        if (!Array.isArray(paths) || paths.length === 0) {
+            return res.status(400).json({ error: 'paths array required' });
+        }
+
+        // Limit to 100 files per batch
+        const limitedPaths = paths.slice(0, 100);
+        const locations = {};
+
+        for (const filePath of limitedPaths) {
+            const safePath = sanitizePathWithinBase(
+                filePath.replace(/^\/mnt\/storage\//, ''),
+                POOL_MOUNT
+            );
+            if (!safePath) continue;
+
+            try {
+                const xattr = execFileSync('getfattr', ['-n', 'user.mergerfs.srcpath', '--only-values', safePath], {
+                    encoding: 'utf8', timeout: 2000, stdio: ['pipe', 'pipe', 'ignore']
+                }).trim();
+
+                if (xattr) {
+                    locations[filePath] = {
+                        diskType: xattr.includes('/cache') ? 'cache' : xattr.includes('/disk') ? 'data' : 'unknown',
+                        physicalLocation: xattr
+                    };
+                }
+            } catch (e) {
+                // File may not exist on mergerfs or getfattr not available
+            }
+        }
+
+        res.json({ locations });
+    } catch (e) {
+        console.error('Batch file locations error:', e);
+        res.status(500).json({ error: 'Failed to get file locations' });
+    }
+});
+
 function formatBytes(bytes) {
     if (bytes === 0) return '0 B';
     const k = 1024;

@@ -137,6 +137,18 @@
                                 HomePiNAS usa SnapRAID + MergerFS para combinar múltiples discos en un único pool de almacenamiento con protección opcional contra fallos.
                             </div>
                         </div>
+
+                        <!-- Network Configuration (optional) -->
+                        <div class="wizard-network-section">
+                            <button class="wizard-network-toggle" id="wizard-net-toggle">
+                                🌐 Configurar Red (opcional) ▸
+                            </button>
+                            <div id="wizard-network-form" class="wizard-network-form" style="display:none;">
+                                <div class="wizard-network-iface" id="wizard-net-iface-container">
+                                    <p class="wizard-detecting-text">Cargando interfaces...</p>
+                                </div>
+                            </div>
+                        </div>
                         
                         <div id="wizard-disk-detection">
                             <div class="wizard-detecting">
