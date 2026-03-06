@@ -2,6 +2,22 @@
 
 All notable changes to HomePiNAS are documented in this file.
 
+## [2.10.9] - 2026-03-06
+
+### Fixed
+- Allow "admin" as username during initial setup (was blocked as reserved)
+- Specific error messages for username validation (start with letter, reserved names)
+- Filter phantom/ghost SATA disks (numeric-only model names like "456" on JMB585)
+- Dark theme not persisting after page refresh (localStorage key mismatch)
+- Race condition: dashboard polling could overwrite other views mid-render
+- Network config was a stub — now actually applies via nmcli with dhcpcd fallback
+- Network form missing Gateway and DNS fields on initial render (only appeared after toggling DHCP)
+- Login only worked for setup admin — additional users created via User Management couldn't login
+
+### Added
+- Volume/mount paths shown in Docker container cards
+- Password validation: minimum 6 characters with clear error message
+
 ## [2.10.8] - 2026-03-04
 
 ### Fixed

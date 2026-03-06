@@ -188,39 +188,42 @@ router.post('/login', authLimiter, async (req, res) => {
 
         const data = getData();
 
-        if (!data.user) {
+        // Find user in all sources: data.users (multi-user) and data.user (legacy admin)
+        const allUsers = [];
+        if (data.users && Array.isArray(data.users)) {
+            allUsers.push(...data.users);
+        }
+        if (data.user && !allUsers.find(u => u.username === data.user.username)) {
+            allUsers.push(data.user);
+        }
+
+        if (allUsers.length === 0) {
             // SECURITY: Still do a bcrypt compare to prevent timing attacks
-            // This ensures response time is similar whether user exists or not
             await bcrypt.compare(password, '$2b$12$invalid.hash.placeholder.for.timing.attack.prevention');
             logSecurityEvent('LOGIN_NO_USER', { username: '[REDACTED]' }, req.ip);
             return res.status(401).json({ success: false, message: 'Invalid credentials' });
         }
 
-        // SECURITY: Always compare password first to ensure constant-time response
-        const isPasswordValid = await bcrypt.compare(password, data.user.password);
-
-        // SECURITY: Use timing-safe comparison for username
-        const crypto = require('crypto');
-        const usernameBuffer = Buffer.from(username);
-        const storedUsernameBuffer = Buffer.from(data.user.username);
+        // Find matching user (case-insensitive)
+        const matchedUser = allUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
         
-        // Pad to same length to prevent length-based timing attacks
-        const maxLen = Math.max(usernameBuffer.length, storedUsernameBuffer.length);
-        const paddedInput = Buffer.alloc(maxLen, 0);
-        const paddedStored = Buffer.alloc(maxLen, 0);
-        usernameBuffer.copy(paddedInput);
-        storedUsernameBuffer.copy(paddedStored);
-        
-        const isUsernameValid = crypto.timingSafeEqual(paddedInput, paddedStored) && 
-                                usernameBuffer.length === storedUsernameBuffer.length;
+        if (!matchedUser) {
+            // SECURITY: timing-safe dummy compare
+            await bcrypt.compare(password, '$2b$12$invalid.hash.placeholder.for.timing.attack.prevention');
+            logSecurityEvent('LOGIN_UNKNOWN_USER', { username: '[REDACTED]' }, req.ip);
+            return res.status(401).json({ success: false, message: 'Invalid credentials' });
+        }
 
-        if (isUsernameValid && isPasswordValid) {
+        // SECURITY: Always compare password to ensure constant-time response
+        const isPasswordValid = await bcrypt.compare(password, matchedUser.password);
+
+        if (isPasswordValid) {
             // Check if 2FA is enabled for this user
-            if (data.user.totpEnabled && data.user.totpSecret) {
+            if (matchedUser.totpEnabled && matchedUser.totpSecret) {
                 // Generate pending 2FA token
                 const pendingToken = generatePendingToken();
                 pending2FASessions.set(pendingToken, {
-                    username: data.user.username,
+                    username: matchedUser.username,
                     createdAt: Date.now()
                 });
                 
@@ -232,19 +235,19 @@ router.post('/login', authLimiter, async (req, res) => {
                     success: true,
                     requires2FA: true,
                     pendingToken,
-                    user: { username: data.user.username }
+                    user: { username: matchedUser.username, role: matchedUser.role || 'admin' }
                 });
             }
             
             // No 2FA - create full session
-            const sessionId = createSession(username);
+            const sessionId = createSession(matchedUser.username);
             const csrfToken = getCsrfToken(sessionId);
-            logSecurityEvent('LOGIN_SUCCESS', { username }, req.ip);
+            logSecurityEvent('LOGIN_SUCCESS', { username: matchedUser.username }, req.ip);
             res.json({
                 success: true,
                 sessionId,
                 csrfToken,
-                user: { username: data.user.username }
+                user: { username: matchedUser.username, role: matchedUser.role || 'admin' }
             });
         } else {
             logSecurityEvent('LOGIN_FAILED', { username: '[REDACTED]' }, req.ip);
