@@ -114,17 +114,28 @@ router.post('/setup', authLimiter, async (req, res) => {
     try {
         const { username, password } = req.body;
 
+        if (!username || typeof username !== 'string') {
+            return res.status(400).json({ success: false, message: 'Username is required' });
+        }
+        const trimmed = username.replace(/[^a-zA-Z0-9_-]/g, '');
+        if (trimmed.length < 3 || trimmed.length > 32) {
+            return res.status(400).json({ success: false, message: 'Username must be 3-32 characters (letters, numbers, _ or -)' });
+        }
+        if (!/^[a-zA-Z]/.test(trimmed)) {
+            return res.status(400).json({ success: false, message: 'Username must start with a letter' });
+        }
+        const reserved = ['root', 'daemon', 'bin', 'sys', 'nobody', 'www-data'];
+        if (reserved.includes(trimmed.toLowerCase())) {
+            return res.status(400).json({ success: false, message: `Username "${trimmed}" is reserved by the system. Try another one.` });
+        }
         if (!validateUsername(username)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid username. Must be 3-32 characters, alphanumeric with _ or -'
-            });
+            return res.status(400).json({ success: false, message: 'Invalid username' });
         }
 
         if (!validatePassword(password)) {
             return res.status(400).json({
                 success: false,
-                message: 'Invalid password. Must be 6-128 characters'
+                message: 'Password must be 6-128 characters'
             });
         }
 
