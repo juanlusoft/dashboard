@@ -465,9 +465,9 @@ function startGlobalPolling() {
             if (res.ok) {
                 state.globalStats = await res.json();
 
-                // Re-render dashboard if still active (check generation to avoid race)
+                // Re-render dashboard if still on dashboard view
+                // Do NOT increment renderGeneration — only user navigation does that
                 if (state.currentView === "dashboard") {
-                    renderGeneration++; // claim current generation for polling render
                     renderDashboard();
                 }
             }
@@ -2569,8 +2569,8 @@ async function renderDashboard() {
         disksHtml = `<div class="no-disks">${t('storage.unableToLoad', 'No se pudo cargar la información de discos')}</div>`;
     }
 
-    // Abort if user navigated away during async fetches
-    if (renderGeneration !== myGeneration) return;
+    // Abort if user navigated away from dashboard during async fetches
+    if (state.currentView !== 'dashboard') return;
 
     dashboardContent.innerHTML = `
         <div class="glass-card overview-card dash-overview-full">
