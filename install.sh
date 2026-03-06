@@ -5,7 +5,7 @@
 # Version: 2.10.8 (Homelabs.club Edition)
 
 # Version - CHANGE THIS FOR EACH RELEASE
-APP_VERSION="2.11.2"
+APP_VERSION="2.12.0"
 
 # Parse command line arguments
 CLEAN_INSTALL=false
@@ -1232,6 +1232,162 @@ else
     echo -e "${YELLOW}Skipping fan control (not a Raspberry Pi)${NC}"
 fi  # End IS_RASPBERRY_PI check
 
+# ===== Cache Mover (SSD cache → HDD data tiering) =====
+echo -e "${BLUE}Setting up cache mover service...${NC}"
+
+CACHE_MOVER_SCRIPT="/usr/local/bin/homepinas-cache-mover.sh"
+CACHE_MOVER_CONF="/usr/local/bin/homepinas-cache-mover.conf"
+
+# Config file with defaults
+cat > "$CACHE_MOVER_CONF" <<'CACHECONF'
+# HomePiNAS Cache Mover Configuration
+# Files older than CACHE_AGE_MINUTES will be moved from SSD cache to HDD pool
+CACHE_AGE_MINUTES=120
+# Percentage of cache usage that triggers immediate move (0=disabled)
+CACHE_USAGE_THRESHOLD=80
+# Log file
+LOG_FILE="/var/log/homepinas-cache-mover.log"
+CACHECONF
+
+cat > "$CACHE_MOVER_SCRIPT" <<'CACHESCRIPT'
+#!/bin/bash
+# HomePiNAS Cache Mover — Moves old files from SSD cache to HDD data disks
+# Runs via systemd timer every 30 minutes
+
+CONF="/usr/local/bin/homepinas-cache-mover.conf"
+[ -f "$CONF" ] && source "$CONF"
+
+CACHE_AGE_MINUTES=${CACHE_AGE_MINUTES:-120}
+CACHE_USAGE_THRESHOLD=${CACHE_USAGE_THRESHOLD:-80}
+LOG_FILE=${LOG_FILE:-/var/log/homepinas-cache-mover.log}
+STORAGE_BASE="/mnt/disks"
+
+log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG_FILE"; }
+
+# Find all cache mount points
+CACHE_DIRS=()
+for d in "$STORAGE_BASE"/cache "$STORAGE_BASE"/cache1 "$STORAGE_BASE"/cache2; do
+    mountpoint -q "$d" 2>/dev/null && CACHE_DIRS+=("$d")
+done
+
+if [ ${#CACHE_DIRS[@]} -eq 0 ]; then
+    exit 0  # No cache disks mounted, nothing to do
+fi
+
+# Find all data disk mount points (diskN)
+DATA_DIRS=()
+for d in "$STORAGE_BASE"/disk*; do
+    [ -d "$d" ] && mountpoint -q "$d" 2>/dev/null && DATA_DIRS+=("$d")
+done
+
+if [ ${#DATA_DIRS[@]} -eq 0 ]; then
+    log "ERROR: No data disks found"
+    exit 1
+fi
+
+# Get data disk with most free space
+get_target_disk() {
+    local max_free=0
+    local target=""
+    for dir in "${DATA_DIRS[@]}"; do
+        local free=$(df --output=avail "$dir" 2>/dev/null | tail -1 | tr -d ' ')
+        if [ "${free:-0}" -gt "$max_free" ] 2>/dev/null; then
+            max_free=$free
+            target=$dir
+        fi
+    done
+    echo "$target"
+}
+
+MOVED=0
+ERRORS=0
+
+for cache_dir in "${CACHE_DIRS[@]}"; do
+    # Check if cache usage exceeds threshold — if so, move ALL files regardless of age
+    if [ "$CACHE_USAGE_THRESHOLD" -gt 0 ]; then
+        usage=$(df --output=pcent "$cache_dir" 2>/dev/null | tail -1 | tr -dc '0-9')
+        if [ "${usage:-0}" -ge "$CACHE_USAGE_THRESHOLD" ]; then
+            AGE_FLAG="-mmin +5"  # Move everything older than 5 minutes
+            log "WARN: Cache $cache_dir at ${usage}% — emergency move (age >5min)"
+        else
+            AGE_FLAG="-mmin +${CACHE_AGE_MINUTES}"
+        fi
+    else
+        AGE_FLAG="-mmin +${CACHE_AGE_MINUTES}"
+    fi
+
+    # Find files to move
+    find "$cache_dir" -type f $AGE_FLAG 2>/dev/null | while IFS= read -r file; do
+        rel="${file#$cache_dir/}"
+        target=$(get_target_disk)
+        
+        if [ -z "$target" ]; then
+            log "ERROR: No data disk with free space"
+            ERRORS=$((ERRORS + 1))
+            break
+        fi
+
+        target_path="$target/$rel"
+        target_dir="$(dirname "$target_path")"
+        
+        # Create directory structure on target
+        mkdir -p "$target_dir" 2>/dev/null
+        
+        # Move file: rsync preserves attributes, --remove-source-files deletes after success
+        if rsync -axHAXWES --preallocate --remove-source-files "$file" "$target_path" 2>/dev/null; then
+            MOVED=$((MOVED + 1))
+        else
+            # Fallback: cp + rm
+            if cp -a "$file" "$target_path" 2>/dev/null && rm -f "$file" 2>/dev/null; then
+                MOVED=$((MOVED + 1))
+            else
+                log "ERROR: Failed to move $rel"
+                ERRORS=$((ERRORS + 1))
+            fi
+        fi
+    done
+
+    # Clean empty directories left behind
+    find "$cache_dir" -mindepth 1 -type d -empty -delete 2>/dev/null
+done
+
+if [ $MOVED -gt 0 ] || [ $ERRORS -gt 0 ]; then
+    log "Moved: $MOVED files, Errors: $ERRORS"
+fi
+CACHESCRIPT
+
+chmod +x "$CACHE_MOVER_SCRIPT"
+
+# Systemd service
+cat > /etc/systemd/system/homepinas-cache-mover.service <<EOF
+[Unit]
+Description=HomePiNAS Cache Mover (SSD→HDD tiering)
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=$CACHE_MOVER_SCRIPT
+Nice=19
+IOSchedulingClass=idle
+EOF
+
+# Systemd timer (every 30 minutes)
+cat > /etc/systemd/system/homepinas-cache-mover.timer <<EOF
+[Unit]
+Description=HomePiNAS Cache Mover Timer
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=30min
+
+[Install]
+WantedBy=timers.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now homepinas-cache-mover.timer 2>/dev/null || true
+echo -e "${GREEN}Cache mover service configured (runs every 30 minutes)${NC}"
+
 # Configure user permissions
 echo -e "${BLUE}Configuring user permissions...${NC}"
 usermod -aG docker $REAL_USER 2>/dev/null || true
@@ -1293,6 +1449,10 @@ $REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl daemon-reload
 $REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart smbd
 $REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart nmbd
 $REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl restart homepinas
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl start homepinas-cache-mover.service
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl enable homepinas-cache-mover.timer
+$REAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl disable homepinas-cache-mover.timer
+$REAL_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /usr/local/bin/homepinas-cache-mover.conf
 
 # Disk management - allow parted, partprobe, blkid, mkdir, mount, umount for storage setup
 $REAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/parted *

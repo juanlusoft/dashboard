@@ -2,6 +2,26 @@
 
 All notable changes to HomePiNAS are documented in this file.
 
+## [2.12.0] - 2026-03-06
+
+### Added
+- **Cache→Pool tiering**: Automatic file migration from SSD cache to HDD data disks
+  - Systemd timer runs every 30 minutes
+  - Configurable age threshold (default: 2 hours)
+  - Emergency mode when cache >80% full (moves files >5min old)
+  - Nice 19 + idle IO scheduling to avoid impacting performance
+  - Logs to `/var/log/homepinas-cache-mover.log`
+- Cache mover status in `/storage/cache/status` endpoint
+
+### Fixed
+- MergerFS cache policy: changed from `lfs` to `ff` (fill first)
+  - `lfs` sent files to the HDD with most space, completely bypassing cache
+  - `ff` fills cache SSD first, then overflows to HDDs
+- Stats polling reduced from 2s to 5s (60% less CPU usage)
+- Static sysinfo (cpu, osInfo, graphics) cached for 5 minutes
+- Dashboard blank screen race condition fixed
+- Network nmcli gateway/DNS cached for 30s (was blocking every request)
+
 ## [2.11.2] - 2026-03-06
 
 ### Fixed

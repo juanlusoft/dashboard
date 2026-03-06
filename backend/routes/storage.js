@@ -464,11 +464,12 @@ exclude .fseventsd
             // May not be mounted
         }
 
-        // If cache disks present: use lfs (least free space) so writes go to cache first,
+        // If cache disks present: use ff (fill first) so writes go to cache SSD first,
         // moveonenospc to overflow to data disks when cache is full
+        // ff fills the first listed disk (cache) before moving to next (data HDDs)
         const hasCache = cacheMounts.length > 0;
-        const createPolicy = hasCache ? 'lfs' : 'mfs';
-        const cacheOpts = hasCache ? ',moveonenospc=true,minfreespace=20G' : '';
+        const createPolicy = hasCache ? 'ff' : 'mfs';
+        const cacheOpts = hasCache ? ',moveonenospc=true,minfreespace=10G' : '';
         const mergerfsOpts = `defaults,allow_other,nonempty,use_ino,cache.files=partial,dropcacheonclose=true,category.create=${createPolicy}${cacheOpts}`;
         execFileSync('sudo', ['mergerfs', '-o', mergerfsOpts, mergerfsSource, POOL_MOUNT], { encoding: 'utf8', timeout: 60000 });
         results.push(`MergerFS pool mounted at ${POOL_MOUNT}`);
@@ -903,11 +904,38 @@ router.get('/cache/status', requireAuth, async (req, res) => {
             }
         } catch (e) {}
 
+        // Cache mover status
+        let moverStatus = { enabled: false };
+        try {
+            const timerState = execFileSync('systemctl', ['is-active', 'homepinas-cache-mover.timer'], {
+                encoding: 'utf8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe']
+            }).trim();
+            moverStatus.enabled = timerState === 'active';
+            // Read last log entries
+            try {
+                const log = execFileSync('tail', ['-5', '/var/log/homepinas-cache-mover.log'], {
+                    encoding: 'utf8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe']
+                }).trim();
+                moverStatus.lastLog = log.split('\n').filter(l => l);
+            } catch (e) {}
+            // Read config
+            try {
+                const conf = fs.readFileSync('/usr/local/bin/homepinas-cache-mover.conf', 'utf8');
+                const ageMatch = conf.match(/CACHE_AGE_MINUTES=(\d+)/);
+                const threshMatch = conf.match(/CACHE_USAGE_THRESHOLD=(\d+)/);
+                moverStatus.ageMinutes = ageMatch ? parseInt(ageMatch[1]) : 120;
+                moverStatus.usageThreshold = threshMatch ? parseInt(threshMatch[1]) : 80;
+            } catch (e) {}
+        } catch (e) {
+            moverStatus.enabled = false;
+        }
+
         res.json({
             hasCache: true,
             cacheDisks: cacheInfo,
             dataDisksCount: dataDisks.length,
             policy: mergerfsPolicy,
+            mover: moverStatus,
             fileCounts: {
                 cache: cacheFileCount,
                 data: dataFileCount,
@@ -1800,7 +1828,7 @@ WantedBy=multi-user.target
  */
 function updateMergerFSSystemdUnit(sources, policy = 'mfs') {
     const hasCache = sources.includes('cache');
-    const policyToUse = hasCache ? 'lfs' : policy;
+    const policyToUse = hasCache ? 'ff' : policy;
     const options = `defaults,allow_other,nonempty,use_ino,cache.files=partial,dropcacheonclose=true,category.create=${policyToUse},moveonenospc=true`;
     
     // Extract mount points from sources

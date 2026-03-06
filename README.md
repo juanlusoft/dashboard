@@ -1,4 +1,4 @@
-# HomePiNAS v2.11.2
+# HomePiNAS v2.12.0
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
