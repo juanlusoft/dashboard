@@ -2,6 +2,14 @@
 
 All notable changes to HomePiNAS are documented in this file.
 
+## [2.11.2] - 2026-03-06
+
+### Fixed
+- Phantom disk filter: use size check instead of model name (JMB585 bridge reports "456" for real disks too)
+- NVMe/SSD behind USB-SATA bridge now detected correctly (250GB, 2TB with model "456")
+- Network static IP: nmcli requires method+address in single command (was failing with "requires address")
+- Network config: added missing execFileSync/fs imports
+
 ## [2.11.1] - 2026-03-06
 
 ### Fixed
