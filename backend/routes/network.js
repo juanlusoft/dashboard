@@ -107,12 +107,93 @@ router.post('/configure', requireAuth, (req, res) => {
             dhcp: isDhcp
         }, req.ip);
 
-        // In a real scenario, this would trigger netplan/nmcli configuration
-        // For now, we just acknowledge the request
-        res.json({
-            success: true,
-            message: `Configuration for ${id} received (Hardware apply pending)`
-        });
+        // Apply network configuration using nmcli (NetworkManager)
+        try {
+            if (isDhcp) {
+                // Switch to DHCP
+                execFileSync('sudo', ['nmcli', 'con', 'mod', id, 'ipv4.method', 'auto'], { encoding: 'utf8', timeout: 10000 });
+                execFileSync('sudo', ['nmcli', 'con', 'mod', id, 'ipv4.addresses', ''], { encoding: 'utf8', timeout: 10000 });
+                execFileSync('sudo', ['nmcli', 'con', 'mod', id, 'ipv4.gateway', ''], { encoding: 'utf8', timeout: 10000 });
+                execFileSync('sudo', ['nmcli', 'con', 'mod', id, 'ipv4.dns', ''], { encoding: 'utf8', timeout: 10000 });
+            } else {
+                // Static IP configuration
+                const ip = config.ip;
+                const subnet = config.subnet || '255.255.255.0';
+                const gateway = config.gateway || '';
+                const dns = Array.isArray(config.dns) ? config.dns.join(' ') : (config.dns || '');
+
+                // Convert subnet mask to CIDR prefix
+                const cidr = subnet.split('.').reduce((acc, octet) => 
+                    acc + (parseInt(octet) >>> 0).toString(2).split('1').length - 1, 0);
+
+                execFileSync('sudo', ['nmcli', 'con', 'mod', id, 'ipv4.method', 'manual'], { encoding: 'utf8', timeout: 10000 });
+                execFileSync('sudo', ['nmcli', 'con', 'mod', id, 'ipv4.addresses', `${ip}/${cidr}`], { encoding: 'utf8', timeout: 10000 });
+                
+                if (gateway) {
+                    execFileSync('sudo', ['nmcli', 'con', 'mod', id, 'ipv4.gateway', gateway], { encoding: 'utf8', timeout: 10000 });
+                }
+                if (dns) {
+                    execFileSync('sudo', ['nmcli', 'con', 'mod', id, 'ipv4.dns', dns], { encoding: 'utf8', timeout: 10000 });
+                }
+            }
+
+            // Apply changes by reactivating the connection
+            execFileSync('sudo', ['nmcli', 'con', 'up', id], { encoding: 'utf8', timeout: 15000 });
+
+            res.json({
+                success: true,
+                message: isDhcp 
+                    ? `${id} configurado en modo DHCP` 
+                    : `${id} configurado con IP estática ${config.ip}`
+            });
+        } catch (applyErr) {
+            console.error('nmcli apply error:', applyErr.message);
+            
+            // Fallback: try dhcpcd for older systems
+            try {
+                const dhcpcdConf = '/etc/dhcpcd.conf';
+                if (fs.existsSync(dhcpcdConf)) {
+                    let content = fs.readFileSync(dhcpcdConf, 'utf8');
+                    
+                    // Remove existing static config for this interface
+                    const regex = new RegExp(`\\n?interface ${id}[\\s\\S]*?(?=\\ninterface |$)`, 'g');
+                    content = content.replace(regex, '');
+                    
+                    if (!isDhcp) {
+                        const subnet = config.subnet || '255.255.255.0';
+                        const cidr = subnet.split('.').reduce((acc, octet) => 
+                            acc + (parseInt(octet) >>> 0).toString(2).split('1').length - 1, 0);
+                        
+                        content += `\ninterface ${id}\nstatic ip_address=${config.ip}/${cidr}\n`;
+                        if (config.gateway) content += `static routers=${config.gateway}\n`;
+                        if (config.dns) {
+                            const dnsStr = Array.isArray(config.dns) ? config.dns.join(' ') : config.dns;
+                            content += `static domain_name_servers=${dnsStr}\n`;
+                        }
+                    }
+                    
+                    fs.writeFileSync(dhcpcdConf, content);
+                    execFileSync('sudo', ['systemctl', 'restart', 'dhcpcd'], { encoding: 'utf8', timeout: 15000 });
+                    
+                    res.json({
+                        success: true,
+                        message: isDhcp 
+                            ? `${id} configurado en modo DHCP (dhcpcd)` 
+                            : `${id} configurado con IP estática ${config.ip} (dhcpcd)`
+                    });
+                } else {
+                    res.json({
+                        success: false,
+                        message: 'NetworkManager no disponible y dhcpcd no encontrado. Configura la red manualmente.'
+                    });
+                }
+            } catch (dhcpcdErr) {
+                console.error('dhcpcd fallback error:', dhcpcdErr.message);
+                res.status(500).json({ 
+                    error: `No se pudo aplicar la configuración: ${applyErr.message}` 
+                });
+            }
+        }
     } catch (e) {
         console.error('Network config error:', e);
         res.status(500).json({ error: 'Failed to configure network' });

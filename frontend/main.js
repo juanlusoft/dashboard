@@ -2361,12 +2361,13 @@ if (headerThemeToggle) {
         const currentTheme = html.getAttribute('data-theme') || 'light';
         const newTheme = currentTheme === 'light' ? 'dark' : 'light';
         html.setAttribute('data-theme', newTheme);
-        localStorage.setItem('theme', newTheme);
+        localStorage.setItem('homepinas-theme', newTheme);
         headerThemeToggle.textContent = newTheme === 'dark' ? '☀️' : '🌙';
     });
     
-    // Set initial icon
-    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+    // Set initial icon from saved theme
+    const currentTheme = localStorage.getItem('homepinas-theme') || document.documentElement.getAttribute('data-theme') || 'light';
+    document.documentElement.setAttribute('data-theme', currentTheme);
     headerThemeToggle.textContent = currentTheme === 'dark' ? '☀️' : '🌙';
 }
 
@@ -3888,71 +3889,11 @@ async function renderNetworkManager() {
         header.appendChild(headerInfo);
         header.appendChild(checkboxItem);
 
-        // Create form
+        // Create form — reuse renderNetForm to avoid duplication
         const netForm = document.createElement('div');
         netForm.className = 'net-form';
         netForm.id = `netform-${iface.id}`;
-
-        if (isDhcp) {
-            const inputGroup = document.createElement('div');
-            inputGroup.className = 'input-group';
-            inputGroup.style.gridColumn = '1 / -1';
-
-            const ipInput = document.createElement('input');
-            ipInput.type = 'text';
-            ipInput.value = iface.ip || '';
-            ipInput.disabled = true;
-            ipInput.placeholder = ' ';
-
-            const label = document.createElement('label');
-            label.textContent = t('network.hardwareAssignedIP', 'IP Asignada por Hardware');
-
-            inputGroup.appendChild(ipInput);
-            inputGroup.appendChild(label);
-            netForm.appendChild(inputGroup);
-        } else {
-            // IP Input
-            const ipGroup = document.createElement('div');
-            ipGroup.className = 'input-group';
-            const ipInput = document.createElement('input');
-            ipInput.type = 'text';
-            ipInput.id = `ip-${iface.id}`;
-            ipInput.value = iface.ip || '';
-            ipInput.placeholder = ' ';
-            const ipLabel = document.createElement('label');
-            ipLabel.textContent = t('network.ipAddress', 'Dirección IP');
-            ipGroup.appendChild(ipInput);
-            ipGroup.appendChild(ipLabel);
-
-            // Subnet Input
-            const subnetGroup = document.createElement('div');
-            subnetGroup.className = 'input-group';
-            const subnetInput = document.createElement('input');
-            subnetInput.type = 'text';
-            subnetInput.id = `subnet-${iface.id}`;
-            subnetInput.value = iface.subnet || '';
-            subnetInput.placeholder = ' ';
-            const subnetLabel = document.createElement('label');
-            subnetLabel.textContent = t('network.subnetMask', 'Máscara de Subred');
-            subnetGroup.appendChild(subnetInput);
-            subnetGroup.appendChild(subnetLabel);
-
-            netForm.appendChild(ipGroup);
-            netForm.appendChild(subnetGroup);
-        }
-
-        // Save button
-        const btnContainer = document.createElement('div');
-        btnContainer.style.cssText = 'display: flex; align-items: flex-end; padding-bottom: 25px; grid-column: 1 / -1;';
-
-        const saveBtn = document.createElement('button');
-        saveBtn.className = 'btn-primary';
-        saveBtn.style.cssText = 'padding: 10px; max-width: 200px;';
-        saveBtn.textContent = t('network.saveToNode', 'Guardar en Nodo');
-        saveBtn.addEventListener('click', () => applyNetwork(iface.id));
-
-        btnContainer.appendChild(saveBtn);
-        netForm.appendChild(btnContainer);
+        renderNetForm(netForm, iface, isDhcp);
 
         card.appendChild(header);
         card.appendChild(netForm);
