@@ -1087,8 +1087,10 @@ calc_pwm2() {
 }
 
 # Calculate target PWM values
-TARGET_PWM1=$(calc_pwm1 $TEMP1)
-TARGET_PWM2=$(calc_pwm2 $CPU_TEMP)
+# PWM1 (EMC2305) → case airflow, reacts to CPU temp
+# PWM2 (pwmfan) → disk cooling fans, reacts to disk temp
+TARGET_PWM1=$(calc_pwm1 $CPU_TEMP)
+TARGET_PWM2=$(calc_pwm2 $TEMP1)
 
 # Apply hysteresis for PWM1
 if [ "$TARGET_PWM1" -lt "$LAST_PWM1" ]; then
@@ -1123,11 +1125,24 @@ if [ "$HAS_EMC" -eq 1 ]; then
     EMC_STATUS="ok" || EMC_STATUS="err"
 fi
 
-# Apply PWM2 to pwmfan via sysfs (RPi CPU fan)
+# Apply PWM2 to disk cooling fans via thermal cooling device
+# The kernel thermal governor controls pwmfan — write to cooling_device, not pwm1 directly
 PWMFAN_STATUS=""
 if [ -n "$HAS_PWMFAN" ]; then
-    echo $PWM2 > "$HAS_PWMFAN" 2>/dev/null && \
-    PWMFAN_STATUS="ok" || PWMFAN_STATUS="err"
+    if [ -e /sys/class/thermal/cooling_device0/cur_state ]; then
+        # Map PWM to cooling state (0-4) with aggressive disk cooling
+        if [ $PWM2 -ge 230 ]; then COOL_STATE=4
+        elif [ $PWM2 -ge 170 ]; then COOL_STATE=3
+        elif [ $PWM2 -ge 100 ]; then COOL_STATE=2
+        elif [ $PWM2 -ge 50 ]; then COOL_STATE=1
+        else COOL_STATE=0; fi
+        echo $COOL_STATE > /sys/class/thermal/cooling_device0/cur_state 2>/dev/null && \
+        PWMFAN_STATUS="ok" || PWMFAN_STATUS="err"
+    else
+        # Fallback: direct pwm1 write (for systems without cooling_device)
+        echo $PWM2 > "$HAS_PWMFAN" 2>/dev/null && \
+        PWMFAN_STATUS="ok" || PWMFAN_STATUS="err"
+    fi
 fi
 
 # Save state
