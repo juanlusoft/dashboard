@@ -150,6 +150,16 @@ router.get('/containers', requireAuth, async (req, res) => {
             // Get notes for this container
             const notes = containerNotes[name] || containerNotes[c.Id] || '';
 
+            // Get volume mounts
+            const mounts = (c.Mounts || [])
+                .filter(m => m.Type === 'bind' || m.Type === 'volume')
+                .map(m => ({
+                    source: m.Source || m.Name || '',
+                    destination: m.Destination || '',
+                    type: m.Type,
+                    rw: m.RW !== false
+                }));
+
             // Find compose file if any
             const compose = findComposeForContainer(name);
 
@@ -187,6 +197,7 @@ router.get('/containers', requireAuth, async (req, res) => {
                 ram,
                 ports,
                 notes,
+                mounts,
                 compose,
                 hasUpdate,
                 created: c.Created

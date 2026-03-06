@@ -3170,6 +3170,29 @@ async function renderDockerManager() {
                 }
             }
 
+            // Volumes/Mounts section
+            if (container.mounts && container.mounts.length > 0) {
+                const mountsDiv = document.createElement('div');
+                mountsDiv.className = 'docker-mounts';
+                mountsDiv.style.cssText = 'margin-bottom: 12px; padding: 8px 10px; background: rgba(255,255,255,0.03); border-radius: 8px; border-left: 3px solid var(--accent, #6366f1);';
+                
+                const mountsLabel = document.createElement('div');
+                mountsLabel.style.cssText = 'font-size: 0.7rem; color: var(--text-dim); margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;';
+                mountsLabel.textContent = `📂 ${t('docker.volumes', 'Volúmenes')}`;
+                mountsDiv.appendChild(mountsLabel);
+                
+                container.mounts.forEach(m => {
+                    const mountRow = document.createElement('div');
+                    mountRow.style.cssText = 'font-size: 0.75rem; color: var(--text-secondary, #aaa); padding: 3px 0; display: flex; align-items: center; gap: 4px; word-break: break-all;';
+                    const shortSource = m.source.length > 35 ? '…' + m.source.slice(-32) : m.source;
+                    const rwBadge = m.rw ? '' : ' <span style="color: #f59e0b; font-size: 0.65rem;">RO</span>';
+                    mountRow.innerHTML = `<span style="color: var(--text-dim);" title="${escapeHtml(m.source)}">${escapeHtml(shortSource)}</span> <span style="color: var(--text-dim); opacity: 0.5;">→</span> <span title="${escapeHtml(m.destination)}">${escapeHtml(m.destination)}</span>${rwBadge}`;
+                    mountsDiv.appendChild(mountRow);
+                });
+                
+                card.appendChild(mountsDiv);
+            }
+
             // Controls row
             const controls = document.createElement('div');
             controls.style.cssText = 'display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;';
