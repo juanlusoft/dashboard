@@ -104,7 +104,7 @@ describe('POST /api/auth/setup', () => {
 
         expect(res.status).toBe(400);
         expect(res.body.success).toBe(false);
-        expect(res.body.message).toContain('Invalid username');
+        expect(res.body.message).toContain('Username must be 3-32 characters (letters, numbers, _ or -)');
     });
 
     test('rejects invalid username - reserved', async () => {
@@ -127,7 +127,7 @@ describe('POST /api/auth/setup', () => {
 
         expect(res.status).toBe(400);
         expect(res.body.success).toBe(false);
-        expect(res.body.message).toContain('Invalid password');
+        expect(res.body.message).toContain('Password must be 6-128 characters');
     });
 
     test('rejects if admin already exists', async () => {

@@ -674,10 +674,10 @@ describe('DELETE /api/vpn/clients/:id', () => {
         await request(app)
             .delete('/api/vpn/clients/client-abc');
 
-        // Should call sudoExec to overwrite/delete the client conf file
+        // Should call sudoExec to overwrite/delete the client conf file (using shred for secure deletion)
         expect(sudoExec).toHaveBeenCalledWith(
-            'tee',
-            [expect.stringContaining('my-phone.conf')],
+            'shred',
+            ['-u', '-z', expect.stringContaining('my-phone.conf')],
             expect.anything()
         );
     });
