@@ -2429,7 +2429,7 @@ async function renderContent(view) {
 
 // Real-Time Dashboard
 async function renderDashboard() {
-    const myGeneration = renderGeneration;
+    if (state.currentView !== 'dashboard') return;
     const stats = state.globalStats;
     const cpuTemp = Number(stats.cpuTemp) || 0;
     const cpuLoad = Number(stats.cpuLoad) || 0;
