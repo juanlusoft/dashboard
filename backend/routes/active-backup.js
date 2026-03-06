@@ -925,8 +925,11 @@ async function runBackup(device) {
  * GET /devices/:id/versions - List backup versions
  */
 router.get('/devices/:id/versions', (req, res) => {
-  const versions = getVersions(((getData()).activeBackup.devices.find(d => d.id === req.params.id) || {}).name || req.params.id);
-  const dir = deviceDir(((data || getData()).activeBackup.devices.find(d => d.id === req.params.id) || {}).name || req.params.id);
+  const data = getData();
+  const device = (data.activeBackup?.devices || []).find(d => d.id === req.params.id);
+  const deviceName = device?.name || req.params.id;
+  const versions = getVersions(deviceName);
+  const dir = deviceDir(deviceName);
 
   const result = versions.map(v => {
     const vPath = path.join(dir, v);
@@ -1005,7 +1008,7 @@ router.get('/devices/:id/browse', (req, res) => {
       success: true,
       path: browsePath,
       version: version || null,
-      files: items.sort((a, b) => {
+      items: items.sort((a, b) => {
         if (a.type === 'directory' && b.type !== 'directory') return -1;
         if (a.type !== 'directory' && b.type === 'directory') return 1;
         return a.name.localeCompare(b.name);

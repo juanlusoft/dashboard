@@ -18,7 +18,7 @@ function sanitizeUsername(username) {
     const sanitized = username.replace(/[^a-zA-Z0-9_-]/g, '');
     if (sanitized.length < 3 || sanitized.length > 32) return null;
     if (!/^[a-zA-Z]/.test(sanitized)) return null;
-    const reserved = ['root', 'daemon', 'bin', 'sys', 'nobody', 'www-data'];
+    const reserved = ['root', 'admin', 'daemon', 'bin', 'sys', 'nobody', 'www-data'];
     if (reserved.includes(sanitized.toLowerCase())) return null;
     return sanitized;
 }
