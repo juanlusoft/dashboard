@@ -4126,10 +4126,23 @@ async function applyNetwork(interfaceId) {
             throw new Error(data.error || 'Network configuration failed');
         }
 
-        alert(data.message || t('common.saved', 'Configuración guardada'));
+        showToast(data.message || t('common.saved', 'Configuración guardada'), 'success');
+        // If IP changed, warn user they may need to reconnect
+        if (!isDhcp && config.ip) {
+            const currentUrl = new URL(window.location);
+            const currentHost = currentUrl.hostname;
+            if (config.ip !== currentHost) {
+                setTimeout(() => {
+                    if (confirm(`IP cambiada a ${config.ip}. ¿Quieres ir a la nueva dirección?`)) {
+                        currentUrl.hostname = config.ip;
+                        window.location.href = currentUrl.toString();
+                    }
+                }, 1500);
+            }
+        }
     } catch (e) {
         console.error('Network config error:', e);
-        alert(e.message || t('common.error', 'Error al aplicar configuración de red'));
+        showToast(e.message || t('common.error', 'Error al aplicar configuración de red'), 'error');
     }
 }
 
