@@ -445,6 +445,10 @@ httpServer.listen(HTTP_PORT, '0.0.0.0', () => {
 
     // Start error monitoring (if enabled in config)
     startErrorMonitor();
+
+    // Start health monitor (disk health, temperature, pool alerts via Telegram)
+    const { startHealthMonitor } = require('./utils/health-monitor');
+    startHealthMonitor(300000); // Check every 5 minutes
 });
 
 // Setup Terminal WebSocket on HTTPS server if available

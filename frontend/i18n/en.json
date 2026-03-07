@@ -521,5 +521,24 @@
     "completedTitle": "Pool Created Successfully!",
     "completedSubtitle": "Your storage is ready to use",
     "goToDashboard": "Go to Dashboard →"
+  },
+  "diskHealth": {
+    "title": "Disk Health",
+    "healthy": "Healthy",
+    "warning": "Warning",
+    "critical": "Critical",
+    "reallocated": "Reallocated sectors",
+    "pending": "Pending sectors",
+    "uncorrectable": "Uncorrectable",
+    "powerOn": "Power-on time",
+    "temperature": "Temperature",
+    "tbw": "TBW written",
+    "lifeRemaining": "Life remaining",
+    "runTest": "Run Test",
+    "testRunning": "Test in progress...",
+    "testShort": "Quick test (~2 min)",
+    "testLong": "Extended test",
+    "smartNotAvailable": "SMART not available",
+    "noDisks": "No disks detected"
   }
 }

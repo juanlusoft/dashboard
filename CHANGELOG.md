@@ -2,114 +2,20 @@
 
 All notable changes to HomePiNAS are documented in this file.
 
-## [2.12.0] - 2026-03-06
 
-### Added
-- **Cache→Pool tiering**: Automatic file migration from SSD cache to HDD data disks
-  - Systemd timer runs every 30 minutes
-  - Configurable age threshold (default: 2 hours)
-  - Emergency mode when cache >80% full (moves files >5min old)
-  - Nice 19 + idle IO scheduling to avoid impacting performance
-  - Logs to `/var/log/homepinas-cache-mover.log`
-- Cache mover status in `/storage/cache/status` endpoint
-
-### Fixed
-- MergerFS cache policy: changed from `lfs` to `ff` (fill first)
-  - `lfs` sent files to the HDD with most space, completely bypassing cache
-  - `ff` fills cache SSD first, then overflows to HDDs
-- Stats polling reduced from 2s to 5s (60% less CPU usage)
-- Static sysinfo (cpu, osInfo, graphics) cached for 5 minutes
-- Dashboard blank screen race condition fixed
-- Network nmcli gateway/DNS cached for 30s (was blocking every request)
-
-## [2.11.2] - 2026-03-06
-
-### Fixed
-- Phantom disk filter: use size check instead of model name (JMB585 bridge reports "456" for real disks too)
-- NVMe/SSD behind USB-SATA bridge now detected correctly (250GB, 2TB with model "456")
-- Network static IP: nmcli requires method+address in single command (was failing with "requires address")
-- Network config: added missing execFileSync/fs imports
-
-## [2.11.1] - 2026-03-06
-
-### Fixed
-- Fan control: pwmfan controls disk fans (not EMC2305), uses disk temp instead of CPU temp
-- Fan control: use thermal cooling_device0 (kernel governor was overriding direct pwm1 writes)
-- Fan control: load i2c-dev module + unbind EMC2305 kernel driver at boot
-- NVMe disks no longer filtered by phantom disk detection
-- Network config: add missing execFileSync/fs imports (was crashing)
-- Network config: resolve nmcli connection name from device name
-- Fan card CSS: no longer stretches with empty space in grid
-
-## [2.11.0] - 2026-03-06
-
-### Added
-- **Cache status dashboard**: shows SSD/NVMe cache usage, free space, and fill percentage
-- **MergerFS policy info**: displays write policy (lfs/mfs), moveonenospc, and min free space
-- **File count comparison**: approximate file counts on cache vs data pool
-- **"View location" in File Station**: right-click any file to see if it's on cache or data disk
-- New API endpoints: `/storage/cache/status` and `/storage/file-location`
-
-## [2.10.9] - 2026-03-06
-
-### Fixed
-- Allow "admin" as username during initial setup (was blocked as reserved)
-- Specific error messages for username validation (start with letter, reserved names)
-- Filter phantom/ghost SATA disks (numeric-only model names like "456" on JMB585)
-- Dark theme not persisting after page refresh (localStorage key mismatch)
-- Race condition: dashboard polling could overwrite other views mid-render
-- Network config was a stub — now actually applies via nmcli with dhcpcd fallback
-- Network form missing Gateway and DNS fields on initial render (only appeared after toggling DHCP)
-- Login only worked for setup admin — additional users created via User Management couldn't login
-
-### Added
-- Volume/mount paths shown in Docker container cards
-- Password validation: minimum 6 characters with clear error message
+---
 
 ## [2.10.8] - 2026-03-04
 
-### Fixed
-- **Fan control: profiles not applied after reboot** — fanctl script required EMC2305 hwmon (never created by kernel driver), now uses I2C directly (`i2cset` on bus 10, addr 0x2e)
-- **Fan control: pwmfan (RPi CPU fan) never controlled** — script now also manages the pwmfan sysfs device
-- **Fan speed detection**: dashboard now reads EMC2305 fan RPMs via I2C tachometer registers when hwmon is unavailable
-- **Individual fan control**: POST `/system/fan` now falls back to I2C for EMC2305 fans
-- Added `i2c-tools` as install dependency, `i2cset`/`i2cget` to sudoers
-
-## [2.10.5] - 2026-03-02
-## [2.10.6] - 2026-03-02
-## [2.10.7] - 2026-03-02
-
-### Fixed
-- **CRITICAL: remove ALL `-R` flags from chown/chmod sambashare** — Recursive permission changes could destroy system when pool not mounted (active-backup.js, install.sh sudoers)
-- Sudoers now allows chown/chmod only on `/mnt/storage` and `/mnt/storage/*` (no recursive)
-- active-backup share creation uses setgid (2775) on top dir only
-
----
-
-
-### Fixed
-- **CRITICAL: sudo broken after setup** — `chown -R :sambashare` and `chmod -R 2775` on `/mnt/storage` propagated to entire filesystem when pool wasn't mounted, breaking sudo permissions on `/usr/bin/sudo` and `/etc/` (auth.js, storage.js)
-- Now checks mountpoint before setting permissions, and never uses `-R` flag
-
----
-
-
-### Merged
-- **Full sync main ↔ develop** — All 421 commits from develop merged into main
-- Includes all fixes from v2.9.10 (issues #1-#9)
-- Active Backup styles and UI improvements
-- APP_VERSION fix in install.sh (no more collision with /etc/os-release)
-
 ### Added
-- **HomeStore enhancements** — External Docker app detection (#6)
-- **SMART tests** — View and relaunch SMART diagnostics (#8)
-- **WireGuard** — Public key included in client export (#7)
-
-### Fixed
-- **Logs** — Duplicate filter boxes and broken search (#1, #2)
-- **Header** — Notification icon and user menu functional (#3, #4)
-- **File Manager** — Folder tree refresh on new directory (#5)
-- **Terminal** — Better error handling for disconnected shortcuts (#9)
+- **Disk Health Panel** — Comprehensive disk health monitoring in Storage view
+  - Auto-detects HDD/SSD/NVMe via `lsblk` + `smartctl -j` (JSON native)
+  - Shows: SMART status, reallocated/pending/uncorrectable sectors (HDD), TBW + life remaining (SSD/NVMe)
+  - Power-on hours formatted as years/months/days
+  - Temperature with traffic light indicators
+  - Run SMART tests (short/long) with progress tracking
+  - Summary badge: X OK · Y Warning · Z Critical
+  - Full i18n support (ES/EN)
 
 ---
 
