@@ -468,7 +468,7 @@ function startGlobalPolling() {
                 // Re-render dashboard if still on dashboard view
                 // Do NOT increment renderGeneration — only user navigation does that
                 if (state.currentView === "dashboard") {
-                    renderDashboard();
+                    renderDashboard(true);
                 }
             }
         } catch (e) {
@@ -2513,9 +2513,14 @@ async function renderContent(view) {
 }
 
 // Real-Time Dashboard
-async function renderDashboard() {
+async function renderDashboard(quickRefresh) {
     if (state.currentView !== 'dashboard') return;
     const currentGen = renderGeneration;
+
+    // Save scroll position for quick refreshes
+    const dashboardContent = document.getElementById('dashboard-content');
+    const scrollParent = dashboardContent?.closest('.view-content') || document.querySelector('.main-content');
+    const savedScroll = quickRefresh && scrollParent ? scrollParent.scrollTop : 0;
     const stats = state.globalStats;
     const cpuTemp = Number(stats.cpuTemp) || 0;
     const cpuLoad = Number(stats.cpuLoad) || 0;
@@ -2655,6 +2660,14 @@ async function renderDashboard() {
         disksHtml = `<div class="no-disks">${t('storage.unableToLoad', 'No se pudo cargar la información de discos')}</div>`;
     }
 
+
+    // Restore scroll position on quick refresh
+    if (quickRefresh && scrollParent && savedScroll > 0) {
+        scrollParent.scrollTop = savedScroll;
+    }
+
+    // Skip heavy widget fetches on quick refresh (polling)
+    if (!quickRefresh) {
 
     // Fetch I/O stats for disks
     try {
@@ -2902,6 +2915,7 @@ async function renderDashboard() {
         console.warn('Docker containers fetch error:', e);
     }
 
+    } // end !quickRefresh
 }
 
 // Fan speed control - update percentage display while dragging
