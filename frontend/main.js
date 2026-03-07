@@ -2516,6 +2516,7 @@ async function renderContent(view) {
 // Real-Time Dashboard
 async function renderDashboard() {
     if (state.currentView !== 'dashboard') return;
+    const currentGen = renderGeneration; // capture current generation to detect navigation during async work
     const stats = state.globalStats;
     const cpuTemp = Number(stats.cpuTemp) || 0;
     const cpuLoad = Number(stats.cpuLoad) || 0;
@@ -2526,8 +2527,10 @@ async function renderDashboard() {
     if (!state.network.interfaces || state.network.interfaces.length === 0 || state.network.interfaces[0]?.ip === '192.168.1.100') {
         try {
             const res = await authFetch(`${API_BASE}/network/interfaces`);
+            if (renderGeneration !== currentGen) return; // abort if user navigated away
             if (res.ok) {
                 state.network.interfaces = await res.json();
+                if (renderGeneration !== currentGen) return; // abort if user navigated away
             }
         } catch (e) {
             console.warn('Could not fetch network interfaces:', e);
@@ -2575,8 +2578,10 @@ async function renderDashboard() {
     let fanMode = 'balanced';
     try {
         const fanModeRes = await authFetch(`${API_BASE}/system/fan/mode`);
+        if (renderGeneration !== currentGen) return; // abort if user navigated away
         if (fanModeRes.ok) {
             const fanModeData = await fanModeRes.json();
+            if (renderGeneration !== currentGen) return; // abort if user navigated away
             fanMode = fanModeData.mode || 'balanced';
         }
     } catch (e) {
@@ -2605,8 +2610,10 @@ async function renderDashboard() {
     let disksHtml = '';
     try {
         const disksRes = await authFetch(`${API_BASE}/system/disks`);
+        if (renderGeneration !== currentGen) return; // abort if user navigated away
         if (disksRes.ok) {
             const disks = await disksRes.json();
+            if (renderGeneration !== currentGen) return; // abort if user navigated away
 
             // Group disks by role
             const disksByRole = { data: [], parity: [], cache: [], none: [] };
@@ -2656,7 +2663,7 @@ async function renderDashboard() {
     }
 
     // Abort if user navigated away from dashboard during async fetches
-    if (state.currentView !== 'dashboard') return;
+    if (renderGeneration !== currentGen) return;
 
     dashboardContent.innerHTML = `
         <div class="glass-card overview-card dash-overview-full">
@@ -2771,8 +2778,10 @@ async function renderDashboard() {
     // Load cache status
     try {
         const cacheRes = await authFetch(\`\${API_BASE}/cache/status\`);
+        if (renderGeneration !== currentGen) return; // abort if user navigated away
         if (cacheRes.ok) {
             const cacheData = await cacheRes.json();
+            if (renderGeneration !== currentGen) return; // abort if user navigated away
             const cacheWidget = document.getElementById('cache-status-widget');
             const cacheContent = document.getElementById('cache-status-content');
             
@@ -2873,8 +2882,10 @@ async function renderDashboard() {
     // Load Docker containers
     try {
         const dockerRes = await authFetch(`${API_BASE}/docker/containers`);
+        if (renderGeneration !== currentGen) return; // abort if user navigated away
         if (dockerRes.ok) {
             const containers = await dockerRes.json();
+            if (renderGeneration !== currentGen) return; // abort if user navigated away
             const dockerWidget = document.getElementById('docker-containers-widget');
             const dockerContent = document.getElementById('docker-containers-content');
             
