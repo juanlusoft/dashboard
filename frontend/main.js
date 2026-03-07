@@ -1301,6 +1301,7 @@ function initStorageSetup() {
     
     // Setup wizard navigation
     setupWizardNavigation();
+    setupNetworkConfiguration();
 }
 
 // Detect disks and populate the wizard
@@ -1793,19 +1794,22 @@ async function createStoragePool() {
     // Navigate to progress step
     navigateWizard(6);
     
+    // Capture selected filesystem
+    const selectedFilesystem = document.querySelector('input[name="wizard-filesystem"]:checked')?.value || 'ext4';
+    
     // Build disk selections
     const selections = [];
     
     wizardState.selectedDataDisks.forEach(id => {
-        selections.push({ id, role: 'data', format: true });
+        selections.push({ id, role: 'data', format: true, filesystem: selectedFilesystem });
     });
     
     if (wizardState.selectedParityDisk) {
-        selections.push({ id: wizardState.selectedParityDisk, role: 'parity', format: true });
+        selections.push({ id: wizardState.selectedParityDisk, role: 'parity', format: true, filesystem: selectedFilesystem });
     }
     
     if (wizardState.selectedCacheDisk) {
-        selections.push({ id: wizardState.selectedCacheDisk, role: 'cache', format: true });
+        selections.push({ id: wizardState.selectedCacheDisk, role: 'cache', format: true, filesystem: selectedFilesystem });
     }
     
     const tasks = ['format', 'mount', 'snapraid', 'mergerfs', 'fstab', 'sync'];
@@ -2055,8 +2059,8 @@ async function pollSyncProgress() {
 
 const saveStorageBtn = document.getElementById('save-storage-btn');
 if (saveStorageBtn) {
-    saveStorageBtn.addEventListener('click', async () => {
         const selections = [];
+        const selectedFilesystem = document.querySelector('input[name="wizard-filesystem"]:checked')?.value || 'ext4';
         document.querySelectorAll('.role-selector').forEach(sel => {
             const diskId = sel.dataset.disk;
             const activeBtn = sel.querySelector('.role-btn.active');
@@ -2065,7 +2069,8 @@ if (saveStorageBtn) {
                 selections.push({
                     id: diskId,
                     role,
-                    format: true
+                    format: true,
+                    filesystem: selectedFilesystem
                 });
             }
         });
@@ -2640,30 +2645,189 @@ async function renderDashboard() {
                 ${disksHtml || `<div class="no-disks">${t('storage.noDisksDetected', 'No se detectaron discos')}</div>`}
             </div>
         </div>
-    `;
+
+        <!-- Cache Status Widget -->
+        <div id="cache-status-widget" class="glass-card storage-overview dash-storage-full" style="display: none;">
+            <div class="storage-array-header">
+                <h3>⚡ Estado de la Caché</h3>
+                <button id="cache-mover-btn" class="btn-primary" style="padding: 8px 16px; font-size: 14px; border-radius: 6px;">
+                    🚀 Mover Ahora
+                </button>
+            </div>
+            <div id="cache-status-content" style="padding: 15px;">
+                <div style="text-align: center; color: var(--text-dim);">Cargando...</div>
+            </div>
+        </div>
+
+        <!-- Docker Containers Widget -->
+        <div id="docker-containers-widget" class="glass-card storage-overview dash-storage-full" style="display: none;">
+            <div class="storage-array-header">
+                <h3>🐳 Contenedores Docker</h3>
+            </div>
+            <div id="docker-containers-content" style="padding: 15px;">
+                <div style="text-align: center; color: var(--text-dim);">Cargando...</div>
+            </div>
+        </div>
+    \`;
 
     // Add fan mode button event listeners
     dashboardContent.querySelectorAll('.fan-mode-btn[data-mode]').forEach(btn => {
         btn.addEventListener('click', () => setFanMode(btn.dataset.mode));
     });
+
+    // Load cache status
+    try {
+        const cacheRes = await authFetch(\`\${API_BASE}/cache/status\`);
+        if (cacheRes.ok) {
+            const cacheData = await cacheRes.json();
+            const cacheWidget = document.getElementById('cache-status-widget');
+            const cacheContent = document.getElementById('cache-status-content');
+            
+            if (cacheWidget && cacheData.hasCache) {
+                cacheWidget.style.display = 'block';
+                
+                // Format cache disks info
+                let cacheDisksHtml = cacheData.cacheDisks.map(disk => {
+                    const fillClass = disk.usagePercent > 90 ? 'high' : disk.usagePercent > 70 ? 'medium' : 'low';
+                    return \`
+                        <div class="storage-mount-row cache" style="margin-bottom: 10px;">
+                            <div class="mount-info">
+                                <span class="mount-path">\${escapeHtml(disk.mountPoint || '')}</span>
+                                <span class="mount-device">\${escapeHtml(disk.disk || '')}</span>
+                            </div>
+                            <div class="mount-bar-container">
+                                <div class="mount-bar">
+                                    <div class="mount-bar-fill \${fillClass}" style="width: \${disk.usagePercent || 0}%"></div>
+                                </div>
+                                <div class="mount-bar-text">
+                                    <span>\${disk.usagePercent || 0}% usado</span>
+                                    <span>\${escapeHtml(disk.availableFormatted || 'N/A')} disponible</span>
+                                </div>
+                            </div>
+                        </div>
+                    \`;
+                }).join('');
+                
+                // Mover status
+                let moverStatusHtml = '';
+                if (cacheData.mover) {
+                    const mover = cacheData.mover;
+                    const statusBadge = mover.enabled ? 
+                        '<span style="color: #10b981;">●</span> Activo' : 
+                        '<span style="color: #64748b;">○</span> Inactivo';
+                    
+                    moverStatusHtml = \`
+                        <div style="margin-top: 15px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <span>Mover automático:</span>
+                                <span>\${statusBadge}</span>
+                            </div>
+                            \${mover.ageMinutes ? \`<div style="font-size: 13px; color: var(--text-dim);">Edad mínima: \${mover.ageMinutes} minutos</div>\` : ''}
+                            \${mover.usageThreshold ? \`<div style="font-size: 13px; color: var(--text-dim);">Umbral: \${mover.usageThreshold}%</div>\` : ''}
+                        </div>
+                    \`;
+                }
+                
+                // File counts
+                let fileCountsHtml = '';
+                if (cacheData.fileCounts) {
+                    fileCountsHtml = \`
+                        <div style="margin-top: 10px; display: flex; gap: 20px; font-size: 14px;">
+                            <span>Archivos en caché: <strong>\${cacheData.fileCounts.cache || 0}</strong></span>
+                            <span>Archivos en datos: <strong>\${cacheData.fileCounts.data || 0}</strong></span>
+                        </div>
+                    \`;
+                }
+                
+                cacheContent.innerHTML = cacheDisksHtml + moverStatusHtml + fileCountsHtml;
+                
+                // Setup mover button
+                const moverBtn = document.getElementById('cache-mover-btn');
+                if (moverBtn) {
+                    moverBtn.addEventListener('click', async () => {
+                        moverBtn.disabled = true;
+                        moverBtn.textContent = '⏳ Moviendo...';
+                        
+                        try {
+                            const res = await authFetch(\`\${API_BASE}/cache/mover/trigger\`, {
+                                method: 'POST'
+                            });
+                            
+                            if (res.ok) {
+                                const result = await res.json();
+                                showNotification(result.message || 'Cache mover iniciado', 'success');
+                                // Reload cache status after 2 seconds
+                                setTimeout(() => renderDashboard(), 2000);
+                            } else {
+                                const err = await res.json();
+                                showNotification('Error: ' + (err.error || 'No se pudo iniciar el mover'), 'error');
+                            }
+                        } catch (e) {
+                            console.error('Cache mover error:', e);
+                            showNotification('Error al iniciar el mover', 'error');
+                        } finally {
+                            moverBtn.disabled = false;
+                            moverBtn.textContent = '🚀 Mover Ahora';
+                        }
+                    });
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Error loading cache status:', e);
+    }
+
+    // Load Docker containers
+    try {
+        const dockerRes = await authFetch(`${API_BASE}/docker/containers`);
+        if (dockerRes.ok) {
+            const containers = await dockerRes.json();
+            const dockerWidget = document.getElementById('docker-containers-widget');
+            const dockerContent = document.getElementById('docker-containers-content');
+            
+            if (dockerWidget && containers && containers.length > 0) {
+                dockerWidget.style.display = 'block';
+                
+                // Generate containers HTML
+                let containersHtml = '<div style="display: grid; gap: 10px;">';
+                
+                containers.forEach(container => {
+                    const isRunning = container.status === 'running';
+                    const statusIcon = isRunning ? '🟢' : '🔴';
+                    const statusText = isRunning ? 'running' : container.status;
+                    
+                    containersHtml += `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 8px;">
+                            <div style="flex: 1;">
+                                <div style="font-weight: 500; margin-bottom: 4px;">
+                                    ${statusIcon} ${escapeHtml(container.name)}
+                                </div>
+                                <div style="font-size: 12px; color: var(--text-dim);">
+                                    ${escapeHtml(container.image)}
+                                    ${container.ports && container.ports.length > 0 ? ` • ${container.ports.map(p => p.public + ':' + p.private).join(', ')}` : ''}
+                                </div>
+                            </div>
+                            <div style="text-align: right; font-size: 12px; color: var(--text-dim);">
+                                ${isRunning && container.cpu !== '---' ? `<div>CPU: ${container.cpu}</div>` : ''}
+                                ${isRunning && container.ram !== '---' ? `<div>RAM: ${container.ram}</div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                containersHtml += '</div>';
+                dockerContent.innerHTML = containersHtml;
+            } else if (dockerWidget && containers && containers.length === 0) {
+                dockerWidget.style.display = 'block';
+                dockerContent.innerHTML = '<div style="text-align: center; color: var(--text-dim); padding: 20px;">No hay contenedores Docker</div>';
+            }
+        }
+    } catch (e) {
+        console.error('Error loading Docker containers:', e);
+    }
 }
 
 // Fan speed control - update percentage display while dragging
-function updateFanPercent(fanId, value) {
-    const percentEl = document.getElementById(`fan-percent-${fanId}`);
-    if (percentEl) {
-        percentEl.textContent = `${value}%`;
-    }
-}
-
-// Fan speed control - apply speed when released
-async function setFanSpeed(fanId, speed) {
-    const percentEl = document.getElementById(`fan-percent-${fanId}`);
-    if (percentEl) {
-        percentEl.textContent = `${speed}% ⏳`;
-    }
-
-    try {
         const res = await authFetch(`${API_BASE}/system/fan`, {
             method: 'POST',
             body: JSON.stringify({ fanId, speed: parseInt(speed) })
@@ -2741,14 +2905,24 @@ async function renderStorageDashboard() {
     
     try {
         // Fetch disks and pool status
-        const [disksRes, poolRes] = await Promise.all([
+        const [disksRes, poolRes, iostatsRes] = await Promise.all([
             authFetch(`${API_BASE}/system/disks`),
-            authFetch(`${API_BASE}/storage/pool/status`)
+            authFetch(`${API_BASE}/storage/pool/status`),
+            authFetch(`${API_BASE}/storage/disks/iostats`)
         ]);
         
         if (disksRes.ok) state.disks = await disksRes.json();
         let poolStatus = {};
         if (poolRes.ok) poolStatus = await poolRes.json();
+
+        let iostats = {};
+        if (iostatsRes.ok) {
+            const iostatsData = await iostatsRes.json();
+            // Convert array to object keyed by diskId
+            (iostatsData.disks || []).forEach(d => {
+                iostats[d.diskId] = d;
+            });
+        }
 
         // Storage Array Header (Cockpit style)
         const arrayCard = document.createElement('div');
@@ -2824,6 +2998,12 @@ async function renderStorageDashboard() {
                               role === 'parity' ? `/mnt/parity${index + 1}` :
                               `/mnt/disks/cache${index + 1}`;
 
+
+            // Get I/O stats for this disk
+            const ioData = iostats[disk.id] || { readMBs: 0, writeMBs: 0, ioErrors: 0 };
+            const ioRead = ioData.readMBs.toFixed(2);
+            const ioWrite = ioData.writeMBs.toFixed(2);
+            const ioErrors = ioData.ioErrors || 0;
             const diskRow = document.createElement('div');
             diskRow.className = `storage-mount-row ${role}`;
             diskRow.innerHTML = `
@@ -2846,6 +3026,11 @@ async function renderStorageDashboard() {
                 </div>
                 <div class="mount-type">
                     <span class="mount-type-badge ext4">ext4</span>
+                </div>
+                <div class="mount-iostats">
+                    <span class="io-stat io-read">📖 ${escapeHtml(ioRead)} MB/s</span>
+                    <span class="io-stat io-write">📝 ${escapeHtml(ioWrite)} MB/s</span>
+                    ${ioErrors > 0 ? `<span class="io-stat io-error">⚠️ ${ioErrors} errores</span>` : ""}
                 </div>
             `;
             mountsGrid.appendChild(diskRow);
@@ -3267,23 +3452,23 @@ async function renderStorageDashboard() {
         });
 
         dashboardContent.appendChild(grid);
-        
-        // Start auto-refresh polling (every 30 seconds)
-        if (!state.pollingIntervals.storage) {
-            state.pollingIntervals.storage = setInterval(async () => {
-                if (state.currentView === 'storage') {
-                    // Only update pool stats without full re-render (avoids flicker)
-                    try {
-                        const poolRes = await authFetch(`${API_BASE}/storage/pool/status`);
-                        if (poolRes.ok) {
-                            const poolStatus = await poolRes.json();
-                            const freeEl = document.querySelector('.dash-pool-free-value');
-                            if (freeEl) freeEl.textContent = poolStatus.poolFree || 'N/A';
-                        }
-                    } catch (e) { /* ignore */ }
-                }
-            }, 30000);
-        }
+//         
+//         // Start auto-refresh polling (every 30 seconds)
+//         if (!state.pollingIntervals.storage) {
+//             state.pollingIntervals.storage = setInterval(async () => {
+//                 if (state.currentView === 'storage') {
+//                     // Only update pool stats without full re-render (avoids flicker)
+//                     try {
+//                         const poolRes = await authFetch(`${API_BASE}/storage/pool/status`);
+//                         if (poolRes.ok) {
+//                             const poolStatus = await poolRes.json();
+//                             const freeEl = document.querySelector('.dash-pool-free-value');
+//                             if (freeEl) freeEl.textContent = poolStatus.poolFree || 'N/A';
+//                         }
+//                     } catch (e) { /* ignore */ }
+//                 }
+//             }, 30000);
+//         }
     } catch (e) {
         console.error('Storage dashboard error:', e);
         dashboardContent.innerHTML = `<div class="glass-card"><h3>${t('common.error', 'Error al cargar datos de almacenamiento')}</h3></div>`;
@@ -4199,8 +4384,36 @@ async function renderNetworkManager() {
             subnetGroup.appendChild(subnetInput);
             subnetGroup.appendChild(subnetLabel);
 
+            // Gateway Input
+            const gatewayGroup = document.createElement('div');
+            gatewayGroup.className = 'input-group';
+            const gatewayInput = document.createElement('input');
+            gatewayInput.type = 'text';
+            gatewayInput.id = `gateway-${iface.id}`;
+            gatewayInput.value = iface.gateway || '';
+            gatewayInput.placeholder = ' ';
+            const gatewayLabel = document.createElement('label');
+            gatewayLabel.textContent = t('network.gateway', 'Puerta de Enlace');
+            gatewayGroup.appendChild(gatewayInput);
+            gatewayGroup.appendChild(gatewayLabel);
+
+            // DNS Input
+            const dnsGroup = document.createElement('div');
+            dnsGroup.className = 'input-group';
+            const dnsInput = document.createElement('input');
+            dnsInput.type = 'text';
+            dnsInput.id = `dns-${iface.id}`;
+            dnsInput.value = '';
+            dnsInput.placeholder = ' ';
+            const dnsLabel = document.createElement('label');
+            dnsLabel.textContent = t('network.dns', 'DNS') + ' (ej: 8.8.8.8)';
+            dnsGroup.appendChild(dnsInput);
+            dnsGroup.appendChild(dnsLabel);
+
             netForm.appendChild(ipGroup);
             netForm.appendChild(subnetGroup);
+            netForm.appendChild(gatewayGroup);
+            netForm.appendChild(dnsGroup);
         }
 
         // Save button
@@ -5628,6 +5841,7 @@ let currentFilePath = '/';
 let fmViewMode = localStorage.getItem('fm-view-mode') || 'list'; // 'list' | 'grid'
 let fmSelectedFiles = new Set(); // Set of full file paths for multi-select
 let fmCurrentFiles = []; // current loaded file list for reference
+let fmFileLocations = {}; // disk locations cache
 let fmClipboard = { action: null, files: [] }; // { action: 'copy'|'cut', files: [{path, name}] }
 
 // Thumbnail loading queue — limits concurrent downloads to avoid overwhelming the Pi
@@ -6126,6 +6340,25 @@ async function loadFiles(filePath) {
 
         filesList.innerHTML = '';
 
+        // ── Fetch disk locations (batch) ──
+        try {
+            const paths = files.map(f => filePath + '/' + f.name);
+            const locRes = await authFetch(`${API_BASE}/storage/file-location`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paths })
+            });
+            if (locRes.ok) {
+                const locData = await locRes.json();
+                fmFileLocations = locData.locations || {};
+            } else {
+                fmFileLocations = {}; // Fail silently, don't block file listing
+            }
+        } catch (e) {
+            console.warn('Failed to get file locations:', e);
+            fmFileLocations = {};
+        }
+
         if (fmViewMode === 'grid') {
             renderFilesGrid(filesList, files, filePath);
         } else {
@@ -6200,6 +6433,17 @@ function renderFilesList(container, files, filePath) {
         permSpan.className = 'fm-file-meta fm-hide-mobile fm-file-perm';
         permSpan.textContent = file.permissions || file.mode || '—';
 
+        // ── Disk location ──
+        const locationSpan = document.createElement('span');
+        locationSpan.className = 'fm-file-meta fm-hide-mobile fm-file-location';
+        const locationInfo = fmFileLocations[fullPath];
+        if (locationInfo && !locationInfo.error) {
+            const deviceName = locationInfo.device || locationInfo.diskName || '?';
+            locationSpan.innerHTML = `<span class="fm-disk-badge" title="${locationInfo.mountPath || ''}">${deviceName}</span>`;
+        } else {
+            locationSpan.textContent = '—';
+        }
+
         const actionsDiv = document.createElement('div');
         actionsDiv.className = 'fm-row-actions';
 
@@ -6225,6 +6469,7 @@ function renderFilesList(container, files, filePath) {
         row.appendChild(sizeSpan);
         row.appendChild(dateSpan);
         row.appendChild(permSpan);
+        row.appendChild(locationSpan);
         row.appendChild(actionsDiv);
 
         row.addEventListener('click', (e) => {
@@ -6299,6 +6544,17 @@ function renderFilesGrid(container, files, filePath) {
         const metaLabel = document.createElement('div');
         metaLabel.className = 'fm-grid-meta';
         metaLabel.textContent = file.type === 'directory' ? 'Carpeta' : formatFileSize(file.size);
+
+        // ── Disk location badge ──
+        const locationInfo = fmFileLocations[fullPath];
+        if (locationInfo && !locationInfo.error) {
+            const locationBadge = document.createElement('div');
+            locationBadge.className = 'fm-grid-disk-badge';
+            const deviceName = locationInfo.device || locationInfo.diskName || '?';
+            locationBadge.textContent = deviceName;
+            locationBadge.title = locationInfo.mountPath || 'Disco: ' + deviceName;
+            card.appendChild(locationBadge);
+        }
 
         card.appendChild(checkbox);
         card.appendChild(iconArea);
@@ -6992,6 +7248,7 @@ function showFileContextMenu(e, filePath, file) {
     const items = [
         ...(file.type === 'directory' ? [
             { icon: '📂', label: 'Abrir carpeta', action: () => { currentFilePath = filePath; renderFilesView(); } },
+            { icon: '🔒', label: 'Permisos', action: () => showFolderPermissions(filePath) },
         ] : [
             { icon: '👁️', label: 'Vista previa', action: () => fmPreviewFile(file, filePath.substring(0, filePath.lastIndexOf('/'))) },
         ]),
@@ -8010,20 +8267,76 @@ async function loadSambaShares() {
     grid.innerHTML = '';
 
     try {
-        const res = await authFetch(`${API_BASE}/samba/shares`);
-        if (!res.ok) throw new Error('Failed');
-        const data = await res.json();
-        const shares = data.shares || data || [];
+        // Fetch both Samba and NFS shares
+        const [sambaRes, nfsRes] = await Promise.all([
+            authFetch(`${API_BASE}/samba/shares`),
+            authFetch(`${API_BASE}/nfs/shares`)
+        ]);
+        
+        const sambaData = sambaRes.ok ? await sambaRes.json() : { shares: [] };
+        const nfsData = nfsRes.ok ? await nfsRes.json() : { shares: [] };
+        
+        const sambaShares = sambaData.shares || [];
+        const nfsShares = nfsData.shares || [];
 
-        if (!shares || shares.length === 0) {
+        // Build a combined map of all shares by path
+        const sharesMap = new Map();
+        
+        // Add Samba shares
+        sambaShares.forEach(share => {
+            sharesMap.set(share.path, {
+                name: share.name,
+                path: share.path,
+                comment: share.comment,
+                readOnly: share.readOnly,
+                guestOk: share.guestOk,
+                hasSamba: true,
+                hasNFS: false
+            });
+        });
+        
+        // Merge NFS shares
+        nfsShares.forEach(nfsShare => {
+            if (sharesMap.has(nfsShare.path)) {
+                sharesMap.get(nfsShare.path).hasNFS = true;
+            } else {
+                // NFS-only share (no Samba name)
+                sharesMap.set(nfsShare.path, {
+                    name: nfsShare.path.split('/').pop() || 'NFS Share',
+                    path: nfsShare.path,
+                    comment: '',
+                    readOnly: nfsShare.readOnly,
+                    guestOk: false,
+                    hasSamba: false,
+                    hasNFS: true
+                });
+            }
+        });
+
+        const allShares = Array.from(sharesMap.values());
+
+        if (allShares.length === 0) {
             grid.innerHTML = '<div class="samba-empty-state">No hay comparticiones configuradas</div>';
             return;
         }
 
-        shares.forEach(share => {
+        allShares.forEach(share => {
             const card = document.createElement('div');
             card.className = 'glass-card';
             card.style.cssText = 'padding: 15px;';
+
+            // Build protocol badges
+            const protocolBadges = [];
+            if (share.hasSamba) protocolBadges.push('<span class="samba-badge-guest" style="background: rgba(99,102,241,0.15); color: #6366f1;">📂 SMB</span>');
+            if (share.hasNFS) protocolBadges.push('<span class="samba-badge-guest" style="background: rgba(16,185,129,0.15); color: #10b981;">🗄️ NFS</span>');
+
+            // NFS connection info
+            const nfsInfo = share.hasNFS ? `
+                <div style="margin-top: 10px; padding: 8px; background: rgba(16,185,129,0.1); border-radius: 6px; font-size: 0.85rem;">
+                    <div style="opacity: 0.7; margin-bottom: 4px;">NFS:</div>
+                    <code style="display: block; background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; overflow-x: auto;">192.168.1.100:${escapeHtml(share.path)}</code>
+                </div>
+            ` : '';
 
             card.innerHTML = `
                 <div class="samba-card-header">
@@ -8033,10 +8346,12 @@ async function loadSambaShares() {
                     </div>
                 </div>
                 <div class="samba-badges-container">
+                    ${protocolBadges.join(' ')}
                     ${share.readOnly ? '<span class="samba-badge-readonly">Solo lectura</span>' : '<span class="samba-badge-readwrite">Lectura/Escritura</span>'}
                     ${share.guestOk ? '<span class="samba-badge-guest">Invitados</span>' : ''}
                 </div>
                 ${share.comment ? `<p class="samba-comment-text">${escapeHtml(share.comment)}</p>` : ''}
+                ${nfsInfo}
             `;
 
             const delBtn = document.createElement('button');
@@ -8044,7 +8359,7 @@ async function loadSambaShares() {
             delBtn.style.cssText = 'position: absolute; top: 10px; right: 10px; background: none; border: none; cursor: pointer; opacity: 0.5; font-size: 1rem;';
             delBtn.addEventListener('mouseenter', () => delBtn.style.opacity = '1');
             delBtn.addEventListener('mouseleave', () => delBtn.style.opacity = '0.5');
-            delBtn.addEventListener('click', () => deleteSambaShare(share.name));
+            delBtn.addEventListener('click', () => deleteSambaShare(share.name, share.path, share.hasSamba, share.hasNFS));
             card.style.position = 'relative';
             card.appendChild(delBtn);
 
@@ -8091,6 +8406,15 @@ function showSambaForm() {
                         <input type="checkbox" id="sf-guest"> Acceso invitados
                     </label>
                 </div>
+                <div class="samba-checkbox-row" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: rgba(255,255,255,0.9);">Protocolos de compartición:</label>
+                    <label class="samba-checkbox-label">
+                        <input type="checkbox" id="sf-enable-smb" checked> 📂 SMB/Samba
+                    </label>
+                    <label class="samba-checkbox-label">
+                        <input type="checkbox" id="sf-enable-nfs"> 🗄️ NFS
+                    </label>
+                </div>
                 <button type="submit" class="btn-primary">Crear Compartición</button>
             </form>
         </div>
@@ -8103,33 +8427,65 @@ function showSambaForm() {
     document.getElementById('samba-create-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         try {
-            const res = await authFetch(`${API_BASE}/samba/shares`, {
-                method: 'POST',
-                body: JSON.stringify({
-                    name: document.getElementById('sf-name').value.trim(),
-                    path: document.getElementById('sf-path').value.trim(),
-                    comment: document.getElementById('sf-comment').value.trim(),
-                    readOnly: document.getElementById('sf-readonly').checked,
-                    guestOk: document.getElementById('sf-guest').checked
-                })
-            });
-            if (!res.ok) throw new Error('Failed');
+            const name = document.getElementById('sf-name').value.trim();
+            const path = document.getElementById('sf-path').value.trim();
+            const comment = document.getElementById('sf-comment').value.trim();
+            const readOnly = document.getElementById('sf-readonly').checked;
+            const guestOk = document.getElementById('sf-guest').checked;
+            const enableSMB = document.getElementById('sf-enable-smb').checked;
+            const enableNFS = document.getElementById('sf-enable-nfs').checked;
+
+            if (!enableSMB && !enableNFS) {
+                alert('Selecciona al menos un protocolo (SMB o NFS)');
+                return;
+            }
+
+            // Create Samba share if enabled
+            if (enableSMB) {
+                const res = await authFetch(`${API_BASE}/samba/shares`, {
+                    method: 'POST',
+                    body: JSON.stringify({ name, path, comment, readOnly, guestOk })
+                });
+                if (!res.ok) throw new Error('Failed to create Samba share');
+            }
+
+            // Create NFS share if enabled
+            if (enableNFS) {
+                const res = await authFetch(`${API_BASE}/nfs/shares`, {
+                    method: 'POST',
+                    body: JSON.stringify({ path, readOnly })
+                });
+                if (!res.ok) throw new Error('Failed to create NFS share');
+            }
+
             modal.remove();
             await loadSambaShares();
         } catch (err) {
-            alert('Error al crear compartición');
+            alert('Error al crear compartición: ' + err.message);
         }
     });
 }
 
-async function deleteSambaShare(name) {
+async function deleteSambaShare(name, path, hasSamba, hasNFS) {
     const confirmed = await showConfirmModal('Eliminar compartición', `¿Eliminar compartición "${name}"?`);
     if (!confirmed) return;
     try {
-        await authFetch(`${API_BASE}/samba/shares/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        // Delete from Samba if present
+        if (hasSamba) {
+            await authFetch(`${API_BASE}/samba/shares/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        }
+        
+        // Delete from NFS if present
+        if (hasNFS) {
+            await authFetch(`${API_BASE}/nfs/shares`, { 
+                method: 'DELETE',
+                body: JSON.stringify({ path })
+            });
+        }
+        
         await loadSambaShares();
     } catch (e) {
-        alert('Error al eliminar');
+        alert('Error al eliminar: ' + e.message);
     }
 }
 
@@ -14919,3 +15275,299 @@ window.detectDisksForWizard = detectDisksForWizard;
 
 init();
 console.log("HomePiNAS Core v2.6.0 Loaded - Cloud Backup");
+
+// Setup network configuration in wizard
+function setupNetworkConfiguration() {
+    const networkToggle = document.getElementById('network-toggle');
+    const networkContent = document.getElementById('network-content');
+    const networkModeRadios = document.querySelectorAll('input[name="network-mode"]');
+    const manualFields = document.getElementById('network-manual-fields');
+    const applyBtn = document.getElementById('network-apply-btn');
+    const statusDiv = document.getElementById('network-status');
+
+    if (!networkToggle) return;
+
+    // Toggle expand/collapse
+    networkToggle.addEventListener('click', () => {
+        const isExpanded = networkContent.style.display === 'block';
+        networkContent.style.display = isExpanded ? 'none' : 'block';
+        networkToggle.classList.toggle('expanded', !isExpanded);
+    });
+
+    // Show/hide manual fields based on selection
+    networkModeRadios.forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            if (e.target.value === 'manual') {
+                manualFields.style.display = 'block';
+            } else {
+                manualFields.style.display = 'none';
+            }
+        });
+    });
+
+    // Apply network configuration
+    applyBtn?.addEventListener('click', async () => {
+        const mode = document.querySelector('input[name="network-mode"]:checked')?.value;
+        
+        if (!mode) {
+            showNetworkStatus('error', 'Selecciona un modo de red');
+            return;
+        }
+
+        const isDhcp = mode === 'dhcp';
+        const config = { dhcp: isDhcp };
+
+        if (!isDhcp) {
+            const ip = document.getElementById('network-ip')?.value.trim();
+            const subnet = document.getElementById('network-subnet')?.value.trim();
+            const gateway = document.getElementById('network-gateway')?.value.trim();
+            const dns = document.getElementById('network-dns')?.value.trim();
+
+            if (!ip || !subnet || !gateway) {
+                showNetworkStatus('error', 'Completa todos los campos obligatorios');
+                return;
+            }
+
+            // Validate IP format (basic)
+            const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+            if (!ipPattern.test(ip) || !ipPattern.test(subnet) || !ipPattern.test(gateway)) {
+                showNetworkStatus('error', 'Formato de IP inválido');
+                return;
+            }
+
+            config.ip = ip;
+            config.subnet = subnet;
+            config.gateway = gateway;
+            
+            if (dns) {
+                config.dns = dns.split(',').map(d => d.trim()).filter(d => d);
+            }
+        }
+
+        try {
+            applyBtn.disabled = true;
+            applyBtn.textContent = 'Aplicando...';
+            showNetworkStatus('info', 'Configurando red...');
+
+            // Get primary interface
+            const interfacesRes = await fetch('/api/network/interfaces', {
+                headers: { 'Authorization': `Bearer ${state.sessionId}` }
+            });
+            const interfaces = await interfacesRes.json();
+            
+            if (!interfaces || interfaces.length === 0) {
+                throw new Error('No se encontraron interfaces de red');
+            }
+
+            // Use first physical interface (usually eth0 or similar)
+            const primaryInterface = interfaces[0].id;
+
+            // Apply configuration
+            const response = await fetch('/api/network/configure', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${state.sessionId}`
+                },
+                body: JSON.stringify({
+                    id: primaryInterface,
+                    config: config
+                })
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                showNetworkStatus('success', isDhcp 
+                    ? '✅ Red configurada en modo DHCP' 
+                    : `✅ Red configurada: ${config.ip}`);
+            } else {
+                throw new Error(result.error || 'Error al configurar red');
+            }
+        } catch (error) {
+            console.error('Network config error:', error);
+            showNetworkStatus('error', `❌ ${error.message}`);
+        } finally {
+            applyBtn.disabled = false;
+            applyBtn.textContent = 'Aplicar Configuración';
+        }
+    });
+
+    // Load current network config
+    loadCurrentNetworkConfig();
+}
+
+function showNetworkStatus(type, message) {
+    const statusDiv = document.getElementById('network-status');
+    if (!statusDiv) return;
+    
+    statusDiv.className = `wizard-network-status ${type}`;
+    statusDiv.textContent = message;
+    statusDiv.style.display = 'block';
+}
+
+async function loadCurrentNetworkConfig() {
+    try {
+        const response = await fetch('/api/network/interfaces', {
+            headers: { 'Authorization': `Bearer ${state.sessionId}` }
+        });
+        
+        if (!response.ok) return;
+        
+        const interfaces = await response.json();
+        if (!interfaces || interfaces.length === 0) return;
+        
+        const primaryInterface = interfaces[0];
+        
+        // Pre-fill current values if static
+        if (!primaryInterface.dhcp && primaryInterface.ip) {
+            document.getElementById('network-ip').value = primaryInterface.ip || '';
+            document.getElementById('network-subnet').value = primaryInterface.subnet || '255.255.255.0';
+            document.getElementById('network-gateway').value = primaryInterface.gateway || '';
+        }
+    } catch (error) {
+        console.error('Failed to load network config:', error);
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// FOLDER PERMISSIONS MANAGEMENT
+// ══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Show folder permissions modal
+ */
+async function showFolderPermissions(folderPath) {
+    try {
+        // Fetch current permissions
+        const permRes = await fetch(`/api/files/permissions?path=${encodeURIComponent(folderPath)}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!permRes.ok) throw new Error('Failed to load permissions');
+        const permData = await permRes.json();
+
+        // Fetch all users
+        const usersRes = await fetch('/api/users', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!usersRes.ok) throw new Error('Failed to load users');
+        const usersData = await usersRes.json();
+        const allUsers = usersData.users || [];
+
+        // Create modal
+        const modal = document.createElement('div');
+        modal.className = 'modal active';
+        modal.innerHTML = `
+            <div class="glass-card modal-content" style="max-width: 600px;">
+                <header class="modal-header">
+                    <h3>🔒 Permisos de Carpeta</h3>
+                    <button class="modal-close" onclick="this.closest('.modal').remove()">✕</button>
+                </header>
+                <div class="modal-body">
+                    <div style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(99,102,241,0.1); border-radius: 8px;">
+                        <strong>Carpeta:</strong> ${folderPath}
+                    </div>
+                    <div style="margin-bottom: 1rem;">
+                        <label style="font-size: 0.875rem; color: #94a3b8; display: block; margin-bottom: 0.5rem;">
+                            Permisos POSIX: <code>${permData.posixMode}</code>
+                        </label>
+                    </div>
+                    <h4 style="margin-bottom: 1rem; font-size: 0.95rem;">Permisos por Usuario</h4>
+                    <div id="permissions-list"></div>
+                </div>
+            </div>
+        `;
+
+        const permList = modal.querySelector('#permissions-list');
+
+        // Build user permissions list
+        allUsers.forEach(user => {
+            const existingPerm = permData.aclUsers.find(u => u.username === user.username);
+            const hasRead = existingPerm ? existingPerm.read : false;
+            const hasWrite = existingPerm ? existingPerm.write : false;
+
+            const row = document.createElement('div');
+            row.className = 'perm-user-row';
+            row.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; border: 1px solid rgba(148,163,184,0.2); border-radius: 6px; margin-bottom: 0.5rem;';
+
+            row.innerHTML = `
+                <div style="flex: 1;">
+                    <strong>${user.username}</strong>
+                    <span style="margin-left: 0.5rem; font-size: 0.75rem; color: #94a3b8;">${user.role || 'user'}</span>
+                </div>
+                <div style="display: flex; gap: 1rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" class="perm-read" data-user="${user.username}" ${hasRead ? 'checked' : ''}>
+                        <span style="font-size: 0.875rem;">Lectura</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" class="perm-write" data-user="${user.username}" ${hasWrite ? 'checked' : ''}>
+                        <span style="font-size: 0.875rem;">Escritura</span>
+                    </label>
+                </div>
+            `;
+
+            permList.appendChild(row);
+        });
+
+        // Add save button
+        const footer = document.createElement('div');
+        footer.className = 'modal-footer';
+        footer.style.cssText = 'display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(148,163,184,0.2);';
+        footer.innerHTML = `
+            <button class="btn-secondary" onclick="this.closest('.modal').remove()">Cancelar</button>
+            <button class="btn-primary" id="save-permissions">Guardar Cambios</button>
+        `;
+
+        modal.querySelector('.modal-body').appendChild(footer);
+
+        // Save handler
+        footer.querySelector('#save-permissions').addEventListener('click', async () => {
+            const rows = permList.querySelectorAll('.perm-user-row');
+            const updates = [];
+
+            for (const row of rows) {
+                const readCb = row.querySelector('.perm-read');
+                const writeCb = row.querySelector('.perm-write');
+                const username = readCb.dataset.user;
+                const read = readCb.checked;
+                const write = writeCb.checked;
+
+                updates.push({ username, read, write });
+            }
+
+            // Send updates to backend
+            try {
+                for (const upd of updates) {
+                    const res = await fetch('/api/files/permissions', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            path: folderPath,
+                            username: upd.username,
+                            read: upd.read,
+                            write: upd.write
+                        })
+                    });
+
+                    if (!res.ok) {
+                        const err = await res.json();
+                        throw new Error(err.error || 'Failed to update permissions');
+                    }
+                }
+
+                showNotification('✅ Permisos actualizados correctamente', 'success');
+                modal.remove();
+            } catch (err) {
+                showNotification(`❌ Error: ${err.message}`, 'error');
+            }
+        });
+
+        document.body.appendChild(modal);
+    } catch (err) {
+        showNotification(`❌ Error al cargar permisos: ${err.message}`, 'error');
+    }
+}

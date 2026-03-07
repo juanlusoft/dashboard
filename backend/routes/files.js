@@ -617,4 +617,169 @@ router.get('/search', requirePermission('read'), (req, res) => {
   }
 });
 
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// PERMISSIONS MANAGEMENT (Minimal implementation)
+// ══════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /permissions?path=/some/folder
+ * Get permissions info for a folder (POSIX + ACLs)
+ * Permission: read
+ */
+router.get('/permissions', requirePermission('read'), async (req, res) => {
+  try {
+    const inputPath = req.query.path;
+    if (!inputPath) {
+      return res.status(400).json({ error: 'Path parameter required' });
+    }
+
+    const folderPath = validatePath(inputPath, res);
+    if (folderPath === null) return;
+
+    if (!fs.existsSync(folderPath)) {
+      return res.status(404).json({ error: 'Folder not found' });
+    }
+
+    const stat = fs.statSync(folderPath);
+    if (!stat.isDirectory()) {
+      return res.status(400).json({ error: 'Path must be a directory' });
+    }
+
+    // Get basic POSIX permissions
+    const mode = '0' + (stat.mode & parseInt('777', 8)).toString(8);
+
+    // Get ACLs (if supported)
+    const { execFile } = require('child_process');
+    let aclUsers = [];
+    try {
+      const { stdout } = await new Promise((resolve, reject) => {
+        execFile('getfacl', ['-p', folderPath], { timeout: 5000 }, (err, stdout, stderr) => {
+          if (err) return reject(err);
+          resolve({ stdout, stderr });
+        });
+      });
+      
+      // Parse getfacl output: user:username:rwx
+      const lines = stdout.split('\n');
+      for (const line of lines) {
+        const match = line.match(/^user:([^:]+):([rwx-]+)/);
+        if (match && match[1] !== '') {
+          const username = match[1];
+          const perms = match[2];
+          aclUsers.push({
+            username,
+            read: perms.includes('r'),
+            write: perms.includes('w'),
+            execute: perms.includes('x'),
+          });
+        }
+      }
+    } catch (e) {
+      // ACL not available or error reading - that's OK
+      console.warn('ACL read error:', e.message);
+    }
+
+    res.json({
+      path: inputPath,
+      posixMode: mode,
+      owner: stat.uid,
+      group: stat.gid,
+      aclUsers,
+    });
+  } catch (err) {
+    console.error('Get permissions error:', err.message);
+    res.status(500).json({ error: 'Failed to get permissions' });
+  }
+});
+
+/**
+ * POST /permissions
+ * Set permissions for a folder (add/remove user ACLs)
+ * Body: { path: "/folder", username: "user1", read: true, write: false }
+ * Permission: admin (only admins can change permissions)
+ */
+router.post('/permissions', requirePermission('admin'), async (req, res) => {
+  try {
+    const { path: inputPath, username, read, write } = req.body;
+    
+    if (!inputPath || !username) {
+      return res.status(400).json({ error: 'Path and username are required' });
+    }
+
+    const folderPath = validatePath(inputPath, res);
+    if (folderPath === null) return;
+
+    if (!fs.existsSync(folderPath)) {
+      return res.status(404).json({ error: 'Folder not found' });
+    }
+
+    const stat = fs.statSync(folderPath);
+    if (!stat.isDirectory()) {
+      return res.status(400).json({ error: 'Path must be a directory' });
+    }
+
+    // Only allow changes to folders within /mnt/storage, never system folders
+    if (!folderPath.startsWith('/mnt/storage/')) {
+      return res.status(403).json({ error: 'Cannot modify system folder permissions' });
+    }
+
+    // Verify user exists
+    const users = require('../utils/data').getData().users || [];
+    const targetUser = users.find(u => u.username === username);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Build ACL permission string
+    let perms = '';
+    if (read && write) perms = 'rwx';
+    else if (read) perms = 'r-x';
+    else if (write) perms = '-wx';
+    else perms = '---'; // No permissions = remove ACL
+
+    const { execFile } = require('child_process');
+    
+    if (perms === '---') {
+      // Remove ACL entry
+      try {
+        await new Promise((resolve, reject) => {
+          execFile('sudo', ['setfacl', '-x', `u:${username}`, folderPath], { timeout: 5000 }, (err) => {
+            if (err) return reject(err);
+            resolve();
+          });
+        });
+      } catch (e) {
+        console.error('Remove ACL error:', e.message);
+        return res.status(500).json({ error: 'Failed to remove permissions' });
+      }
+    } else {
+      // Set ACL entry
+      try {
+        await new Promise((resolve, reject) => {
+          execFile('sudo', ['setfacl', '-m', `u:${username}:${perms}`, folderPath], { timeout: 5000 }, (err) => {
+            if (err) return reject(err);
+            resolve();
+          });
+        });
+      } catch (e) {
+        console.error('Set ACL error:', e.message);
+        return res.status(500).json({ error: 'Failed to set permissions' });
+      }
+    }
+
+    logSecurityEvent('folder_permissions_changed', req.user.username, {
+      path: inputPath,
+      targetUser: username,
+      permissions: { read, write },
+    });
+
+    res.json({ message: 'Permissions updated', path: inputPath, username, read, write });
+  } catch (err) {
+    console.error('Set permissions error:', err.message);
+    res.status(500).json({ error: 'Failed to set permissions' });
+  }
+});
+
 module.exports = router;

@@ -56,7 +56,7 @@ router.get('/interfaces', requireAuth, async (req, res) => {
 });
 
 // Configure network interface
-router.post('/configure', requireAuth, (req, res) => {
+router.post('/configure', requireAuth, async (req, res) => {
     try {
         const { id, config } = req.body;
 
@@ -107,16 +107,77 @@ router.post('/configure', requireAuth, (req, res) => {
             dhcp: isDhcp
         }, req.ip);
 
-        // In a real scenario, this would trigger netplan/nmcli configuration
-        // For now, we just acknowledge the request
-        res.json({
-            success: true,
-            message: `Configuration for ${id} received (Hardware apply pending)`
-        });
+        // Apply configuration with nmcli
+        const { execSync } = require('child_process');
+        
+        try {
+            // Get connection name for this interface
+            let connectionName;
+            try {
+                connectionName = execSync(`nmcli -t -f NAME,DEVICE connection show | grep "${id}$" | cut -d: -f1`, { encoding: 'utf-8' }).trim();
+            } catch (e) {
+                connectionName = '';
+            }
+            
+            if (!connectionName) {
+                // Create new connection if it doesn't exist
+                if (isDhcp) {
+                    execSync(`sudo nmcli connection add type ethernet con-name "${id}" ifname "${id}" autoconnect yes`, { encoding: 'utf-8' });
+                } else {
+                    const cidr = subnetToCIDR(config.subnet);
+                    const dnsServers = Array.isArray(config.dns) ? config.dns.join(' ') : (config.dns || '8.8.8.8');
+                    
+                    execSync(`sudo nmcli connection add type ethernet con-name "${id}" ifname "${id}" ` +
+                             `ip4 "${config.ip}/${cidr}" gw4 "${config.gateway}" ` +
+                             `ipv4.dns "${dnsServers}" autoconnect yes`, { encoding: 'utf-8' });
+                }
+            } else {
+                // Modify existing connection
+                if (isDhcp) {
+                    execSync(`sudo nmcli connection modify "${connectionName}" ipv4.method auto`, { encoding: 'utf-8' });
+                    execSync(`sudo nmcli connection modify "${connectionName}" ipv4.addresses ''`, { encoding: 'utf-8' });
+                    execSync(`sudo nmcli connection modify "${connectionName}" ipv4.gateway ''`, { encoding: 'utf-8' });
+                } else {
+                    const cidr = subnetToCIDR(config.subnet);
+                    const dnsServers = Array.isArray(config.dns) ? config.dns.join(' ') : (config.dns || '8.8.8.8');
+                    
+                    execSync(`sudo nmcli connection modify "${connectionName}" ipv4.method manual`, { encoding: 'utf-8' });
+                    execSync(`sudo nmcli connection modify "${connectionName}" ipv4.addresses "${config.ip}/${cidr}"`, { encoding: 'utf-8' });
+                    execSync(`sudo nmcli connection modify "${connectionName}" ipv4.gateway "${config.gateway}"`, { encoding: 'utf-8' });
+                    execSync(`sudo nmcli connection modify "${connectionName}" ipv4.dns "${dnsServers}"`, { encoding: 'utf-8' });
+                }
+                
+                // Bring connection down and up
+                execSync(`sudo nmcli connection down "${connectionName}" && sudo nmcli connection up "${connectionName}"`, { encoding: 'utf-8' });
+            }
+            
+            res.json({
+                success: true,
+                message: isDhcp ? 'Network configured with DHCP' : `Network configured: ${config.ip}`
+            });
+        } catch (nmcliError) {
+            console.error('nmcli error:', nmcliError);
+            res.status(500).json({ 
+                error: 'Failed to apply network configuration',
+                details: nmcliError.message
+            });
+        }
     } catch (e) {
         console.error('Network config error:', e);
         res.status(500).json({ error: 'Failed to configure network' });
     }
 });
+
+// Helper: Convert subnet mask to CIDR notation
+function subnetToCIDR(subnet) {
+    const parts = subnet.split('.'). map(Number);
+    let cidr = 0;
+    
+    for (const part of parts) {
+        cidr += part.toString(2).split('1').length - 1;
+    }
+    
+    return cidr;
+}
 
 module.exports = router;

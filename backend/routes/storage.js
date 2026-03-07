@@ -304,17 +304,17 @@ router.post('/pool/configure', requireAuthOrSetup, async (req, res) => {
     // Parity is now optional - SnapRAID will only be configured if parity disks are present
     try {
         const results = [];
-
         // 1. Format disks that need formatting
         for (const disk of validatedDisks) {
             if (disk.format) {
                 // SECURITY: disk.id is now validated by sanitizeDiskId
                 const safeDiskId = disk.id;
-                results.push(`Formatting /dev/${safeDiskId}...`);
+                const filesystem = disk.filesystem || 'ext4'; // Default to ext4 if not specified
+                results.push(`Formatting /dev/${safeDiskId} as ${filesystem}...`);
                 try {
                     // SECURITY: Use execFileSync with explicit arguments instead of shell interpolation
                     execFileSync('sudo', ['parted', '-s', `/dev/${safeDiskId}`, 'mklabel', 'gpt'], { encoding: 'utf8', timeout: 30000 });
-                    execFileSync('sudo', ['parted', '-s', `/dev/${safeDiskId}`, 'mkpart', 'primary', 'ext4', '0%', '100%'], { encoding: 'utf8', timeout: 30000 });
+                    execFileSync('sudo', ['parted', '-s', `/dev/${safeDiskId}`, 'mkpart', 'primary', filesystem, '0%', '100%'], { encoding: 'utf8', timeout: 30000 });
                     execFileSync('sudo', ['partprobe', `/dev/${safeDiskId}`], { encoding: 'utf8', timeout: 10000 });
                     execFileSync('sleep', ['2'], { timeout: 5000 });
 
@@ -324,9 +324,16 @@ router.post('/pool/configure', requireAuthOrSetup, async (req, res) => {
                     if (!safePartition) {
                         throw new Error('Invalid partition derived from disk ID');
                     }
-                    const label = `${disk.role}_${safeDiskId}`.substring(0, 16); // ext4 label max 16 chars
-                    execFileSync('sudo', ['mkfs.ext4', '-F', '-L', label, `/dev/${safePartition}`], { encoding: 'utf8', timeout: 300000 });
-                    results.push(`Formatted /dev/${safePartition} as ext4`);
+                    const label = `${disk.role}_${safeDiskId}`.substring(0, 16); // ext4/xfs label max 16 chars
+                    
+                    // Format with selected filesystem
+                    if (filesystem === 'xfs') {
+                        execFileSync('sudo', ['mkfs.xfs', '-f', '-L', label, `/dev/${safePartition}`], { encoding: 'utf8', timeout: 300000 });
+                    } else {
+                        execFileSync('sudo', ['mkfs.ext4', '-F', '-L', label, `/dev/${safePartition}`], { encoding: 'utf8', timeout: 300000 });
+                    }
+                    
+                    results.push(`Formatted /dev/${safePartition} as ${filesystem}`);
                 } catch (e) {
                     results.push(`Warning: Format failed for ${safeDiskId}: ${e.message}`);
                 }
@@ -1000,8 +1007,12 @@ router.post('/disks/add-to-pool', requireAuth, async (req, res) => {
         if (format) {
             const label = `${role}_${safeDiskId}`.substring(0, 16);
             try {
-                console.log(`Formatting ${partitionPath} as ext4...`);
-                execFileSync('sudo', ['mkfs.ext4', '-F', '-L', label, partitionPath], { encoding: 'utf8', timeout: 300000 });
+                console.log(`Formatting ${partitionPath} as ${filesystem}...`);
+                if (filesystem === 'xfs') {
+                    execFileSync('sudo', ['mkfs.xfs', '-f', '-L', label, partitionPath], { encoding: 'utf8', timeout: 300000 });
+                } else {
+                    execFileSync('sudo', ['mkfs.ext4', '-F', '-L', label, partitionPath], { encoding: 'utf8', timeout: 300000 });
+                }
             } catch (e) {
                 return res.status(500).json({ 
                     error: 'Format failed',
@@ -1241,7 +1252,11 @@ router.post('/disks/mount-standalone', requireAuth, async (req, res) => {
         // Format if requested
         if (format) {
             try {
-                execFileSync('sudo', ['mkfs.ext4', '-F', '-L', safeName, partitionPath], { encoding: 'utf8' });
+                if (filesystem === 'xfs') {
+                    execFileSync('sudo', ['mkfs.xfs', '-f', '-L', safeName, partitionPath], { encoding: 'utf8', timeout: 300000 });
+                } else {
+                    execFileSync('sudo', ['mkfs.ext4', '-F', '-L', safeName, partitionPath], { encoding: 'utf8', timeout: 300000 });
+                }
             } catch (e) {
                 return res.status(500).json({ error: `Format failed: ${e.message}` });
             }
@@ -2330,6 +2345,72 @@ router.get('/disks/health', requireAuth, async (req, res) => {
         res.status(500).json({ error: 'Failed to get disk health: ' + error.message });
     }
 });
+
+// Get I/O statistics for all configured disks
+router.get("/disks/iostats", requireAuth, async (req, res) => {
+    try {
+        const data = getData();
+        const configuredDisks = (data.storageConfig || []).map(d => d.id);
+        
+        if (configuredDisks.length === 0) {
+            return res.json({ disks: [] });
+        }
+        
+        // Get iostat data (1 second sample)
+        const iostatOutput = execFileSync("iostat", ["-dx", "1", "1", "-o", "JSON"], { 
+            encoding: "utf8",
+            timeout: 5000
+        });
+        
+        const iostatData = JSON.parse(iostatOutput);
+        const diskStats = iostatData.sysstat.hosts[0].statistics[0].disk || [];
+        
+        const result = [];
+        
+        for (const diskId of configuredDisks) {
+            const stat = diskStats.find(d => d.disk_device === diskId);
+            
+            if (stat) {
+                // Convert kB/s to MB/s
+                const readMBs = (stat["rkB/s"] / 1024).toFixed(2);
+                const writeMBs = (stat["wkB/s"] / 1024).toFixed(2);
+                
+                // Get error count from /sys/block if available
+                let errorCount = 0;
+                try {
+                    const ioErrPath = `/sys/block/${diskId}/stat`;
+                    if (fs.existsSync(ioErrPath)) {
+                        const statContent = fs.readFileSync(ioErrPath, "utf8");
+                        // /sys/block/*/stat format: field 10 is I/O errors (0-indexed position 9)
+                        const fields = statContent.trim().split(/\s+/);
+                        if (fields.length > 9) {
+                            errorCount = parseInt(fields[9]) || 0;
+                        }
+                    }
+                } catch (e) {
+                    // Ignore error reading /sys
+                }
+                
+                result.push({
+                    diskId: diskId,
+                    readMBs: parseFloat(readMBs),
+                    writeMBs: parseFloat(writeMBs),
+                    ioErrors: errorCount,
+                    utilization: stat.util || 0
+                });
+            } else {
+                // Disk not found in iostat (might be offline)
+                result.push({ diskId: diskId, readMBs: 0, writeMBs: 0, ioErrors: 0, utilization: 0 });
+            }
+        }
+        
+        res.json({ disks: result });
+    } catch (e) {
+        console.error("I/O stats error:", e);
+        res.status(500).json({ error: "Failed to get I/O statistics" });
+    }
+});
+
 
 module.exports = router;
 

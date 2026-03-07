@@ -3288,6 +3288,41 @@ select option,
     font-size: 0.75rem;
 }
 
+/* Disk location badge for list view */
+.fm-file-location {
+    min-width: 60px;
+    text-align: center;
+}
+.fm-disk-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Disk location badge for grid view */
+.fm-grid-disk-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 3px 8px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 600;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    z-index: 2;
+}
+
 .fm-row-actions {
     display: flex;
     gap: 2px;
@@ -4138,6 +4173,65 @@ body.fm-dragging .fm-tree-item {
     font-size: 1.5rem;
     font-weight: 700;
     color: var(--primary);
+}
+
+
+/* Filesystem Selector */
+.wizard-filesystem-section {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--card-border);
+}
+
+.wizard-filesystem-options {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.wizard-fs-option {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--card-bg);
+    border: 2px solid var(--card-border);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.wizard-fs-option:hover {
+    border-color: var(--primary);
+    background: var(--card-hover);
+}
+
+.wizard-fs-option input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.wizard-fs-option input[type="radio"]:checked + .wizard-fs-content {
+    color: var(--primary);
+}
+
+.wizard-fs-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.wizard-fs-content strong {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.wizard-fs-content small {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
 }
 
 /* Progress step */
@@ -12775,4 +12869,297 @@ body.fm-dragging .fm-tree-item {
     .disk-health-row > div {
         width: 100%;
     }
+}
+
+/* I/O Statistics display */
+.mount-iostats {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+    grid-column: 1 / -1;
+    padding: 8px 12px;
+    background: rgba(99, 102, 241, 0.05);
+    border-radius: 8px;
+    margin-top: 8px;
+}
+
+.io-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.85rem;
+    font-family: var(--mono-font, "Fira Code", monospace);
+    color: var(--text);
+}
+
+.io-stat.io-read {
+    color: #10b981;
+}
+
+.io-stat.io-write {
+    color: #3b82f6;
+}
+
+.io-stat.io-error {
+    color: #ef4444;
+    font-weight: 600;
+}
+
+
+/* Wizard Network Configuration */
+.wizard-network-config {
+    margin: 24px 0;
+}
+
+.wizard-section-toggle {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    background: var(--background-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.wizard-section-toggle:hover {
+    background: var(--background-tertiary);
+    border-color: var(--primary);
+}
+
+.wizard-section-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.wizard-section-text {
+    flex: 1;
+}
+
+.wizard-section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 4px 0;
+}
+
+.wizard-section-subtitle {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.wizard-section-arrow {
+    font-size: 12px;
+    color: var(--text-secondary);
+    transition: transform 0.2s ease;
+}
+
+.wizard-section-toggle.expanded .wizard-section-arrow {
+    transform: rotate(180deg);
+}
+
+.wizard-network-content {
+    margin-top: 16px;
+    padding: 20px;
+    background: var(--background-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+}
+
+.wizard-network-mode {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.wizard-radio-option {
+    display: flex;
+    cursor: pointer;
+}
+
+.wizard-radio-option input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+}
+
+.wizard-radio-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    background: var(--background-primary);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    width: 100%;
+    transition: all 0.2s ease;
+}
+
+.wizard-radio-option input[type="radio"]:checked + .wizard-radio-label {
+    border-color: var(--primary);
+    background: rgba(var(--primary-rgb), 0.05);
+}
+
+.wizard-radio-label:hover {
+    border-color: var(--primary);
+}
+
+.wizard-radio-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.wizard-radio-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.wizard-radio-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.wizard-network-manual {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+.wizard-form-group {
+    margin-bottom: 16px;
+}
+
+.wizard-form-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.wizard-form-input {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: var(--text-primary);
+    background: var(--background-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+.wizard-form-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.1);
+}
+
+.wizard-form-hint {
+    display: block;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+.wizard-btn-secondary {
+    background: var(--background-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.wizard-btn-secondary:hover {
+    background: var(--background-secondary);
+    border-color: var(--primary);
+}
+
+.wizard-network-status {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    display: none;
+}
+
+.wizard-network-status.success {
+    display: block;
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    color: #22c55e;
+}
+
+.wizard-network-status.error {
+    display: block;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+}
+
+.wizard-network-status.info {
+    display: block;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: #3b82f6;
+}
+
+/* Filesystem Selector */
+.wizard-filesystem-section {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--card-border);
+}
+
+.wizard-filesystem-options {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.wizard-fs-option {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--card-bg);
+    border: 2px solid var(--card-border);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.wizard-fs-option:hover {
+    border-color: var(--primary);
+    background: var(--card-hover);
+}
+
+.wizard-fs-option input[type='radio'] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.wizard-fs-option input[type='radio']:checked + .wizard-fs-content {
+    color: var(--primary);
+}
+
+.wizard-fs-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.wizard-fs-content strong {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.wizard-fs-content small {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
 }
