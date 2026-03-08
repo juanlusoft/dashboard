@@ -3912,7 +3912,12 @@ async function renderDockerManager() {
                             const selector = document.createElement('div');
                             selector.className = 'docker-port-selector';
                             const btnRect = webBtn.getBoundingClientRect();
-                            selector.style.cssText = `position:fixed;z-index:10000;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:6px;box-shadow:0 4px 16px rgba(0,0,0,0.25);display:flex;flex-direction:column;gap:4px;top:${btnRect.bottom + 4}px;left:${btnRect.left}px;`;
+                            // Position above the button to avoid overlapping with notes section below
+                            const popupHeight = publicPorts.length * 38 + 16; // estimate
+                            const topPos = btnRect.top - popupHeight - 4;
+                            const useAbove = topPos > 10; // fall back to below if not enough space above
+                            const finalTop = useAbove ? topPos : (btnRect.bottom + 4);
+                            selector.style.cssText = `position:fixed;z-index:10000;background:var(--bg-primary, #fff);border:2px solid var(--accent, #4f46e5);border-radius:10px;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,0.3);display:flex;flex-direction:column;gap:4px;top:${finalTop}px;left:${btnRect.left}px;`;
                             for (const p of publicPorts) {
                                 const opt = document.createElement('button');
                                 opt.className = 'docker-action-btn web';
