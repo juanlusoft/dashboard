@@ -73,6 +73,9 @@ function getUsers() {
  */
 function sanitizeUser(user) {
   const { password, ...safe } = user;
+  // Ensure paths fields are always present
+  safe.homePath = safe.homePath || '';
+  safe.allowedPaths = safe.allowedPaths || [];
   return safe;
 }
 
@@ -436,6 +439,109 @@ router.delete('/:username', requireAdmin, async (req, res) => {
   } catch (err) {
     console.error('Delete user error:', err.message);
     res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+/**
+ * PUT /:username/paths
+ * Configure file paths for a user (admin only)
+ * Body: { homePath, allowedPaths }
+ * - homePath: user's default directory in File Station (e.g. /mnt/storage/homes/username)
+ * - allowedPaths: array of paths the user can access (empty = full access for admin/user roles)
+ */
+router.put('/:username/paths', requireAdmin, async (req, res) => {
+  try {
+    const targetUsername = req.params.username;
+    const { homePath, allowedPaths } = req.body;
+
+    const users = getUsers();
+    const userIndex = users.findIndex(
+      u => u.username.toLowerCase() === targetUsername.toLowerCase()
+    );
+
+    if (userIndex === -1) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Validate homePath
+    if (homePath !== undefined) {
+      if (typeof homePath !== 'string') {
+        return res.status(400).json({ error: 'homePath must be a string' });
+      }
+      // Must be within /mnt/storage or empty
+      if (homePath && !homePath.startsWith('/mnt/storage')) {
+        return res.status(400).json({ error: 'homePath must be within /mnt/storage' });
+      }
+      users[userIndex].homePath = homePath;
+
+      // Create home directory if it doesn't exist
+      if (homePath) {
+        const fs = require('fs');
+        const { execFileSync } = require('child_process');
+        try {
+          if (!fs.existsSync(homePath)) {
+            execFileSync('sudo', ['mkdir', '-p', homePath], { timeout: 5000 });
+            execFileSync('sudo', ['chown', `${targetUsername}:${targetUsername}`, homePath], { timeout: 5000 });
+            execFileSync('sudo', ['chmod', '750', homePath], { timeout: 5000 });
+          }
+        } catch (e) {
+          console.warn('Could not create home directory:', e.message);
+        }
+      }
+    }
+
+    // Validate allowedPaths
+    if (allowedPaths !== undefined) {
+      if (!Array.isArray(allowedPaths)) {
+        return res.status(400).json({ error: 'allowedPaths must be an array' });
+      }
+      // Validate each path
+      for (const p of allowedPaths) {
+        if (typeof p !== 'string' || !p.startsWith('/mnt/storage')) {
+          return res.status(400).json({ error: 'Each path must be within /mnt/storage' });
+        }
+      }
+      users[userIndex].allowedPaths = allowedPaths;
+    }
+
+    saveUsers(users);
+
+    logSecurityEvent('USER_PATHS_UPDATED', req.user.username, {
+      ip: req.ip,
+      targetUser: targetUsername,
+      homePath: users[userIndex].homePath,
+      allowedPaths: users[userIndex].allowedPaths,
+    });
+
+    res.json({
+      message: 'User paths updated',
+      user: sanitizeUser(users[userIndex]),
+    });
+  } catch (err) {
+    console.error('Update user paths error:', err.message);
+    res.status(500).json({ error: 'Failed to update user paths' });
+  }
+});
+
+/**
+ * GET /:username/paths
+ * Get file paths configuration for a user
+ */
+router.get('/:username/paths', requireAdmin, (req, res) => {
+  try {
+    const targetUsername = req.params.username;
+    const user = findUser(targetUsername);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({
+      username: user.username,
+      homePath: user.homePath || '',
+      allowedPaths: user.allowedPaths || [],
+    });
+  } catch (err) {
+    console.error('Get user paths error:', err.message);
+    res.status(500).json({ error: 'Failed to get user paths' });
   }
 });
 

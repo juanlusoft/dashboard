@@ -6065,6 +6065,22 @@ async function renderFilesView() {
     // FILE MANAGER - SYNOLOGY STYLE LAYOUT
     // ══════════════════════════════════════════════════════════════════════════
     
+    // Load user's home path on first render (if not already set)
+    if (currentFilePath === '/' && !state._fileHomeLoaded) {
+        try {
+            const homeRes = await authFetch(`${API_BASE}/files/user-home`);
+            if (homeRes.ok) {
+                const homeData = await homeRes.json();
+                if (homeData.homePath && homeData.homePath !== '/') {
+                    currentFilePath = homeData.homePath;
+                }
+                state._userFileRestrictions = homeData.hasRestrictions;
+                state._userAllowedPaths = homeData.allowedPaths || [];
+            }
+        } catch (e) {}
+        state._fileHomeLoaded = true;
+    }
+    
     // Revoke previous thumbnail blob URLs to prevent memory leaks
     _cleanupThumbBlobs();
 
@@ -7685,6 +7701,14 @@ async function loadUsers() {
             const actionsDiv = document.createElement('div');
             actionsDiv.className = 'users-actions';
 
+            // Paths button (for all users)
+            const pathsBtn = document.createElement('button');
+            pathsBtn.textContent = '📁';
+            pathsBtn.title = 'Gestionar rutas de archivos';
+            pathsBtn.className = 'users-action-btn';
+            pathsBtn.addEventListener('click', () => showUserPathsModal(user.username));
+            actionsDiv.appendChild(pathsBtn);
+
             // Edit button (for all users except self — admin can change role/password)
             if (user.username !== state.user?.username) {
                 const editBtn = document.createElement('button');
@@ -7774,6 +7798,103 @@ function showUserForm(editUser = null) {
             await loadUsers();
         } catch (err) {
             alert('Error: ' + err.message);
+        }
+    });
+}
+
+async function showUserPathsModal(username) {
+    // Remove existing modal
+    document.querySelector('.modal.user-paths-modal')?.remove();
+
+    // Fetch current paths
+    let pathsData = { homePath: '', allowedPaths: [] };
+    try {
+        const res = await authFetch(`${API_BASE}/users/${encodeURIComponent(username)}/paths`);
+        if (res.ok) pathsData = await res.json();
+    } catch (e) {}
+
+    const modal = document.createElement('div');
+    modal.className = 'modal active user-paths-modal';
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width:520px;">
+            <div class="modal-header">
+                <h3>📁 Rutas de Archivos — ${escapeHtml(username)}</h3>
+                <button class="modal-close" id="up-modal-close">&times;</button>
+            </div>
+            <div style="padding:16px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                    <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">🏠 Directorio Personal</label>
+                    <input type="text" id="up-home-path" value="${escapeHtml(pathsData.homePath)}" placeholder="/mnt/storage/homes/${escapeHtml(username)}" 
+                        style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg-input, var(--bg-secondary));color:var(--text-primary);">
+                    <span style="font-size:0.75rem;color:var(--text-secondary);">Se abrirá como directorio inicial en el Gestor de Archivos. Se crea automáticamente.</span>
+                </div>
+                <div>
+                    <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">🔒 Rutas Permitidas</label>
+                    <span style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-bottom:8px;">
+                        Si se configuran rutas, el usuario SOLO podrá acceder a estas carpetas. Vacío = acceso completo.
+                    </span>
+                    <div id="up-allowed-paths" style="display:flex;flex-direction:column;gap:6px;">
+                        ${(pathsData.allowedPaths || []).map((p, i) => `
+                            <div class="up-path-row" style="display:flex;gap:6px;align-items:center;">
+                                <input type="text" class="up-allowed-input" value="${escapeHtml(p)}" placeholder="/mnt/storage/media" 
+                                    style="flex:1;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-input, var(--bg-secondary));color:var(--text-primary);font-size:0.85rem;">
+                                <button class="up-remove-path" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:1.1rem;" title="Eliminar">✕</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button id="up-add-path" style="margin-top:6px;padding:4px 12px;font-size:0.8rem;border:1px dashed var(--border);border-radius:6px;background:none;color:var(--text-secondary);cursor:pointer;">+ Añadir ruta</button>
+                </div>
+                <button id="up-save" class="btn-primary" style="padding:10px;font-size:0.9rem;">💾 Guardar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    // Bind close
+    document.getElementById('up-modal-close').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+    // Bind remove path buttons
+    modal.querySelectorAll('.up-remove-path').forEach(btn => {
+        btn.addEventListener('click', () => btn.closest('.up-path-row').remove());
+    });
+
+    // Add path button
+    document.getElementById('up-add-path').addEventListener('click', () => {
+        const container = document.getElementById('up-allowed-paths');
+        const row = document.createElement('div');
+        row.className = 'up-path-row';
+        row.style.cssText = 'display:flex;gap:6px;align-items:center;';
+        row.innerHTML = `
+            <input type="text" class="up-allowed-input" value="" placeholder="/mnt/storage/media" 
+                style="flex:1;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-input, var(--bg-secondary));color:var(--text-primary);font-size:0.85rem;">
+            <button class="up-remove-path" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:1.1rem;" title="Eliminar">✕</button>
+        `;
+        row.querySelector('.up-remove-path').addEventListener('click', () => row.remove());
+        container.appendChild(row);
+    });
+
+    // Save
+    document.getElementById('up-save').addEventListener('click', async () => {
+        const homePath = document.getElementById('up-home-path').value.trim();
+        const allowedInputs = modal.querySelectorAll('.up-allowed-input');
+        const allowedPaths = Array.from(allowedInputs).map(i => i.value.trim()).filter(v => v);
+
+        try {
+            const res = await authFetch(`${API_BASE}/users/${encodeURIComponent(username)}/paths`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ homePath, allowedPaths })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showNotification(data.message || 'Rutas guardadas', 'success');
+                modal.remove();
+            } else {
+                showNotification(data.error || 'Error', 'error');
+            }
+        } catch (e) {
+            showNotification(e.message, 'error');
         }
     });
 }

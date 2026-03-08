@@ -55,8 +55,9 @@ function guessMimeType(filePath) {
 /**
  * Validate a path is within /mnt/storage. Returns sanitized path or sends 400 error.
  * Returns null if invalid (caller should return early).
+ * If the user has allowedPaths configured, restricts access to those paths only.
  */
-function validatePath(inputPath, res) {
+function validatePath(inputPath, res, req) {
   // Treat '/' or empty as root of storage
   let relativePath = inputPath || '/';
   if (relativePath === '/') relativePath = '.';
@@ -68,6 +69,25 @@ function validatePath(inputPath, res) {
     res.status(400).json({ error: 'Invalid path: must be within storage directory' });
     return null;
   }
+
+  // Check per-user path restrictions (if configured)
+  if (req && req.user) {
+    const data = getData();
+    const users = data.users || [];
+    const user = users.find(u => u.username.toLowerCase() === req.user.username.toLowerCase())
+                  || (data.user && data.user.username === req.user.username ? data.user : null);
+    
+    if (user && user.allowedPaths && user.allowedPaths.length > 0) {
+      const isAllowed = user.allowedPaths.some(allowed => 
+        sanitized === allowed || sanitized.startsWith(allowed + '/')
+      );
+      if (!isAllowed) {
+        res.status(403).json({ error: 'Access denied: path not in your allowed directories' });
+        return null;
+      }
+    }
+  }
+
   return sanitized;
 }
 
@@ -194,10 +214,42 @@ router.use(requireAuth);
  * List directory contents with file metadata
  * Permission: read
  */
+
+/**
+ * GET /user-home
+ * Get the current user's configured home path and allowed paths
+ */
+router.get('/user-home', requirePermission('read'), (req, res) => {
+  try {
+    const data = getData();
+    const users = data.users || [];
+    const user = users.find(u => u.username.toLowerCase() === req.user.username.toLowerCase())
+                  || (data.user && data.user.username === req.user.username ? data.user : null);
+    
+    const homePath = (user && user.homePath) || '';
+    const allowedPaths = (user && user.allowedPaths) || [];
+    
+    // Return path relative to STORAGE_BASE for the frontend
+    let relativHome = '';
+    if (homePath && homePath.startsWith(STORAGE_BASE)) {
+      relativHome = homePath.substring(STORAGE_BASE.length) || '/';
+    }
+
+    res.json({
+      homePath: relativHome,
+      allowedPaths: allowedPaths.map(p => p.startsWith(STORAGE_BASE) ? p.substring(STORAGE_BASE.length) || '/' : p),
+      hasRestrictions: allowedPaths.length > 0,
+    });
+  } catch (err) {
+    console.error('Get user home error:', err.message);
+    res.json({ homePath: '', allowedPaths: [], hasRestrictions: false });
+  }
+});
+
 router.get('/list', requirePermission('read'), (req, res) => {
   try {
     const inputPath = req.query.path || '/';
-    const dirPath = validatePath(inputPath, res);
+    const dirPath = validatePath(inputPath, res, req);
     if (dirPath === null) return;
 
     // Verify the path is a directory
@@ -269,7 +321,7 @@ router.get('/download', requirePermission('read'), (req, res) => {
       return res.status(400).json({ error: 'Path parameter required' });
     }
 
-    const filePath = validatePath(inputPath, res);
+    const filePath = validatePath(inputPath, res, req);
     if (filePath === null) return;
 
     if (!fs.existsSync(filePath)) {
@@ -376,7 +428,7 @@ router.post('/mkdir', requirePermission('write'), (req, res) => {
       return res.status(400).json({ error: 'Path parameter required' });
     }
 
-    const dirPath = validatePath(inputPath, res);
+    const dirPath = validatePath(inputPath, res, req);
     if (dirPath === null) return;
 
     if (fs.existsSync(dirPath)) {
@@ -406,7 +458,7 @@ router.post('/rename', requirePermission('write'), (req, res) => {
       return res.status(400).json({ error: 'Both oldPath and newPath are required' });
     }
 
-    const oldPath = validatePath(oldInput, res);
+    const oldPath = validatePath(oldInput, res, req);
     if (oldPath === null) return;
     const newPath = sanitizePathWithinBase(newInput, STORAGE_BASE);
     if (newPath === null) {
@@ -443,7 +495,7 @@ router.post('/delete', requirePermission('delete'), (req, res) => {
       return res.status(400).json({ error: 'Path parameter required' });
     }
 
-    const targetPath = validatePath(inputPath, res);
+    const targetPath = validatePath(inputPath, res, req);
     if (targetPath === null) return;
 
     if (!fs.existsSync(targetPath)) {
@@ -482,7 +534,7 @@ router.post('/move', requirePermission('write'), (req, res) => {
       return res.status(400).json({ error: 'Both source and destination are required' });
     }
 
-    const sourcePath = validatePath(srcInput, res);
+    const sourcePath = validatePath(srcInput, res, req);
     if (sourcePath === null) return;
     const destPath = sanitizePathWithinBase(destInput, STORAGE_BASE);
     if (destPath === null) {
@@ -516,7 +568,7 @@ router.post('/copy', requirePermission('write'), (req, res) => {
       return res.status(400).json({ error: 'Both source and destination are required' });
     }
 
-    const sourcePath = validatePath(srcInput, res);
+    const sourcePath = validatePath(srcInput, res, req);
     if (sourcePath === null) return;
     const destPath = sanitizePathWithinBase(destInput, STORAGE_BASE);
     if (destPath === null) {
@@ -549,7 +601,7 @@ router.get('/info', requirePermission('read'), (req, res) => {
       return res.status(400).json({ error: 'Path parameter required' });
     }
 
-    const filePath = validatePath(inputPath, res);
+    const filePath = validatePath(inputPath, res, req);
     if (filePath === null) return;
 
     if (!fs.existsSync(filePath)) {
@@ -593,7 +645,7 @@ router.get('/search', requirePermission('read'), (req, res) => {
       return res.status(400).json({ error: 'Search query is required' });
     }
 
-    const searchDir = validatePath(inputPath, res);
+    const searchDir = validatePath(inputPath, res, req);
     if (searchDir === null) return;
 
     if (!fs.existsSync(searchDir) || !fs.statSync(searchDir).isDirectory()) {
