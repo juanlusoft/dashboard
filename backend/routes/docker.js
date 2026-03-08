@@ -819,8 +819,30 @@ router.get('/logs/:containerId', requireAuth, async (req, res) => {
 
         const logs = await container.logs(opts);
         
-        // Parse logs (remove Docker stream header bytes)
-        const logText = logs.toString('utf8');
+        // Parse Docker multiplexed stream format:
+        // Each frame has an 8-byte header: [stream_type(1), 0, 0, 0, size(4)]
+        // Strip headers to get clean log text
+        const buf = Buffer.isBuffer(logs) ? logs : Buffer.from(logs);
+        let logText = '';
+        let offset = 0;
+        while (offset < buf.length) {
+            if (offset + 8 <= buf.length) {
+                const streamType = buf[offset];
+                // Valid stream types: 0=stdin, 1=stdout, 2=stderr
+                if (streamType <= 2 && buf[offset + 1] === 0 && buf[offset + 2] === 0 && buf[offset + 3] === 0) {
+                    const frameSize = buf.readUInt32BE(offset + 4);
+                    offset += 8;
+                    if (offset + frameSize <= buf.length) {
+                        logText += buf.slice(offset, offset + frameSize).toString('utf8');
+                        offset += frameSize;
+                        continue;
+                    }
+                }
+            }
+            // Fallback: not multiplexed (TTY mode), return as-is
+            logText = buf.toString('utf8');
+            break;
+        }
         
         res.json({ 
             success: true, 
