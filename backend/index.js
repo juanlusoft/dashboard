@@ -237,7 +237,8 @@ app.use(cors({
 app.use(generalLimiter);
 
 // Body parsing
-app.use(express.json({ limit: '10kb' }));
+// 256kb allows docker-compose files and larger configs while still limiting abuse
+app.use(express.json({ limit: '256kb' }));
 
 // CSRF protection for state-changing requests
 app.use(csrfProtection);
