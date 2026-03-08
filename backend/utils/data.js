@@ -1,9 +1,9 @@
 /**
  * HomePiNAS - Data Storage Utilities
- * v1.5.6 - Modular Architecture
+ * v1.5.7 - Modular Architecture
  *
  * JSON file-based configuration storage with atomic writes
- * to prevent data corruption from concurrent access.
+ * and in-process mutex to prevent concurrent write corruption.
  */
 
 const fs = require('fs');
@@ -41,6 +41,48 @@ const initialState = {
         history: []
     }
 };
+
+/**
+ * In-process mutex for data file access.
+ * Node.js is single-threaded but async handlers can interleave:
+ *   Request A: getData() → modify → (await something) → saveData()
+ *   Request B: getData() → modify → saveData()  ← overwrites A's changes
+ *
+ * withData() ensures read-modify-write is atomic.
+ */
+let _dataLock = Promise.resolve();
+
+/**
+ * Execute a read-modify-write operation atomically.
+ * The callback receives current data and must return the modified data.
+ * 
+ * Usage:
+ *   await withData(data => {
+ *       data.users.push(newUser);
+ *       return data;
+ *   });
+ *
+ * For read-only access, use getData() directly (no lock needed).
+ */
+function withData(fn) {
+    let release;
+    const next = new Promise(resolve => { release = resolve; });
+    const prev = _dataLock;
+    _dataLock = next;
+
+    return prev.then(async () => {
+        try {
+            const data = getData();
+            const result = await fn(data);
+            if (result !== undefined) {
+                saveData(result);
+            }
+            return result;
+        } finally {
+            release();
+        }
+    });
+}
 
 /**
  * Ensure config directory exists with secure permissions
@@ -91,6 +133,7 @@ function saveData(data) {
 module.exports = {
     getData,
     saveData,
+    withData,
     DATA_FILE,
     initialState
 };
