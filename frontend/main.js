@@ -3226,7 +3226,7 @@ async function renderStorageDashboard() {
                 if (healthData.summary.warning > 0) summaryParts.push(`${healthData.summary.warning} ${t('diskHealth.warning', 'Atención')}`);
                 if (healthData.summary.critical > 0) summaryParts.push(`${healthData.summary.critical} ${t('diskHealth.critical', 'Crítico')}`);
                 const summaryClass = healthData.summary.critical > 0 ? 'critical' : healthData.summary.warning > 0 ? 'warning' : 'ok';
-                const summaryBadge = `<span class="health-summary-badge ${summaryClass}">${summaryParts.join(' · ')}</span>`;
+                const summaryBadge = `<span class="health-summary-badge ${escapeHtml(summaryClass)}">${escapeHtml(summaryParts.join(' · '))}</span>`;
                 healthHeader.innerHTML = `<h3>🏥 ${t('diskHealth.title', 'Salud de Discos')}</h3>${summaryBadge}`;
                 healthCard.appendChild(healthHeader);
                 
@@ -3547,7 +3547,7 @@ async function renderStorageDashboard() {
 
             const tempIndicator = document.createElement('div');
             tempIndicator.className = `temp-indicator ${tempClass}`;
-            tempIndicator.innerHTML = `<span>🌡️</span><span>${temp}°C</span>`;
+            tempIndicator.innerHTML = `<span>🌡️</span><span>${escapeHtml(String(temp))}°C</span>`;
 
             telemetryRow.appendChild(tempIndicator);
 
@@ -4820,11 +4820,11 @@ function renderSystemView() {
 
     const uptimeRow = document.createElement('div');
     uptimeRow.className = 'stat-row';
-    uptimeRow.innerHTML = `<span>${t('system.logicUptime', 'Tiempo Activo Lógico')}</span> <span>${uptimeStr}</span>`;
+    uptimeRow.innerHTML = `<span>${t('system.logicUptime', 'Tiempo Activo Lógico')}</span> <span>${escapeHtml(uptimeStr)}</span>`;
 
     const hostnameRow = document.createElement('div');
     hostnameRow.className = 'stat-row';
-    hostnameRow.innerHTML = `<span>${t('system.nodeName', 'Nombre del Nodo')}</span> <span>${hostname}</span>`;
+    hostnameRow.innerHTML = `<span>${t('system.nodeName', 'Nombre del Nodo')}</span> <span>${escapeHtml(hostname)}</span>`;
 
     infoCard.appendChild(infoTitle);
     infoCard.appendChild(uptimeRow);
