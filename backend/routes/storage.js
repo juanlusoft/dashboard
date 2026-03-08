@@ -496,17 +496,26 @@ exclude .fseventsd
         let fstabEntries = '\n# HomePiNAS Storage Configuration\n';
 
         // Helper: resolve UUID or fall back to /dev/path
+        // Detect actual filesystem type for each partition (respects ext4/xfs choice)
         const addFstabEntry = (partition, mountPoint) => {
+            // Detect filesystem type from the formatted partition
+            let fsType = 'ext4';
+            try {
+                const detected = execFileSync('sudo', ['blkid', '-s', 'TYPE', '-o', 'value', `/dev/${partition}`],
+                    { encoding: 'utf8', timeout: 10000 }).trim();
+                if (detected === 'xfs' || detected === 'ext4') fsType = detected;
+            } catch (e) {}
+
             try {
                 const uuid = execFileSync('sudo', ['blkid', '-s', 'UUID', '-o', 'value', `/dev/${partition}`], 
                     { encoding: 'utf8', timeout: 10000 }).trim();
                 if (uuid && uuid.length > 8 && !uuid.includes('$') && !uuid.includes('(')) {
-                    fstabEntries += `UUID=${uuid} ${mountPoint} ext4 defaults,nofail 0 2\n`;
+                    fstabEntries += `UUID=${uuid} ${mountPoint} ${fsType} defaults,nofail 0 2\n`;
                     return;
                 }
             } catch (e) {}
             // Fallback: use device path directly
-            fstabEntries += `/dev/${partition} ${mountPoint} ext4 defaults,nofail 0 2\n`;
+            fstabEntries += `/dev/${partition} ${mountPoint} ${fsType} defaults,nofail 0 2\n`;
             results.push(`Warning: UUID not found for /dev/${partition}, using device path`);
         };
 

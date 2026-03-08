@@ -244,6 +244,23 @@
                             <!-- Data disk cards will be injected here -->
                         </div>
 
+                        <div class="wizard-info-box" style="background:var(--bg-secondary);border:1px solid var(--border);">
+                            <span class="wizard-info-box-icon">📦</span>
+                            <div class="wizard-info-box-text">
+                                <strong data-i18n="wizard.filesystemLabel">Sistema de archivos:</strong>
+                                <div style="display:flex;gap:16px;margin-top:8px;">
+                                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                                        <input type="radio" name="wizard-filesystem" value="ext4" checked>
+                                        <span><strong>ext4</strong> — Estable, amplio soporte, ideal para NAS</span>
+                                    </label>
+                                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                                        <input type="radio" name="wizard-filesystem" value="xfs">
+                                        <span><strong>XFS</strong> — Alto rendimiento, mejor con archivos grandes</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="wizard-info-box warning">
                             <span class="wizard-info-box-icon">⚠️</span>
                             <div class="wizard-info-box-text" data-i18n="wizard.formatWarning">
