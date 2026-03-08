@@ -36,17 +36,19 @@ router.post('/reset', requireAuth, requireAdmin, criticalLimiter, (req, res) => 
     }
 });
 
-// Factory reset (public - from login page when locked out)
+// Factory reset (requires authentication + admin role)
 // Rate limited: 1 request per hour per IP
+// SECURITY: Previously public (no auth). Now requires admin to prevent
+// anyone on the local network from wiping the NAS configuration.
 const factoryResetLimiter = require('express-rate-limit')({
     windowMs: 60 * 60 * 1000, // 1 hour
     max: 1,
     message: { error: 'Too many reset attempts. Try again in 1 hour.' }
 });
 
-router.post('/factory-reset', factoryResetLimiter, (req, res) => {
+router.post('/factory-reset', requireAuth, requireAdmin, factoryResetLimiter, (req, res) => {
     try {
-        logSecurityEvent('FACTORY_RESET', { source: 'login-page' }, req.ip);
+        logSecurityEvent('FACTORY_RESET', { user: req.user.username, source: 'dashboard' }, req.ip);
 
         if (fs.existsSync(DATA_FILE)) {
             fs.unlinkSync(DATA_FILE);
