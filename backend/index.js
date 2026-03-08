@@ -35,6 +35,7 @@ const shortcutsRoutes = require('./routes/shortcuts');
 const filesRoutes = require('./routes/files');
 const usersRoutes = require('./routes/users');
 const sambaRoutes = require('./routes/samba');
+const nfsRoutes = require('./routes/nfs');
 const notificationsRoutes = require('./routes/notifications');
 const totpRoutes = require('./routes/totp');
 const logsRoutes = require('./routes/logs');
@@ -304,6 +305,7 @@ app.use('/api/users', usersRoutes);
 
 // Samba Share Management routes
 app.use('/api/samba', sambaRoutes);
+app.use('/api/nfs', nfsRoutes);
 
 // Notification routes (email + Telegram)
 app.use('/api/notifications', notificationsRoutes);

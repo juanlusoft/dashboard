@@ -2497,6 +2497,7 @@ async function renderContent(view) {
         await renderNetworkManager();
         // Append Samba + DDNS sections after network interfaces
         await renderSambaSection(dashboardContent);
+        await renderNFSSection(dashboardContent);
         await renderDDNSSection(dashboardContent);
     }
     else if (view === 'backup') await renderBackupView();
@@ -8932,6 +8933,169 @@ async function renderNotificationsSection(container) {
                 showNotification(data.error || 'Error', 'error');
             }
         } catch (err) { showNotification('Error: ' + err.message, 'error'); }
+    });
+}
+
+// =============================================================================
+// NFS SECTION (Network view)
+// =============================================================================
+
+async function renderNFSSection(container) {
+    const card = document.createElement('div');
+    card.className = 'misc-section-card';
+    card.innerHTML = `
+        <div class="misc-section-header">
+            <h3>📁 NFS ${t('network.shares', 'Carpetas Compartidas')}</h3>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <span id="nfs-status-badge" class="misc-badge">...</span>
+                <button id="nfs-add-btn" class="btn-primary" style="font-size:0.8rem;padding:4px 12px;">+ ${t('network.addShare', 'Añadir')}</button>
+            </div>
+        </div>
+        <div id="nfs-shares-list" style="margin-top:12px;"></div>
+    `;
+    container.appendChild(card);
+
+    // Load NFS status and shares
+    async function loadNFS() {
+        const listEl = document.getElementById('nfs-shares-list');
+        const badgeEl = document.getElementById('nfs-status-badge');
+        
+        try {
+            const [statusRes, sharesRes] = await Promise.all([
+                authFetch(`${API_BASE}/nfs/status`),
+                authFetch(`${API_BASE}/nfs/shares`)
+            ]);
+            const status = await statusRes.json();
+            const sharesData = await sharesRes.json();
+            
+            // Update status badge
+            if (status.running) {
+                badgeEl.textContent = `● ${t('network.active', 'Activo')}`;
+                badgeEl.className = 'misc-badge misc-badge-success';
+            } else {
+                badgeEl.textContent = `○ ${t('network.inactive', 'Inactivo')}`;
+                badgeEl.className = 'misc-badge misc-badge-warning';
+            }
+            
+            const shares = sharesData.shares || [];
+            if (shares.length === 0) {
+                listEl.innerHTML = `<p style="color:var(--text-secondary);font-size:0.9rem;padding:8px 0;">${t('network.noNFSShares', 'No hay carpetas NFS compartidas. Añade una para compartir archivos en tu red local.')}</p>`;
+                return;
+            }
+            
+            listEl.innerHTML = shares.map(share => `
+                <div class="misc-item-row" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);">
+                    <div>
+                        <div style="font-weight:600;font-size:0.9rem;">${escapeHtml(share.path)}</div>
+                        <div style="font-size:0.8rem;color:var(--text-secondary);">
+                            ${escapeHtml(share.network)} · ${share.readOnly ? '🔒 ' + t('network.readOnly', 'Solo lectura') : '✏️ ' + t('network.readWrite', 'Lectura/Escritura')}
+                            ${share.options ? ' · <code style="font-size:0.75rem;">' + escapeHtml(share.options) + '</code>' : ''}
+                        </div>
+                    </div>
+                    <button class="docker-action-btn" style="color:#ef4444;font-size:0.8rem;" data-nfs-delete="${escapeHtml(share.path)}">🗑️ ${t('common.delete', 'Eliminar')}</button>
+                </div>
+            `).join('');
+            
+            // Bind delete buttons
+            listEl.querySelectorAll('[data-nfs-delete]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const sharePath = btn.dataset.nfsDelete;
+                    if (!confirm(`${t('network.confirmDeleteNFS', '¿Eliminar la carpeta NFS compartida')} ${sharePath}?`)) return;
+                    try {
+                        const res = await authFetch(`${API_BASE}/nfs/shares`, {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ path: sharePath })
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            showNotification(data.message || 'NFS share deleted', 'success');
+                            loadNFS();
+                        } else {
+                            showNotification(data.error || 'Error', 'error');
+                        }
+                    } catch (e) {
+                        showNotification(e.message, 'error');
+                    }
+                });
+            });
+        } catch (e) {
+            listEl.innerHTML = `<p style="color:var(--text-secondary);font-size:0.85rem;">NFS ${t('network.notAvailable', 'no disponible')} (nfs-server ${t('network.notInstalled', 'no instalado')})</p>`;
+            badgeEl.textContent = '—';
+            badgeEl.className = 'misc-badge';
+        }
+    }
+    
+    // Add share button
+    document.getElementById('nfs-add-btn').addEventListener('click', () => {
+        showNFSAddModal(loadNFS);
+    });
+    
+    await loadNFS();
+}
+
+function showNFSAddModal(onSuccess) {
+    const existing = document.querySelector('.modal.nfs-add-modal');
+    if (existing) existing.remove();
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal active nfs-add-modal';
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width:450px;">
+            <div class="modal-header">
+                <h3>📁 ${t('network.addNFSShare', 'Nueva Carpeta NFS')}</h3>
+                <button class="modal-close" id="nfs-modal-close">&times;</button>
+            </div>
+            <div style="padding:16px;display:flex;flex-direction:column;gap:14px;">
+                <div>
+                    <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">${t('network.sharePath', 'Ruta de la carpeta')}</label>
+                    <input type="text" id="nfs-path" placeholder="/mnt/storage/media" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg-input, var(--bg-secondary));color:var(--text-primary);">
+                    <span style="font-size:0.75rem;color:var(--text-secondary);">${t('network.mustBeInStorage', 'Debe estar dentro de /mnt/storage')}</span>
+                </div>
+                <div>
+                    <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">${t('network.allowedNetwork', 'Red permitida')}</label>
+                    <input type="text" id="nfs-network" placeholder="192.168.1.0/24" value="192.168.1.0/24" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg-input, var(--bg-secondary));color:var(--text-primary);">
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <input type="checkbox" id="nfs-readonly">
+                    <label for="nfs-readonly" style="font-size:0.85rem;">${t('network.readOnly', 'Solo lectura')}</label>
+                </div>
+                <button id="nfs-save-btn" class="btn-primary" style="padding:10px;font-size:0.9rem;">💾 ${t('common.save', 'Guardar')}</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    
+    document.getElementById('nfs-modal-close').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    
+    document.getElementById('nfs-save-btn').addEventListener('click', async () => {
+        const sharePath = document.getElementById('nfs-path').value.trim();
+        const network = document.getElementById('nfs-network').value.trim();
+        const readOnly = document.getElementById('nfs-readonly').checked;
+        
+        if (!sharePath) {
+            showNotification(t('network.pathRequired', 'La ruta es obligatoria'), 'warning');
+            return;
+        }
+        
+        try {
+            const res = await authFetch(`${API_BASE}/nfs/shares`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: sharePath, network, readOnly })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showNotification(data.message || 'NFS share created', 'success');
+                modal.remove();
+                if (onSuccess) onSuccess();
+            } else {
+                showNotification(data.error || 'Error', 'error');
+            }
+        } catch (e) {
+            showNotification(e.message, 'error');
+        }
     });
 }
 
