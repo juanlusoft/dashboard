@@ -77,28 +77,30 @@ router.get('/pool/status', requireAuth, async (req, res) => {
                     status.mergerfs.sources = match[1].split(':').filter(s => s);
                 }
                 
-                // Get pool capacity
-                const dfRaw = execFileSync('df', ['-BG', POOL_MOUNT], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
-                const dfLines = dfRaw.trim().split('\n');
-                const df = dfLines[dfLines.length - 1];
-                const parts = df.trim().split(/\s+/);
-                if (parts.length >= 5) {
-                    const total = parseInt(parts[1]) || 0;
-                    const used = parseInt(parts[2]) || 0;
-                    const free = parseInt(parts[3]) || 0;
-                    const usedPercent = parseInt(parts[4]) || 0;
-                    
-                    status.capacity.total = formatSize(total);
-                    status.capacity.used = formatSize(used);
-                    status.capacity.free = formatSize(free);
-                    status.capacity.usedPercent = usedPercent;
-                    
-                    // Warn if pool is getting full
-                    if (usedPercent > 90) {
-                        status.warnings.push('Pool is over 90% full');
-                    } else if (usedPercent > 80) {
-                        status.warnings.push('Pool is over 80% full');
-                    }
+                // Get pool capacity via statfs (statvfs) for accurate calculation
+                // df's "Available" column deducts reserved space per-disk, which
+                // compounds across a MergerFS pool and causes BUG-04.
+                const statfs = fs.statfsSync(POOL_MOUNT);
+                const blockSize = statfs.bsize;
+                const totalBytes = statfs.blocks * blockSize;
+                const freeBytes = statfs.bfree * blockSize;  // total free (incl. reserved)
+                const usedBytes = totalBytes - freeBytes;
+
+                const totalGB = totalBytes / (1024 ** 3);
+                const usedGB = usedBytes / (1024 ** 3);
+                const freeGB = freeBytes / (1024 ** 3);
+                const usedPercent = totalBytes > 0 ? Math.round((usedBytes / totalBytes) * 100) : 0;
+
+                status.capacity.total = formatSize(totalGB);
+                status.capacity.used = formatSize(usedGB);
+                status.capacity.free = formatSize(freeGB);
+                status.capacity.usedPercent = usedPercent;
+                
+                // Warn if pool is getting full
+                if (usedPercent > 90) {
+                    status.warnings.push('Pool is over 90% full');
+                } else if (usedPercent > 80) {
+                    status.warnings.push('Pool is over 80% full');
                 }
             }
         } catch (e) {
