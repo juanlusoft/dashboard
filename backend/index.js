@@ -15,8 +15,11 @@ const http = require('http');
 const helmet = require('helmet');
 
 // Import utilities
+const log = require('./utils/logger');
+const { validateEnv } = require('./utils/validate-env');
 const { initSessionDb, startSessionCleanup } = require('./utils/session');
 const { startErrorMonitor } = require('./utils/error-monitor');
+const { errorHandler } = require('./middleware/error-handler');
 
 // Import middleware
 const { generalLimiter } = require('./middleware/rateLimit');
@@ -56,7 +59,7 @@ let setupTerminalWebSocket;
 try {
     setupTerminalWebSocket = require('./utils/terminal-ws').setupTerminalWebSocket;
 } catch (e) {
-    console.warn('[WARN] Terminal WebSocket not available - node-pty may not be installed');
+    log.warn('[WARN] Terminal WebSocket not available - node-pty may not be installed');
     setupTerminalWebSocket = null;
 }
 
@@ -76,7 +79,7 @@ function ensureSSLCerts() {
     }
     
     if (!fs.existsSync(SSL_CERT_PATH) || !fs.existsSync(SSL_KEY_PATH)) {
-        console.log('[SSL] Certificates not found, generating self-signed certificates...');
+        log.info('[SSL] Certificates not found, generating self-signed certificates...');
         try {
             const { execFileSync } = require('child_process');
             const os = require('os');
@@ -130,9 +133,9 @@ IP.2 = 127.0.0.1
             fs.chmodSync(SSL_KEY_PATH, 0o600);
             fs.unlinkSync(configPath);
             
-            console.log('[SSL] Self-signed certificates generated successfully');
+            log.info('[SSL] Self-signed certificates generated successfully');
         } catch (e) {
-            console.error('[SSL] Failed to generate certificates:', e.message);
+            log.error('[SSL] Failed to generate certificates:', e.message);
         }
     }
 }
@@ -151,13 +154,16 @@ for (const dir of storageTmpDirs) {
             fs.mkdirSync(dir, { recursive: true });
         }
     } catch (e) {
-        console.warn(`[WARN] Could not create ${dir}:`, e.message);
+        log.warn(`Could not create ${dir}:`, e.message);
     }
 }
 
 ensureSSLCerts();
 
 // Initialize Express app
+// Validate environment variables before anything else
+validateEnv();
+
 const app = express();
 
 // Initialize session database
@@ -215,7 +221,7 @@ app.use(cors({
         if (isAllowed) {
             callback(null, true);
         } else {
-            console.warn(`CORS blocked origin: ${origin}`);
+            log.warn(`CORS blocked origin: ${origin}`);
             callback(new Error('CORS not allowed'));
         }
     },
@@ -343,23 +349,14 @@ app.use('/api/vpn', vpnRoutes);
 // GLOBAL ERROR HANDLER
 // =============================================================================
 
-// Catch unhandled errors - prevent stack traces from leaking to client
-app.use((err, req, res, next) => {
-    console.error(`[ERROR] ${req.method} ${req.path}:`, err.message);
-    res.status(err.status || 500).json({ error: 'Internal server error' });
-});
+// Centralized error handler (see middleware/error-handler.js)
+app.use(errorHandler);
 
 // =============================================================================
 // SERVER STARTUP
 // =============================================================================
 
-console.log(`
-╔═══════════════════════════════════════════════════════════╗
-║                    HomePiNAS v${VERSION}                      ║
-║           Premium NAS Dashboard for Raspberry Pi          ║
-║                   Homelabs.club Edition                   ║
-╚═══════════════════════════════════════════════════════════╝
-`);
+log.info(`HomePiNAS v${VERSION} — Premium NAS Dashboard for Raspberry Pi (Homelabs.club)`);
 
 // Start HTTPS server if certificates exist
 let httpsServer = null;
@@ -371,10 +368,10 @@ if (fs.existsSync(SSL_CERT_PATH) && fs.existsSync(SSL_KEY_PATH)) {
         };
         httpsServer = https.createServer(sslOptions, app);
         httpsServer.listen(HTTPS_PORT, '0.0.0.0', () => {
-            console.log(`[HTTPS] Secure server running on https://0.0.0.0:${HTTPS_PORT}`);
+            log.info('[HTTPS] Secure server running on https://0.0.0.0:${HTTPS_PORT}`);
         });
     } catch (e) {
-        console.error('[HTTPS] Failed to start:', e.message);
+        log.error('[HTTPS] Failed to start:', e.message);
     }
 }
 
@@ -390,7 +387,7 @@ if (httpsServer) {
         const httpsUrl = `https://${host}${portSuffix}${req.url}`;
         res.redirect(302, httpsUrl);
     });
-    console.log(`[HTTP]  Will redirect all traffic to HTTPS`);
+    log.info('[HTTP]  Will redirect all traffic to HTTPS`);
 } else {
     // No HTTPS, serve app on HTTP
     httpApp = app;
@@ -398,42 +395,21 @@ if (httpsServer) {
 
 const httpServer = http.createServer(httpApp);
 httpServer.listen(HTTP_PORT, '0.0.0.0', () => {
-    console.log(`[HTTP]  Server running on http://0.0.0.0:${HTTP_PORT}`);
+    log.info('[HTTP]  Server running on http://0.0.0.0:${HTTP_PORT}`);
     if (httpsServer) {
-        console.log('[HTTP]  → Redirecting to HTTPS on port ' + HTTPS_PORT);
+        log.info('[HTTP]  → Redirecting to HTTPS on port ' + HTTPS_PORT);
     } else {
-        console.log('\n[WARN]  HTTPS not configured. Run install.sh to generate SSL certificates.');
+        log.info('\n[WARN]  HTTPS not configured. Run install.sh to generate SSL certificates.');
     }
-    console.log('\n[INFO]  Modular architecture loaded:');
-    console.log('        - routes/system.js         (stats, fans, disks)');
-    console.log('        - routes/storage.js        (pool, snapraid)');
-    console.log('        - routes/docker.js         (containers)');
-    console.log('        - routes/auth.js           (login, setup)');
-    console.log('        - routes/network.js        (interfaces)');
-    console.log('        - routes/power.js          (reboot, shutdown)');
-    console.log('        - routes/update.js         (OTA updates)');
-    console.log('        - routes/terminal.js       (web terminal)');
-    console.log('        - routes/shortcuts.js      (custom shortcuts)');
-    console.log('        - routes/files.js          (file manager)');
-    console.log('        - routes/users.js          (user management)');
-    console.log('        - routes/samba.js          (samba shares)');
-    console.log('        - routes/notifications.js  (email/telegram)');
-    console.log('        - routes/totp.js           (2FA)');
-    console.log('        - routes/logs.js           (log viewer)');
-    console.log('        - routes/backup.js         (backup jobs)');
-    console.log('        - routes/scheduler.js      (task scheduler)');
-    console.log('        - routes/ups.js            (UPS monitor)');
-    console.log('        - routes/ddns.js           (dynamic DNS)');
-    console.log('        - routes/vpn.js            (VPN server)');
-    console.log('');
+    log.info('All route modules loaded');
     
     // Setup Terminal WebSocket on HTTP server
     if (setupTerminalWebSocket) {
         try {
             setupTerminalWebSocket(httpServer);
-            console.log('[WS]    Terminal WebSocket available at /api/terminal/ws');
+            log.info('[WS]    Terminal WebSocket available at /api/terminal/ws');
         } catch (e) {
-            console.warn('[WARN]  Terminal WebSocket setup failed:', e.message);
+            log.warn('[WARN]  Terminal WebSocket setup failed:', e.message);
         }
     }
 
@@ -450,7 +426,7 @@ if (httpsServer && setupTerminalWebSocket) {
     try {
         setupTerminalWebSocket(httpsServer);
     } catch (e) {
-        console.warn('[WARN]  Terminal WebSocket (HTTPS) setup failed:', e.message);
+        log.warn('[WARN]  Terminal WebSocket (HTTPS) setup failed:', e.message);
     }
 }
 
