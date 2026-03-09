@@ -180,9 +180,8 @@ app.use(helmet({
         directives: {
             defaultSrc: ["'self'"],
             scriptSrc: ["'self'", "https://cdn.jsdelivr.net"],
-            // TODO: Migrate inline onclick handlers to addEventListener to remove 'unsafe-inline'
-            // Currently ~15 inline handlers in main.js (modals, banners, menus)
-            scriptSrcAttr: ["'unsafe-inline'"],
+            // All inline onclick handlers migrated to data-action event delegation
+            scriptSrcAttr: ["'none'"],
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
             imgSrc: ["'self'", "data:", "https://api.qrserver.com", "https://cdn.jsdelivr.net"],
