@@ -148,11 +148,14 @@ router.post('/configure', requireAuth, (req, res) => {
             } catch (e) {}
 
             if (isDhcp) {
-                // Switch to DHCP
-                execFileSync('sudo', ['nmcli', 'con', 'mod', conName, 'ipv4.method', 'auto'], { encoding: 'utf8', timeout: 10000 });
-                execFileSync('sudo', ['nmcli', 'con', 'mod', conName, 'ipv4.addresses', ''], { encoding: 'utf8', timeout: 10000 });
-                execFileSync('sudo', ['nmcli', 'con', 'mod', conName, 'ipv4.gateway', ''], { encoding: 'utf8', timeout: 10000 });
-                execFileSync('sudo', ['nmcli', 'con', 'mod', conName, 'ipv4.dns', ''], { encoding: 'utf8', timeout: 10000 });
+                // Switch to DHCP — clear static values so nmcli falls back to DHCP
+                // nmcli requires removing properties individually; empty string doesn't work for all fields
+                execFileSync('sudo', ['nmcli', 'con', 'mod', conName,
+                    'ipv4.method', 'auto',
+                    'ipv4.addresses', '',
+                    'ipv4.gateway', '',
+                    'ipv4.dns', ''
+                ], { encoding: 'utf8', timeout: 10000 });
             } else {
                 // Static IP configuration
                 const ip = config.ip;

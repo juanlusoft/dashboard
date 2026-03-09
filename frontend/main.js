@@ -4754,7 +4754,26 @@ async function applyNetwork(interfaceId) {
             throw new Error(data.error || 'Network configuration failed');
         }
 
-        showToast(data.message || t('common.saved', 'Configuración guardada'), 'success');
+        showNotification(data.message || t('common.saved', 'Configuración guardada'), 'success');
+
+        // Re-fetch interface state from the server to confirm changes were applied
+        try {
+            const refreshRes = await authFetch(`${API_BASE}/network/interfaces`);
+            if (refreshRes.ok) {
+                state.network.interfaces = await refreshRes.json();
+                // Re-render the form for this interface with fresh data
+                const freshIface = state.network.interfaces.find(i => i.id === interfaceId);
+                if (freshIface) {
+                    const netForm = document.getElementById(`netform-${interfaceId}`);
+                    const freshDhcp = localDhcpState[interfaceId] !== undefined ? localDhcpState[interfaceId] : freshIface.dhcp;
+                    if (netForm) renderNetForm(netForm, freshIface, freshDhcp);
+                }
+            }
+        } catch (refreshErr) {
+            // If refresh fails (e.g. IP changed), that's expected
+            console.info('Network refresh after save:', refreshErr.message);
+        }
+
         // If IP changed, warn user they may need to reconnect
         if (!isDhcp && config.ip) {
             const currentUrl = new URL(window.location);
@@ -4770,7 +4789,7 @@ async function applyNetwork(interfaceId) {
         }
     } catch (e) {
         console.error('Network config error:', e);
-        showToast(e.message || t('common.error', 'Error al aplicar configuración de red'), 'error');
+        showNotification(e.message || t('common.error', 'Error al aplicar configuración de red'), 'error');
     }
 }
 
