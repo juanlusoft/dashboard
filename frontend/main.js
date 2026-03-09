@@ -1,5 +1,7 @@
 // Import i18n
 import { initI18n, t, applyTranslations, getCurrentLang } from './i18n.js';
+// Import shared utilities
+import { escapeHtml, formatBytes, debounce, formatUptime } from './modules/utils.js';
 
 // State Management
 const state = {
@@ -27,16 +29,7 @@ const API_BASE = window.location.origin + '/api';
 // Local state for DHCP overrides (to track user changes before saving)
 const localDhcpState = {};
 
-// Security: HTML escape function to prevent XSS
-function escapeHtml(unsafe) {
-    if (unsafe === null || unsafe === undefined) return '';
-    return String(unsafe)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
+// escapeHtml imported from modules/utils.js
 
 // =============================================================================
 // NOTIFICATION SYSTEM - Toast notifications with animations
@@ -1035,7 +1028,7 @@ async function applyDiskActions() {
                 const resultEl = document.getElementById(`progress-${disk.id}-result`);
                 if (resultEl) {
                     resultEl.style.display = 'block';
-                    resultEl.innerHTML = `<span class="dash-status-success">✅ ${data.message || 'Completado'}</span>`;
+                    resultEl.innerHTML = `<span class="dash-status-success">✅ ${escapeHtml(data.message || 'Completado')}</span>`;
                 }
             } else if (res) {
                 const err = await res.json().catch(() => ({ error: 'Error desconocido' }));
@@ -1863,13 +1856,7 @@ function updateSummary() {
 }
 
 // Format bytes to human readable
-function formatBytes(bytes) {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
+// formatBytes imported from modules/utils.js
 
 // Create the storage pool
 async function createStoragePool() {
@@ -3810,7 +3797,7 @@ async function renderDockerManager() {
                     if (port.public) {
                         const badge = document.createElement('span');
                         badge.className = 'docker-port-badge';
-                        badge.innerHTML = `<span class="port-public">${port.public}</span><span class="port-arrow">→</span><span class="port-private">${port.private}</span>`;
+                        badge.innerHTML = `<span class="port-public">${escapeHtml(port.public)}</span><span class="port-arrow">→</span><span class="port-private">${escapeHtml(port.private)}</span>`;
                         portsDiv.appendChild(badge);
                     }
                 });
@@ -5238,8 +5225,8 @@ async function applyOsUpdate() {
                 <div class="misc-update-banner-title">${t('system.updateAvailableBanner', '¡Actualización disponible!')}</div>
                 <div class="misc-update-banner-version">v${escapeHtml(currentVersion)} → v${escapeHtml(latestVersion)}</div>
             </div>
-            <button onclick="document.getElementById('update-banner').remove(); document.querySelector('[data-view=system]')?.click();" class="misc-update-banner-view-btn">${t('system.viewUpdate', 'Ver')}</button>
-            <button onclick="document.getElementById('update-banner').remove();" class="misc-update-banner-close-btn">&times;</button>
+            <button data-action="view-update" class="misc-update-banner-view-btn">${t('system.viewUpdate', 'Ver')}</button>
+            <button data-action="dismiss-update" class="misc-update-banner-close-btn">&times;</button>
         `;
         document.body.appendChild(banner);
     }
@@ -5397,7 +5384,7 @@ function showNotificationCenter() {
             <div class="modal-content">
                 <header class="modal-header">
                     <h3>Centro de Notificaciones</h3>
-                    <button class="modal-close" onclick="this.closest('.modal').classList.remove('active')">&times;</button>
+                    <button class="modal-close" data-action="close-modal">&times;</button>
                 </header>
                 <div class="modal-body">
                     <div class="notification-list">
@@ -5423,16 +5410,16 @@ function showUserMenu() {
         dropdown.id = 'user-menu-dropdown';
         dropdown.className = 'user-menu-dropdown';
         dropdown.innerHTML = `
-            <div class="user-menu-option" onclick="showUserProfile()">
+            <div class="user-menu-option" data-action="user-profile">
                 <span class="user-menu-icon">👤</span>
                 <span>Perfil de Usuario</span>
             </div>
-            <div class="user-menu-option" onclick="showUserSettings()">
+            <div class="user-menu-option" data-action="user-settings">
                 <span class="user-menu-icon">⚙️</span>
                 <span>Configuración</span>
             </div>
             <div class="user-menu-divider"></div>
-            <div class="user-menu-option" onclick="showChangePassword()">
+            <div class="user-menu-option" data-action="change-password">
                 <span class="user-menu-icon">🔑</span>
                 <span>Cambiar Contraseña</span>
             </div>
@@ -5480,7 +5467,7 @@ function showChangePassword() {
             <div class="modal-content">
                 <header class="modal-header">
                     <h3>Cambiar Contraseña</h3>
-                    <button class="modal-close" onclick="this.closest('.modal').classList.remove('active')">&times;</button>
+                    <button class="modal-close" data-action="close-modal">&times;</button>
                 </header>
                 <div class="modal-body">
                     <form id="change-password-form">
@@ -5497,7 +5484,7 @@ function showChangePassword() {
                             <label for="confirm-password">Confirmar Nueva Contraseña</label>
                         </div>
                         <div class="modal-actions">
-                            <button type="button" onclick="this.closest('.modal').classList.remove('active')">Cancelar</button>
+                            <button type="button" data-action="close-modal">Cancelar</button>
                             <button type="submit">Cambiar Contraseña</button>
                         </div>
                     </form>
@@ -6598,7 +6585,7 @@ function renderFilesList(container, files, filePath) {
 
         const checkbox = document.createElement('label');
         checkbox.className = 'fm-checkbox-wrap';
-        checkbox.innerHTML = `<input type="checkbox" ${isSelected ? 'checked' : ''} data-path="${fullPath.replace(/"/g, '&quot;')}"><span class="fm-checkbox-custom"></span>`;
+        checkbox.innerHTML = `<input type="checkbox" ${isSelected ? 'checked' : ''} data-path="${escapeHtml(fullPath)}"><span class="fm-checkbox-custom"></span>`;
         checkbox.querySelector('input').addEventListener('change', function() { fmToggleSelect(this.dataset.path, this.checked); });
         checkbox.addEventListener('click', (e) => e.stopPropagation());
 
@@ -6722,7 +6709,7 @@ function renderFilesGrid(container, files, filePath) {
 
         const checkbox = document.createElement('label');
         checkbox.className = 'fm-checkbox-wrap fm-grid-checkbox';
-        checkbox.innerHTML = `<input type="checkbox" ${isSelected ? 'checked' : ''} data-path="${fullPath.replace(/"/g, '&quot;')}"><span class="fm-checkbox-custom"></span>`;
+        checkbox.innerHTML = `<input type="checkbox" ${isSelected ? 'checked' : ''} data-path="${escapeHtml(fullPath)}"><span class="fm-checkbox-custom"></span>`;
         checkbox.querySelector('input').addEventListener('change', function() { fmToggleSelect(this.dataset.path, this.checked); });
         checkbox.addEventListener('click', (e) => e.stopPropagation());
 
@@ -7135,7 +7122,7 @@ function fmPreviewFile(file, basePath) {
         });
     } else if (videoExts.includes(ext)) {
         loadPreviewBlob(url => {
-            body.innerHTML = `<video controls autoplay class="fm-preview-video"><source src="${url}"></video>`;
+            body.innerHTML = `<video controls autoplay class="fm-preview-video"><source src="${encodeURI(url)}"></video>`;
         });
     } else if (audioExts.includes(ext)) {
         loadPreviewBlob(url => {
@@ -7143,7 +7130,7 @@ function fmPreviewFile(file, basePath) {
         });
     } else if (ext === 'pdf') {
         loadPreviewBlob(url => {
-            body.innerHTML = `<iframe src="${url}" class="fm-preview-pdf"></iframe>`;
+            body.innerHTML = `<iframe src="${encodeURI(url)}" class="fm-preview-pdf"></iframe>`;
         });
     } else if (textExts.includes(ext)) {
         body.innerHTML = '<div class="fm-preview-loading"><div class="fm-spinner"></div></div>';
@@ -9999,6 +9986,46 @@ function showVPNConfigModal(currentStatus) {
 // =============================================================================
 // INITIALIZATION
 // =============================================================================
+
+// Event delegation for data-action attributes (replaces inline onclick handlers)
+document.addEventListener('click', (e) => {
+    const el = e.target.closest('[data-action]');
+    if (!el) return;
+
+    const action = el.dataset.action;
+    switch (action) {
+        case 'view-update': {
+            const banner = document.getElementById('update-banner');
+            if (banner) banner.remove();
+            document.querySelector('[data-view=system]')?.click();
+            break;
+        }
+        case 'dismiss-update': {
+            const banner = document.getElementById('update-banner');
+            if (banner) banner.remove();
+            break;
+        }
+        case 'close-modal': {
+            const modal = el.closest('.modal');
+            if (modal) modal.classList.remove('active');
+            break;
+        }
+        case 'remove-modal': {
+            const modal = el.closest('.modal');
+            if (modal) modal.remove();
+            break;
+        }
+        case 'user-profile':
+            showUserProfile();
+            break;
+        case 'user-settings':
+            showUserSettings();
+            break;
+        case 'change-password':
+            showChangePassword();
+            break;
+    }
+});
 
 // Initialize i18n first, then auth
 async function init() {
@@ -14397,7 +14424,7 @@ async function openTemplateSelector() {
             btn.addEventListener('click', () => useTemplate(btn.dataset.templateId));
         });
     } catch (e) {
-        document.getElementById('templates-list').innerHTML = `<div class="stacks-error">Error: ${e.message}</div>`;
+        document.getElementById('templates-list').innerHTML = `<div class="stacks-error">Error: ${escapeHtml(e.message)}</div>`;
     }
 }
 
@@ -14614,7 +14641,7 @@ async function loadCloudBackupStatus() {
             return;
         }
 
-        badgeDiv.innerHTML = `<span class="cloudbackup-version-badge">✓ rclone v${status.version}</span>`;
+        badgeDiv.innerHTML = `<span class="cloudbackup-version-badge">✓ rclone v${escapeHtml(status.version)}</span>`;
         
         // Load configured remotes
         const remotesRes = await authFetch(`${API_BASE}/cloud-backup/remotes`);
@@ -14794,7 +14821,7 @@ async function loadCloudBackupStatus() {
         bindCloudBackupEventListeners();
         
     } catch (e) {
-        contentDiv.innerHTML = `<div class="glass-card cloudbackup-error">Error: ${e.message}</div>`;
+        contentDiv.innerHTML = `<div class="glass-card cloudbackup-error">Error: ${escapeHtml(e.message)}</div>`;
     }
 }
 
@@ -15331,7 +15358,7 @@ async function loadRemoteFiles(remoteName, path) {
         });
         
     } catch (e) {
-        listDiv.innerHTML = `<div class="cloudbackup-browser-empty" style="color: #ef4444;">Error: ${e.message}</div>`;
+        listDiv.innerHTML = `<div class="cloudbackup-browser-empty" style="color: #ef4444;">Error: ${escapeHtml(e.message)}</div>`;
     }
 }
 
@@ -15844,7 +15871,7 @@ async function showFolderPermissions(folderPath) {
             <div class="glass-card modal-content" style="max-width: 600px;">
                 <header class="modal-header">
                     <h3>🔒 Permisos de Carpeta</h3>
-                    <button class="modal-close" onclick="this.closest('.modal').remove()">✕</button>
+                    <button class="modal-close" data-action="remove-modal">✕</button>
                 </header>
                 <div class="modal-body">
                     <div style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(99,102,241,0.1); border-radius: 8px;">
@@ -15898,7 +15925,7 @@ async function showFolderPermissions(folderPath) {
         footer.className = 'modal-footer';
         footer.style.cssText = 'display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(148,163,184,0.2);';
         footer.innerHTML = `
-            <button class="btn-secondary" onclick="this.closest('.modal').remove()">Cancelar</button>
+            <button class="btn-secondary" data-action="remove-modal">Cancelar</button>
             <button class="btn-primary" id="save-permissions">Guardar Cambios</button>
         `;
 
