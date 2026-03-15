@@ -236,7 +236,7 @@ async function authFetch(url, options = {}) {
         headers['X-CSRF-Token'] = state.csrfToken;
     }
 
-    const response = await fetch(url, { ...options, headers });
+    const response = await fetch(url, { ...options, headers, cache: 'no-store' });
 
     // Handle CSRF errors (token expired after server restart)
     if (response.status === 403) {
@@ -1882,11 +1882,11 @@ async function createStoragePool() {
     });
     
     if (wizardState.selectedParityDisk) {
-        selections.push({ id: wizardState.selectedParityDisk, role: 'parity', format: true });
+        selections.push({ id: wizardState.selectedParityDisk, role: 'parity', format: true, filesystem: selectedFilesystem });
     }
     
     if (wizardState.selectedCacheDisk) {
-        selections.push({ id: wizardState.selectedCacheDisk, role: 'cache', format: true });
+        selections.push({ id: wizardState.selectedCacheDisk, role: 'cache', format: true, filesystem: selectedFilesystem });
     }
     
     const tasks = ['format', 'mount', 'snapraid', 'mergerfs', 'fstab', 'sync'];
@@ -2138,6 +2138,8 @@ const saveStorageBtn = document.getElementById('save-storage-btn');
 if (saveStorageBtn) {
     saveStorageBtn.addEventListener('click', async () => {
         const selections = [];
+        // Read filesystem selection (same selector the wizard uses)
+        const selectedFs = document.querySelector('input[name="wizard-filesystem"]:checked')?.value || 'ext4';
         document.querySelectorAll('.role-selector').forEach(sel => {
             const diskId = sel.dataset.disk;
             const activeBtn = sel.querySelector('.role-btn.active');
@@ -2146,7 +2148,8 @@ if (saveStorageBtn) {
                 selections.push({
                     id: diskId,
                     role,
-                    format: true
+                    format: true,
+                    filesystem: selectedFs
                 });
             }
         });
@@ -3112,7 +3115,7 @@ async function renderStorageDashboard() {
                     <span class="total">${role.toUpperCase()}</span>
                 </div>
                 <div class="mount-type">
-                    <span class="mount-type-badge ext4">ext4</span>
+                    <span class="mount-type-badge ${escapeHtml(disk.fstype || 'ext4')}">${escapeHtml(disk.fstype || 'ext4')}</span>
                 </div>
             `;
             mountsGrid.appendChild(diskRow);
@@ -4751,7 +4754,26 @@ async function applyNetwork(interfaceId) {
             throw new Error(data.error || 'Network configuration failed');
         }
 
-        showToast(data.message || t('common.saved', 'Configuración guardada'), 'success');
+        showNotification(data.message || t('common.saved', 'Configuración guardada'), 'success');
+
+        // Re-fetch interface state from the server to confirm changes were applied
+        try {
+            const refreshRes = await authFetch(`${API_BASE}/network/interfaces`);
+            if (refreshRes.ok) {
+                state.network.interfaces = await refreshRes.json();
+                // Re-render the form for this interface with fresh data
+                const freshIface = state.network.interfaces.find(i => i.id === interfaceId);
+                if (freshIface) {
+                    const netForm = document.getElementById(`netform-${interfaceId}`);
+                    const freshDhcp = localDhcpState[interfaceId] !== undefined ? localDhcpState[interfaceId] : freshIface.dhcp;
+                    if (netForm) renderNetForm(netForm, freshIface, freshDhcp);
+                }
+            }
+        } catch (refreshErr) {
+            // If refresh fails (e.g. IP changed), that's expected
+            console.info('Network refresh after save:', refreshErr.message);
+        }
+
         // If IP changed, warn user they may need to reconnect
         if (!isDhcp && config.ip) {
             const currentUrl = new URL(window.location);
@@ -4767,7 +4789,7 @@ async function applyNetwork(interfaceId) {
         }
     } catch (e) {
         console.error('Network config error:', e);
-        showToast(e.message || t('common.error', 'Error al aplicar configuración de red'), 'error');
+        showNotification(e.message || t('common.error', 'Error al aplicar configuración de red'), 'error');
     }
 }
 
@@ -6053,7 +6075,7 @@ async function renderFilesView() {
     // ══════════════════════════════════════════════════════════════════════════
     
     // Load user's home path on first render (if not already set)
-    if (currentFilePath === '/' && !state._fileHomeLoaded) {
+    if (currentFilePath === '/' && !state._fileHomeLoaded && state._fmRoot !== 'independent') {
         try {
             const homeRes = await authFetch(`${API_BASE}/files/user-home`);
             if (homeRes.ok) {
@@ -6084,7 +6106,43 @@ async function renderFilesView() {
     sidebar.innerHTML = `
         <div class="fm-sidebar-header">📂 Carpetas</div>
         <div class="fm-tree" id="fm-tree"></div>
+        <div id="fm-independent-section" style="display:none">
+            <div class="fm-sidebar-header" style="margin-top:12px;cursor:pointer" id="fm-independent-header">🖥️ Discos Externos</div>
+            <div id="fm-independent-list"></div>
+        </div>
     `;
+    
+    // Load independent disks
+    (async () => {
+        try {
+            const res = await authFetch(`${API_BASE}/files/independent`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.disks && data.disks.length > 0) {
+                    const section = document.getElementById('fm-independent-section');
+                    const list = document.getElementById('fm-independent-list');
+                    if (section && list) {
+                        section.style.display = 'block';
+                        data.disks.forEach(disk => {
+                            const item = document.createElement('div');
+                            item.className = 'fm-tree-item';
+                            item.style.cssText = 'padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px;border-radius:6px;margin:2px 4px';
+                            item.innerHTML = `<span>💾</span><span>${disk.name}</span>`;
+                            item.addEventListener('mouseenter', () => item.style.background = 'var(--hover-bg, #f0f0f0)');
+                            item.addEventListener('mouseleave', () => item.style.background = '');
+                            item.addEventListener('click', () => {
+                                state._fmRoot = 'independent';
+                                state._fmDisk = disk.name;
+                                currentFilePath = '/';
+                                renderFilesView();
+                            });
+                            list.appendChild(item);
+                        });
+                    }
+                }
+            }
+        } catch(e) {}
+    })();
     layout.appendChild(sidebar);
     
     // ── RIGHT PANEL: Main Content ──
@@ -6290,10 +6348,14 @@ async function renderFilesView() {
     fmSelectedFiles.clear();
     
     // Load folder tree and files in parallel
-    await Promise.all([
-        loadFolderTree(),
-        loadFiles(currentFilePath)
-    ]);
+    if (state._fmRoot === 'independent') {
+        await loadFiles(currentFilePath);
+    } else {
+        await Promise.all([
+            loadFolderTree(),
+            loadFiles(currentFilePath)
+        ]);
+    }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -6492,10 +6554,15 @@ async function loadFiles(filePath) {
     filesList.innerHTML = '<div class="fm-empty-state"><div class="fm-spinner"></div><p>Cargando archivos...</p></div>';
 
     try {
-        const res = await authFetch(`${API_BASE}/files/list?path=${encodeURIComponent(filePath)}`);
+        const _root = state._fmRoot || 'storage';
+        const _disk = state._fmDisk || '';
+        const _rp = _root === 'independent' ? `&root=independent&disk=${encodeURIComponent(_disk)}` : '';
+        console.log('[FM] loadFiles root:', _root, 'disk:', _disk, 'path:', filePath);
+        const res = await authFetch(`${API_BASE}/files/list?path=${encodeURIComponent(filePath)}${_rp}`);
+        console.log('[FM] response status:', res.status);
         if (!res.ok) throw new Error('Failed to load files');
         const data = await res.json();
-        const files = data.items || data || [];
+        const files = data.items || data.files || data || [];
 
         fmCurrentFiles = files;
 
@@ -9154,44 +9221,62 @@ async function renderNFSSection(container) {
 }
 
 function showNFSAddModal(onSuccess) {
-    const existing = document.querySelector('.modal.nfs-add-modal');
+    const existing = document.getElementById('nfs-form-modal');
     if (existing) existing.remove();
-    
+
     const modal = document.createElement('div');
-    modal.className = 'modal active nfs-add-modal';
+    modal.id = 'nfs-form-modal';
+    modal.className = 'modal active';
+    modal.style.cssText = 'display: flex; position: fixed; inset: 0; z-index: 1000; align-items: center; justify-content: center; background: rgba(0,0,0,0.5);';
+
     modal.innerHTML = `
-        <div class="modal-content" style="max-width:450px;">
-            <div class="modal-header">
-                <h3>📁 ${t('network.addNFSShare', 'Nueva Carpeta NFS')}</h3>
-                <button class="modal-close" id="nfs-modal-close">&times;</button>
-            </div>
-            <div style="padding:16px;display:flex;flex-direction:column;gap:14px;">
-                <div>
-                    <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">${t('network.sharePath', 'Ruta de la carpeta')}</label>
-                    <input type="text" id="nfs-path" placeholder="/mnt/storage/media" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg-input, var(--bg-secondary));color:var(--text-primary);">
-                    <span style="font-size:0.75rem;color:var(--text-secondary);">${t('network.mustBeInStorage', 'Debe estar dentro de /mnt/storage')}</span>
+        <div class="glass-card modal-content samba-modal-content">
+            <header class="modal-header samba-modal-header">
+                <h3>📁 Nueva Carpeta NFS</h3>
+                <button class="btn-close" id="close-nfs-form">&times;</button>
+            </header>
+            <form id="nfs-create-form" class="samba-create-form">
+                <div class="input-group">
+                    <input type="text" id="nf-name" placeholder=" ">
+                    <label>${t('common.name', 'Nombre')}</label>
                 </div>
-                <div>
-                    <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">${t('network.allowedNetwork', 'Red permitida')}</label>
-                    <input type="text" id="nfs-network" placeholder="192.168.1.0/24" value="192.168.1.0/24" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg-input, var(--bg-secondary));color:var(--text-primary);">
+                <div class="input-group">
+                    <input type="text" id="nf-path" required placeholder=" " value="/mnt/storage/">
+                    <label>${t('network.sharePath', 'Ruta')}</label>
                 </div>
-                <div style="display:flex;align-items:center;gap:8px;">
-                    <input type="checkbox" id="nfs-readonly">
-                    <label for="nfs-readonly" style="font-size:0.85rem;">${t('network.readOnly', 'Solo lectura')}</label>
+                <div class="input-group">
+                    <input type="text" id="nf-network" placeholder=" " value="192.168.1.0/24">
+                    <label>${t('network.allowedNetwork', 'Red permitida')} (IP/CIDR)</label>
                 </div>
-                <button id="nfs-save-btn" class="btn-primary" style="padding:10px;font-size:0.9rem;">💾 ${t('common.save', 'Guardar')}</button>
-            </div>
+                <div class="input-group">
+                    <input type="text" id="nf-comment" placeholder=" ">
+                    <label>${t('common.comment', 'Comentario')}</label>
+                </div>
+                <div class="samba-checkbox-row">
+                    <label class="samba-checkbox-label">
+                        <input type="checkbox" id="nf-readonly"> ${t('network.readOnly', 'Solo lectura')}
+                    </label>
+                    <label class="samba-checkbox-label">
+                        <input type="checkbox" id="nf-guest"> ${t('network.guestAccess', 'Acceso invitados')}
+                    </label>
+                </div>
+                <button type="submit" class="btn-primary">${t('network.createNFSFolder', 'Crear Carpeta NFS')}</button>
+            </form>
         </div>
     `;
+
     document.body.appendChild(modal);
-    
-    document.getElementById('nfs-modal-close').addEventListener('click', () => modal.remove());
+    document.getElementById('close-nfs-form').addEventListener('click', () => modal.remove());
     modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
-    
-    document.getElementById('nfs-save-btn').addEventListener('click', async () => {
-        const sharePath = document.getElementById('nfs-path').value.trim();
-        const network = document.getElementById('nfs-network').value.trim();
-        const readOnly = document.getElementById('nfs-readonly').checked;
+
+    document.getElementById('nfs-create-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const sharePath = document.getElementById('nf-path').value.trim();
+        const shareName = document.getElementById('nf-name').value.trim();
+        const comment = document.getElementById('nf-comment').value.trim();
+        const network = document.getElementById('nf-network').value.trim();
+        const readOnly = document.getElementById('nf-readonly').checked;
+        const guestOk = document.getElementById('nf-guest').checked;
         
         if (!sharePath) {
             showNotification(t('network.pathRequired', 'La ruta es obligatoria'), 'warning');
@@ -9201,8 +9286,7 @@ function showNFSAddModal(onSuccess) {
         try {
             const res = await authFetch(`${API_BASE}/nfs/shares`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ path: sharePath, network, readOnly })
+                body: JSON.stringify({ path: sharePath, name: shareName, comment, network, readOnly, guestOk })
             });
             const data = await res.json();
             if (res.ok) {

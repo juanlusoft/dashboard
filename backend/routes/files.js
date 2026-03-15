@@ -18,6 +18,7 @@ const { getData } = require('../utils/data');
 
 // Base storage directory - all operations are confined here
 const STORAGE_BASE = '/mnt/storage';
+const INDEPENDENT_BASE = '/mnt/independent';
 
 // MIME type mapping based on file extension
 const MIME_TYPES = {
@@ -55,18 +56,37 @@ function guessMimeType(filePath) {
 }
 
 /**
+ * Resolve the base directory for file operations.
+ * root='storage' => /mnt/storage
+ * root='independent', disk='toshiba' => /mnt/independent/toshiba
+ */
+function resolveBaseDir(root, disk) {
+  if (root === 'independent' && disk) {
+    // Validate disk is a simple name (no slashes, no dots at start)
+    const safeDisk = path.basename(disk);
+    if (!safeDisk || safeDisk.startsWith('.')) return null;
+    const diskPath = path.join(INDEPENDENT_BASE, safeDisk);
+    if (!fs.existsSync(diskPath)) return null;
+    return diskPath;
+  }
+  return STORAGE_BASE;
+}
+
+
+/**
  * Validate a path is within /mnt/storage. Returns sanitized path or sends 400 error.
  * Returns null if invalid (caller should return early).
  * If the user has allowedPaths configured, restricts access to those paths only.
  */
-function validatePath(inputPath, res, req) {
+function validatePath(inputPath, res, req, baseDir) {
+  const BASE = baseDir || STORAGE_BASE;
   // Treat '/' or empty as root of storage
   let relativePath = inputPath || '/';
   if (relativePath === '/') relativePath = '.';
   // Remove leading slash to make it relative to STORAGE_BASE
   if (relativePath.startsWith('/')) relativePath = relativePath.substring(1);
   
-  const sanitized = sanitizePathWithinBase(relativePath, STORAGE_BASE);
+  const sanitized = sanitizePathWithinBase(relativePath, BASE);
   if (sanitized === null) {
     res.status(400).json({ error: 'Invalid path: must be within storage directory' });
     return null;
@@ -249,6 +269,32 @@ router.get('/user-home', requirePermission('read'), (req, res) => {
 });
 
 router.get('/list', requirePermission('read'), (req, res) => {
+  const { root, disk } = req.query;
+  if (root === 'independent') {
+    const baseDir = resolveBaseDir('independent', disk);
+    if (!baseDir) return res.status(400).json({ error: 'Invalid or unmounted disk' });
+    const inputPath = req.query.path || '/';
+    const relativePath = inputPath.replace(/^\/+/, ''); // strip ALL leading slashes
+    const fullPath = relativePath ? path.join(baseDir, relativePath) : baseDir;
+    const resolvedFull = path.resolve(fullPath);
+    if (!resolvedFull.startsWith(baseDir + '/') && resolvedFull !== baseDir) return res.status(400).json({ error: 'Invalid path' });
+    try {
+      const entries = fs.readdirSync(fullPath, { withFileTypes: true });
+      const files = entries.map(e => {
+        const stats = fs.statSync(path.join(fullPath, e.name));
+        return {
+          name: e.name,
+          type: e.isDirectory() ? 'directory' : 'file',
+          size: stats.size,
+          modified: stats.mtime,
+          path: '/' + path.relative(baseDir, path.join(fullPath, e.name)),
+        };
+      });
+      return res.json({ files, path: '/' + path.relative(baseDir, fullPath) || '/' });
+    } catch (err) {
+      return res.status(500).json({ error: 'Failed to list directory' });
+    }
+  }
   try {
     const inputPath = req.query.path || '/';
     const dirPath = validatePath(inputPath, res, req);
@@ -668,6 +714,46 @@ router.get('/search', requirePermission('read'), (req, res) => {
   } catch (err) {
     log.error('Search error:', err.message);
     res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+
+// ── Independent disks (NTFS/FAT32/exFAT mounted at /mnt/independent) ──
+
+/**
+ * GET /api/files/independent
+ * Returns list of mounted independent disks (subdirs of /mnt/independent/)
+ */
+router.get('/independent', requirePermission('read'), (req, res) => {
+  try {
+    if (!fs.existsSync(INDEPENDENT_BASE)) {
+      return res.json({ disks: [] });
+    }
+    const entries = fs.readdirSync(INDEPENDENT_BASE, { withFileTypes: true });
+    const disks = entries
+      .filter(e => {
+        if (!e.isDirectory()) return false;
+        // Filter out internal Pi partitions (mmcblk) and plain 'toshiba' manual mounts
+        // Keep only entries that look like external disk partitions (sdX)
+        const n = e.name;
+        if (n.includes('mmcblk')) return false;  // Pi SD card
+        return true;
+      })
+      // Remove duplicates: if both 'toshiba' and 'TOSHIBA_...' exist, keep the named one
+      .filter((e, idx, arr) => {
+        const named = arr.find(x => x.name.toUpperCase().startsWith(e.name.toUpperCase() + '_') || x.name.toUpperCase().startsWith(e.name.toUpperCase().replace(/_SDC\d+$/, '')));
+        if (named && named.name !== e.name && e.name.length < named.name.length) return false;
+        return true;
+      })
+      .map(e => ({
+        name: e.name,
+        path: path.join(INDEPENDENT_BASE, e.name),
+        mountpoint: '/mnt/independent/' + e.name,
+      }));
+    res.json({ disks });
+  } catch (err) {
+    log.error('Error listing independent disks:', err);
+    res.json({ disks: [] });
   }
 });
 
