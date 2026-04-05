@@ -13055,11 +13055,20 @@ body.fm-dragging .fm-tree-item {
 
 .wizard-radio-option input[type="radio"]:checked + .wizard-radio-label {
     border-color: var(--primary);
-    background: rgba(var(--primary-rgb), 0.05);
+    border-width: 2px;
+    background: rgba(0, 120, 212, 0.08);
+    box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.15);
+}
+
+.wizard-radio-option input[type="radio"]:checked + .wizard-radio-label .wizard-radio-title::after {
+    content: ' ✓';
+    color: var(--primary);
+    font-weight: 700;
 }
 
 .wizard-radio-label:hover {
     border-color: var(--primary);
+    background: rgba(0, 120, 212, 0.04);
 }
 
 .wizard-radio-icon {

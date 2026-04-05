@@ -5,6 +5,20 @@ All notable changes to HomePiNAS are documented in this file.
 
 ---
 
+## [2.13.0] - 2026-04-05
+
+### Added
+- **🌐 DHCP IP Display** — El wizard muestra la IP asignada por el router al seleccionar modo DHCP, usando nuevo endpoint público `/api/network/current-ip` que no requiere autenticación
+- **🎨 Network Mode Highlight** — Selección visual con borde, fondo y checkmark (✓) para indicar el modo de red activo (DHCP/Estático) en el wizard
+- **🗂️ Storage Type Selection** — Paso 2 del wizard rediseñado: elige entre SnapRAID+MergerFS, Discos Básicos (JBOD) o RAID Estándar (mdadm) antes de seleccionar discos. La elección de sistema de archivos se mueve exclusivamente al paso 5
+- **⚡ Parallel Disk Formatting** — Los discos se formatean en paralelo (`Promise.all` + `execFileAsync`) en lugar de secuencialmente, reduciendo significativamente el tiempo de configuración
+
+### Fixed
+- Variable CSS `--primary-rgb` no definida que causaba que el highlight de selección fuera invisible
+- IP DHCP no se cargaba en el wizard porque el endpoint requería autenticación antes de que existiera sesión
+
+---
+
 ## [2.11.0] - 2026-03-08
 
 ### Security

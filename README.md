@@ -1,8 +1,8 @@
-# HomePiNAS v2.12.0
+# HomePiNAS v2.13.0
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.12.0-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.0-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -67,24 +67,17 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
 
-## 🆕 What's New in v2.11.0
+## 🆕 What's New in v2.13.0
 
 ### Features
-- **📁 NFS Share Management** — Full NFS UI in Network view (create, delete, status)
-- **👤 Per-User File Paths** — Set home directories and restrict access per user
-- **📦 ext4/XFS Choice** — Select filesystem type when creating storage pools
-- **🐳 Smart Port Selector** — Docker "Open Web" button detects HTTP ports, shows dropdown for multi-port containers
-- **🔒 Enhanced Security** — Factory reset requires auth, emergency reset needs confirmation, XSS fixes
-- **🔄 CI/CD** — Automated tests on GitHub Actions
+- **🌐 DHCP IP Display** — Wizard step 1 now shows the router-assigned IP when DHCP mode is selected
+- **🎨 Network Mode Selection** — Visual highlight (border + background + checkmark) shows the active network mode (DHCP/Static) in the wizard
+- **🗂️ Storage Type Wizard** — Step 2 redesigned: choose between SnapRAID+MergerFS, Basic Disks (JBOD) or Standard RAID (mdadm) before selecting disks. Filesystem choice moved exclusively to step 5
+- **⚡ Parallel Disk Formatting** — Disks are now formatted simultaneously (Promise.all) instead of sequentially, reducing setup time significantly
 
 ### Fixes
-- Version numbers synchronized across all files (package.json as single source)
-- Docker container update now preserves networks, entrypoint, user config
-- Container notes persist across updates (indexed by name)
-- Network CIDR calculation fixed
-- Docker logs properly parsed (no more garbage bytes)
-- Gateway auto-fills when switching DHCP → manual
-- JSON body limit increased for large compose files
+- Fixed `--primary-rgb` CSS variable not defined causing invisible selection highlight
+- Fixed DHCP IP not loading in wizard (endpoint required auth before session existed)
 
 ## ⚡ Quick Install
 

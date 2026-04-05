@@ -1228,6 +1228,8 @@ const wizardState = {
     selectedDataDisks: [],
     selectedParityDisk: null,
     selectedCacheDisk: null,
+    storageType: 'snapraid',
+    raidLevel: '1',
     isConfiguring: false
 };
 
@@ -1253,7 +1255,9 @@ function saveWizardState() {
             currentStep: wizardState.currentStep,
             selectedDataDisks: wizardState.selectedDataDisks,
             selectedParityDisk: wizardState.selectedParityDisk,
-            selectedCacheDisk: wizardState.selectedCacheDisk
+            selectedCacheDisk: wizardState.selectedCacheDisk,
+            storageType: wizardState.storageType,
+            raidLevel: wizardState.raidLevel
         }));
     } catch (e) {
         console.warn('Could not save wizard state:', e);
@@ -1687,11 +1691,76 @@ function setupWizardNavigation() {
     // Step 1 -> 2
     document.getElementById('wizard-next-1')?.addEventListener('click', () => navigateWizard(2));
     
-    // Step 2
+    // Step 2 - Phase A: storage type selection
     document.getElementById('wizard-back-2')?.addEventListener('click', () => navigateWizard(1));
+
+    // Storage type radios
+    const storageTypeRadios = document.querySelectorAll('input[name="wizard-storage-type"]');
+    const storageTypeNextBtn = document.getElementById('wizard-storage-type-next');
+
+    storageTypeRadios.forEach(radio => {
+        radio.addEventListener('change', () => {
+            wizardState.storageType = radio.value;
+            if (storageTypeNextBtn) storageTypeNextBtn.disabled = false;
+            saveWizardState();
+        });
+    });
+
+    // Storage type labels map
+    const storageTypeLabels = {
+        snapraid: 'SnapRAID + MergerFS',
+        jbod: 'Discos Básicos (JBOD)',
+        raid: 'RAID Estándar (mdadm)'
+    };
+
+    // Phase A -> Phase B
+    document.getElementById('wizard-storage-type-next')?.addEventListener('click', () => {
+        const phaseA = document.getElementById('wizard-phase-type');
+        const phaseB = document.getElementById('wizard-phase-disks');
+        if (phaseA) phaseA.style.display = 'none';
+        if (phaseB) phaseB.style.display = '';
+
+        // Update chosen type label
+        const label = document.getElementById('wizard-chosen-type-label');
+        if (label) label.textContent = storageTypeLabels[wizardState.storageType] || wizardState.storageType;
+
+        // Show/hide RAID level selector
+        const raidLevelDiv = document.getElementById('wizard-raid-level');
+        if (raidLevelDiv) {
+            raidLevelDiv.style.display = wizardState.storageType === 'raid' ? '' : 'none';
+        }
+    });
+
+    // Phase B -> Phase A (change type)
+    document.getElementById('wizard-change-type')?.addEventListener('click', () => {
+        const phaseA = document.getElementById('wizard-phase-type');
+        const phaseB = document.getElementById('wizard-phase-disks');
+        if (phaseB) phaseB.style.display = 'none';
+        if (phaseA) phaseA.style.display = '';
+    });
+
+    // Phase B back to step 1
+    document.getElementById('wizard-back-2-disks')?.addEventListener('click', () => navigateWizard(1));
+
+    // Step 2 next: conditional flow based on storage type
     document.getElementById('wizard-next-2')?.addEventListener('click', () => {
-        updateParityDiskOptions();
-        navigateWizard(3);
+        if (wizardState.storageType === 'raid') {
+            const raidSelect = document.getElementById('wizard-raid-level-select');
+            if (raidSelect) wizardState.raidLevel = raidSelect.value;
+        }
+        saveWizardState();
+
+        if (wizardState.storageType === 'snapraid') {
+            // Normal flow: parity (step 3) -> cache (step 4) -> summary (step 5)
+            updateParityDiskOptions();
+            navigateWizard(3);
+        } else {
+            // JBOD or RAID: skip parity and cache, go to summary
+            wizardState.selectedParityDisk = null;
+            wizardState.selectedCacheDisk = null;
+            updateSummary();
+            navigateWizard(5);
+        }
     });
     
     // Step 3
@@ -1721,7 +1790,14 @@ function setupWizardNavigation() {
     });
     
     // Step 5
-    document.getElementById('wizard-back-5')?.addEventListener('click', () => navigateWizard(4));
+    document.getElementById('wizard-back-5')?.addEventListener('click', () => {
+        if (wizardState.storageType === 'snapraid') {
+            navigateWizard(4);
+        } else {
+            // JBOD/RAID: go back to step 2 (disks), skipping parity/cache
+            navigateWizard(2);
+        }
+    });
     document.getElementById('wizard-create-pool')?.addEventListener('click', createStoragePool);
     
     // Step 7 (completed)
@@ -1793,6 +1869,21 @@ function updateWizardProgress(step) {
 
 // Update the summary step
 function updateSummary() {
+    // Storage type summary
+    const storageTypeContainer = document.getElementById('summary-storage-type');
+    if (storageTypeContainer) {
+        const storageTypeLabels = {
+            snapraid: 'SnapRAID + MergerFS',
+            jbod: 'Discos Básicos (JBOD)',
+            raid: 'RAID Estándar (mdadm)'
+        };
+        let typeText = storageTypeLabels[wizardState.storageType] || wizardState.storageType;
+        if (wizardState.storageType === 'raid') {
+            typeText += ` - RAID ${wizardState.raidLevel}`;
+        }
+        storageTypeContainer.textContent = typeText;
+    }
+
     // Data disks summary
     const dataContainer = document.getElementById('summary-data-disks');
     if (dataContainer) {
@@ -1876,19 +1967,22 @@ async function createStoragePool() {
 
     // Build disk selections
     const selections = [];
-    
+
     wizardState.selectedDataDisks.forEach(id => {
         selections.push({ id, role: 'data', format: true, filesystem: selectedFilesystem });
     });
-    
-    if (wizardState.selectedParityDisk) {
-        selections.push({ id: wizardState.selectedParityDisk, role: 'parity', format: true, filesystem: selectedFilesystem });
+
+    // Only include parity/cache for snapraid mode
+    if (wizardState.storageType === 'snapraid') {
+        if (wizardState.selectedParityDisk) {
+            selections.push({ id: wizardState.selectedParityDisk, role: 'parity', format: true, filesystem: selectedFilesystem });
+        }
+
+        if (wizardState.selectedCacheDisk) {
+            selections.push({ id: wizardState.selectedCacheDisk, role: 'cache', format: true, filesystem: selectedFilesystem });
+        }
     }
-    
-    if (wizardState.selectedCacheDisk) {
-        selections.push({ id: wizardState.selectedCacheDisk, role: 'cache', format: true, filesystem: selectedFilesystem });
-    }
-    
+
     const tasks = ['format', 'mount', 'snapraid', 'mergerfs', 'fstab', 'sync'];
     
     try {
@@ -1899,7 +1993,11 @@ async function createStoragePool() {
         // Call the API to configure the pool
         const res = await authFetch(`${API_BASE}/storage/pool/configure`, {
             method: 'POST',
-            body: JSON.stringify({ disks: selections })
+            body: JSON.stringify({
+                disks: selections,
+                storageType: wizardState.storageType,
+                raidLevel: wizardState.raidLevel
+            })
         });
         
         const data = await res.json();
@@ -1916,22 +2014,32 @@ async function createStoragePool() {
         await new Promise(r => setTimeout(r, 500));
         updateWizardTask('mount', 'done', 'Particiones montadas');
         
-        updateWizardTask('snapraid', 'running', 'Configurando SnapRAID...');
-        await new Promise(r => setTimeout(r, 500));
-        updateWizardTask('snapraid', 'done', 'SnapRAID configurado');
-        
-        updateWizardTask('mergerfs', 'running', 'Configurando MergerFS...');
-        await new Promise(r => setTimeout(r, 500));
-        updateWizardTask('mergerfs', 'done', 'MergerFS configurado');
+        if (wizardState.storageType === 'snapraid') {
+            updateWizardTask('snapraid', 'running', 'Configurando SnapRAID...');
+            await new Promise(r => setTimeout(r, 500));
+            updateWizardTask('snapraid', 'done', 'SnapRAID configurado');
+
+            updateWizardTask('mergerfs', 'running', 'Configurando MergerFS...');
+            await new Promise(r => setTimeout(r, 500));
+            updateWizardTask('mergerfs', 'done', 'MergerFS configurado');
+        } else if (wizardState.storageType === 'jbod') {
+            updateWizardTask('snapraid', 'done', 'JBOD - sin SnapRAID');
+            updateWizardTask('mergerfs', 'done', 'JBOD - montaje directo');
+        } else if (wizardState.storageType === 'raid') {
+            updateWizardTask('snapraid', 'running', `Configurando RAID ${wizardState.raidLevel} (mdadm)...`);
+            await new Promise(r => setTimeout(r, 500));
+            updateWizardTask('snapraid', 'done', `RAID ${wizardState.raidLevel} configurado`);
+            updateWizardTask('mergerfs', 'done', 'RAID - sin MergerFS');
+        }
         
         updateWizardTask('fstab', 'running', 'Actualizando /etc/fstab...');
         await new Promise(r => setTimeout(r, 500));
         updateWizardTask('fstab', 'done', '/etc/fstab actualizado');
         
         updateWizardTask('sync', 'running', 'Sincronización inicial...');
-        
-        // Start sync in background if parity is configured
-        if (wizardState.selectedParityDisk) {
+
+        // Start sync in background if parity is configured (snapraid only)
+        if (wizardState.storageType === 'snapraid' && wizardState.selectedParityDisk) {
             try {
                 await authFetch(`${API_BASE}/storage/snapraid/sync`, { method: 'POST' });
                 // Poll for sync progress (simplified)
@@ -15793,8 +15901,11 @@ function setupNetworkConfiguration() {
         radio.addEventListener('change', (e) => {
             if (e.target.value === 'manual') {
                 manualFields.style.display = 'block';
+                hideDhcpCurrentIp();
             } else {
                 manualFields.style.display = 'none';
+                // Reload DHCP IP when switching back to DHCP
+                loadCurrentNetworkConfig();
             }
         });
     });
@@ -15872,9 +15983,19 @@ function setupNetworkConfiguration() {
             const result = await response.json();
 
             if (response.ok) {
-                showNetworkStatus('success', isDhcp 
-                    ? '✅ Red configurada en modo DHCP' 
-                    : `✅ Red configurada: ${config.ip}`);
+                if (isDhcp) {
+                    // Wait briefly for the interface to get its IP, then fetch and show it
+                    showNetworkStatus('success', '✅ Red configurada en modo DHCP. Obteniendo IP...');
+                    await new Promise(r => setTimeout(r, 2000));
+                    await loadCurrentNetworkConfig();
+                    const ipEl = document.getElementById('dhcp-ip-value');
+                    const assignedIp = ipEl?.textContent;
+                    showNetworkStatus('success', assignedIp
+                        ? `✅ DHCP activo — IP asignada: ${assignedIp}`
+                        : '✅ Red configurada en modo DHCP');
+                } else {
+                    showNetworkStatus('success', `✅ Red configurada: ${config.ip}`);
+                }
             } else {
                 throw new Error(result.error || 'Error al configurar red');
             }
@@ -15902,26 +16023,46 @@ function showNetworkStatus(type, message) {
 
 async function loadCurrentNetworkConfig() {
     try {
-        const response = await fetch('/api/network/interfaces', {
-            headers: { 'Authorization': `Bearer ${state.sessionId}` }
-        });
-        
+        // Use public endpoint (no auth needed — called from wizard before login)
+        const response = await fetch('/api/network/current-ip');
         if (!response.ok) return;
-        
-        const interfaces = await response.json();
-        if (!interfaces || interfaces.length === 0) return;
-        
-        const primaryInterface = interfaces[0];
-        
-        // Pre-fill current values if static
-        if (!primaryInterface.dhcp && primaryInterface.ip) {
-            document.getElementById('network-ip').value = primaryInterface.ip || '';
-            document.getElementById('network-subnet').value = primaryInterface.subnet || '255.255.255.0';
-            document.getElementById('network-gateway').value = primaryInterface.gateway || '';
+        const data = await response.json();
+
+        if (data.dhcp && data.ip) {
+            showDhcpCurrentIp(data.ip);
+        }
+
+        // If we have a full session, also pre-fill static fields
+        if (state.sessionId) {
+            const ifaceRes = await fetch('/api/network/interfaces', {
+                headers: { 'Authorization': `Bearer ${state.sessionId}` }
+            });
+            if (!ifaceRes.ok) return;
+            const interfaces = await ifaceRes.json();
+            if (!interfaces || interfaces.length === 0) return;
+            const primaryInterface = interfaces[0];
+            if (!primaryInterface.dhcp && primaryInterface.ip) {
+                document.getElementById('network-ip').value = primaryInterface.ip || '';
+                document.getElementById('network-subnet').value = primaryInterface.subnet || '255.255.255.0';
+                document.getElementById('network-gateway').value = primaryInterface.gateway || '';
+            }
         }
     } catch (error) {
         console.error('Failed to load network config:', error);
     }
+}
+
+function showDhcpCurrentIp(ip) {
+    const container = document.getElementById('dhcp-current-ip');
+    const value = document.getElementById('dhcp-ip-value');
+    if (!container || !value) return;
+    value.textContent = ip;
+    container.style.display = 'block';
+}
+
+function hideDhcpCurrentIp() {
+    const container = document.getElementById('dhcp-current-ip');
+    if (container) container.style.display = 'none';
 }
 
 // ══════════════════════════════════════════════════════════════════════════

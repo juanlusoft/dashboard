@@ -21,6 +21,24 @@ const {
     validateSubnetMask
 } = require('../utils/sanitize');
 
+// Get current IP (public - used by wizard before login)
+router.get('/current-ip', async (req, res) => {
+    try {
+        const netInterfaces = await si.networkInterfaces();
+        const physicalPrefixes = ['eth', 'wlan', 'enp', 'ens', 'wlp', 'end'];
+        const excludePrefixes = ['lo', 'docker', 'veth', 'br-', 'virbr', 'tun', 'tap'];
+        const primary = netInterfaces.find(iface => {
+            if (!iface.iface || !validateInterfaceName(iface.iface)) return false;
+            const name = iface.iface.toLowerCase();
+            if (excludePrefixes.some(p => name.startsWith(p))) return false;
+            return physicalPrefixes.some(p => name.startsWith(p)) && iface.ip4;
+        });
+        res.json({ ip: primary?.ip4 || '', dhcp: primary?.dhcp === true });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read network info' });
+    }
+});
+
 // Get network interfaces
 router.get('/interfaces', requireAuth, async (req, res) => {
     try {

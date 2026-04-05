@@ -8,7 +8,9 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const { execFileSync, spawn } = require('child_process');
+const { execFileSync, execFile, spawn } = require('child_process');
+const { promisify } = require('util');
+const execFileAsync = promisify(execFile);
 
 const { requireAuth } = require('../../middleware/auth');
 const { logSecurityEvent } = require('../../utils/security');
@@ -70,41 +72,33 @@ router.post('/pool/configure', requireAuthOrSetup, async (req, res) => {
     // Parity is now optional - SnapRAID will only be configured if parity disks are present
     try {
         const results = [];
-        // 1. Format disks that need formatting
-        for (const disk of validatedDisks) {
-            if (disk.format) {
-                // SECURITY: disk.id is now validated by sanitizeDiskId
-                const safeDiskId = disk.id;
-                const filesystem = disk.filesystem || 'ext4'; // Default to ext4 if not specified
-                results.push(`Formatting /dev/${safeDiskId} as ${filesystem}...`);
-                try {
-                    // SECURITY: Use execFileSync with explicit arguments instead of shell interpolation
-                    execFileSync('sudo', ['parted', '-s', `/dev/${safeDiskId}`, 'mklabel', 'gpt'], { encoding: 'utf8', timeout: 30000 });
-                    execFileSync('sudo', ['parted', '-s', `/dev/${safeDiskId}`, 'mkpart', 'primary', filesystem, '0%', '100%'], { encoding: 'utf8', timeout: 30000 });
-                    execFileSync('sudo', ['partprobe', `/dev/${safeDiskId}`], { encoding: 'utf8', timeout: 10000 });
-                    execFileSync('sleep', ['2'], { timeout: 5000 });
+        // 1. Format disks in parallel
+        const disksToFormat = validatedDisks.filter(d => d.format);
+        await Promise.all(disksToFormat.map(async (disk) => {
+            const safeDiskId = disk.id;
+            const filesystem = disk.filesystem || 'ext4';
+            results.push(`Formatting /dev/${safeDiskId} as ${filesystem}...`);
+            try {
+                await execFileAsync('sudo', ['parted', '-s', `/dev/${safeDiskId}`, 'mklabel', 'gpt'], { encoding: 'utf8', timeout: 30000 });
+                await execFileAsync('sudo', ['parted', '-s', `/dev/${safeDiskId}`, 'mkpart', 'primary', filesystem, '0%', '100%'], { encoding: 'utf8', timeout: 30000 });
+                await execFileAsync('sudo', ['partprobe', `/dev/${safeDiskId}`], { encoding: 'utf8', timeout: 10000 });
+                await new Promise(r => setTimeout(r, 2000)); // wait for kernel to register partition
 
-                    const partition = safeDiskId.includes('nvme') ? `${safeDiskId}p1` : `${safeDiskId}1`;
-                    // SECURITY: Validate partition name too (derived from validated disk ID)
-                    const safePartition = sanitizeDiskId(partition);
-                    if (!safePartition) {
-                        throw new Error('Invalid partition derived from disk ID');
-                    }
-                    const label = `${disk.role}_${safeDiskId}`.substring(0, 16); // ext4/xfs label max 16 chars
-                    
-                    // Format with selected filesystem
-                    if (filesystem === 'xfs') {
-                        execFileSync('sudo', ['mkfs.xfs', '-f', '-L', label, `/dev/${safePartition}`], { encoding: 'utf8', timeout: 300000 });
-                    } else {
-                        execFileSync('sudo', ['mkfs.ext4', '-F', '-L', label, `/dev/${safePartition}`], { encoding: 'utf8', timeout: 300000 });
-                    }
-                    
-                    results.push(`Formatted /dev/${safePartition} as ${filesystem}`);
-                } catch (e) {
-                    results.push(`Warning: Format failed for ${safeDiskId}: ${e.message}`);
+                const partition = safeDiskId.includes('nvme') ? `${safeDiskId}p1` : `${safeDiskId}1`;
+                const safePartition = sanitizeDiskId(partition);
+                if (!safePartition) throw new Error('Invalid partition derived from disk ID');
+
+                const label = `${disk.role}_${safeDiskId}`.substring(0, 16);
+                if (filesystem === 'xfs') {
+                    await execFileAsync('sudo', ['mkfs.xfs', '-f', '-L', label, `/dev/${safePartition}`], { encoding: 'utf8', timeout: 300000 });
+                } else {
+                    await execFileAsync('sudo', ['mkfs.ext4', '-F', '-L', label, `/dev/${safePartition}`], { encoding: 'utf8', timeout: 300000 });
                 }
+                results.push(`Formatted /dev/${safePartition} as ${filesystem}`);
+            } catch (e) {
+                results.push(`Warning: Format failed for ${safeDiskId}: ${e.message}`);
             }
-        }
+        }));
 
         // 2. Create mount points and mount disks
         let diskNum = 1;

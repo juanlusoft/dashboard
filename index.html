@@ -171,6 +171,7 @@
                                             <div>
                                                 <div class="wizard-radio-title">DHCP (Automático)</div>
                                                 <div class="wizard-radio-desc">El router asigna la IP automáticamente</div>
+                                                <div id="dhcp-current-ip" style="display:none; margin-top:4px; font-size:0.85rem; color:var(--accent);">IP asignada: <strong id="dhcp-ip-value"></strong></div>
                                             </div>
                                         </div>
                                     </label>
@@ -232,50 +233,107 @@
                         </div>
                     </div>
 
-                    <!-- Step 2: Data Disk Selection -->
+                    <!-- Step 2: Storage Type + Data Disk Selection -->
                     <div class="wizard-step" data-step="2">
-                        <div class="wizard-step-header">
-                            <span class="wizard-step-icon">💾</span>
-                            <h2 class="wizard-step-title" data-i18n="wizard.dataDisksTitle">Selecciona Discos de Datos</h2>
-                            <p class="wizard-step-subtitle" data-i18n="wizard.dataDisksSubtitle">Estos discos almacenarán tus archivos (selecciona al menos uno)</p>
-                        </div>
-                        
-                        <div class="wizard-disk-list" id="wizard-data-disks">
-                            <!-- Data disk cards will be injected here -->
+
+                        <!-- FASE A: Selección de tipo de almacenamiento -->
+                        <div id="wizard-phase-type">
+                            <div class="wizard-step-header">
+                                <span class="wizard-step-icon">🗄️</span>
+                                <h2 class="wizard-step-title">¿Cómo quieres configurar el almacenamiento?</h2>
+                                <p class="wizard-step-subtitle">Elige el esquema que mejor se adapte a tus necesidades</p>
+                            </div>
+
+                            <div class="wizard-network-mode" style="flex-direction:column;">
+                                <label class="wizard-radio-option">
+                                    <input type="radio" name="wizard-storage-type" value="snapraid">
+                                    <div class="wizard-radio-label">
+                                        <span class="wizard-radio-icon">🛡️</span>
+                                        <div>
+                                            <div class="wizard-radio-title">SnapRAID + MergerFS <span style="background:var(--accent);color:#fff;font-size:0.7rem;padding:2px 8px;border-radius:8px;margin-left:8px;vertical-align:middle;">Recomendado</span></div>
+                                            <div class="wizard-radio-desc">Pool de discos con protección opcional contra fallos</div>
+                                        </div>
+                                    </div>
+                                </label>
+
+                                <label class="wizard-radio-option">
+                                    <input type="radio" name="wizard-storage-type" value="jbod">
+                                    <div class="wizard-radio-label">
+                                        <span class="wizard-radio-icon">💾</span>
+                                        <div>
+                                            <div class="wizard-radio-title">Discos Básicos (JBOD)</div>
+                                            <div class="wizard-radio-desc">Discos independientes sin protección de paridad</div>
+                                        </div>
+                                    </div>
+                                </label>
+
+                                <label class="wizard-radio-option">
+                                    <input type="radio" name="wizard-storage-type" value="raid">
+                                    <div class="wizard-radio-label">
+                                        <span class="wizard-radio-icon">⚡</span>
+                                        <div>
+                                            <div class="wizard-radio-title">RAID Estándar (mdadm)</div>
+                                            <div class="wizard-radio-desc">RAID 0, 1, 5, 6 o 10 — rendimiento o redundancia</div>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+
+                            <div class="wizard-nav">
+                                <button class="wizard-btn wizard-btn-back" id="wizard-back-2" data-i18n="wizard.back">
+                                    ← Atrás
+                                </button>
+                                <button class="wizard-btn wizard-btn-next" id="wizard-storage-type-next" disabled>
+                                    Continuar →
+                                </button>
+                            </div>
                         </div>
 
-                        <div class="wizard-info-box" style="background:var(--bg-secondary);border:1px solid var(--border);">
-                            <span class="wizard-info-box-icon">📦</span>
-                            <div class="wizard-info-box-text">
-                                <strong data-i18n="wizard.filesystemLabel">Sistema de archivos:</strong>
-                                <div style="display:flex;gap:16px;margin-top:8px;">
-                                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-                                        <input type="radio" name="wizard-filesystem" value="ext4" checked>
-                                        <span><strong>ext4</strong> — Estable, amplio soporte, ideal para NAS</span>
-                                    </label>
-                                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-                                        <input type="radio" name="wizard-filesystem" value="xfs">
-                                        <span><strong>XFS</strong> — Alto rendimiento, mejor con archivos grandes</span>
-                                    </label>
+                        <!-- FASE B: Selección de discos -->
+                        <div id="wizard-phase-disks" style="display:none;">
+                            <div class="wizard-step-header">
+                                <span class="wizard-step-icon">💾</span>
+                                <h2 class="wizard-step-title">Selecciona Discos de Datos</h2>
+                                <p class="wizard-step-subtitle">Estos discos almacenarán tus archivos (selecciona al menos uno)</p>
+                            </div>
+
+                            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                                <span id="wizard-chosen-type-label" style="font-size:0.9rem;color:var(--text-secondary);"></span>
+                                <button type="button" id="wizard-change-type" class="wizard-btn" style="font-size:0.8rem;padding:4px 12px;">← Cambiar tipo</button>
+                            </div>
+
+                            <div class="wizard-disk-list" id="wizard-data-disks">
+                                <!-- Data disk cards will be injected here -->
+                            </div>
+
+                            <div id="wizard-raid-level" style="display:none;margin-bottom:16px;">
+                                <label style="font-weight:600;margin-bottom:6px;display:block;">Nivel de RAID:</label>
+                                <select id="wizard-raid-level-select" class="wizard-form-input" style="max-width:260px;">
+                                    <option value="0">RAID 0 — Rendimiento (sin redundancia)</option>
+                                    <option value="1">RAID 1 — Espejo (máxima redundancia)</option>
+                                    <option value="5">RAID 5 — Paridad simple</option>
+                                    <option value="6">RAID 6 — Paridad doble</option>
+                                    <option value="10">RAID 10 — Espejo + Stripe</option>
+                                </select>
+                            </div>
+
+                            <div class="wizard-info-box warning">
+                                <span class="wizard-info-box-icon">⚠️</span>
+                                <div class="wizard-info-box-text" data-i18n="wizard.formatWarning">
+                                    Los discos seleccionados serán FORMATEADOS. Asegúrate de hacer backup de cualquier dato importante.
                                 </div>
                             </div>
-                        </div>
 
-                        <div class="wizard-info-box warning">
-                            <span class="wizard-info-box-icon">⚠️</span>
-                            <div class="wizard-info-box-text" data-i18n="wizard.formatWarning">
-                                Los discos seleccionados serán FORMATEADOS. Asegúrate de hacer backup de cualquier dato importante.
+                            <div class="wizard-nav">
+                                <button class="wizard-btn wizard-btn-back" id="wizard-back-2-disks" data-i18n="wizard.back">
+                                    ← Atrás
+                                </button>
+                                <button class="wizard-btn wizard-btn-next" id="wizard-next-2" disabled data-i18n="wizard.next">
+                                    Siguiente →
+                                </button>
                             </div>
                         </div>
 
-                        <div class="wizard-nav">
-                            <button class="wizard-btn wizard-btn-back" id="wizard-back-2" data-i18n="wizard.back">
-                                ← Atrás
-                            </button>
-                            <button class="wizard-btn wizard-btn-next" id="wizard-next-2" disabled data-i18n="wizard.next">
-                                Siguiente →
-                            </button>
-                        </div>
                     </div>
 
                     <!-- Step 3: Parity Disk Selection -->
