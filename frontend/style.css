@@ -13263,3 +13263,16 @@ body.fm-dragging .fm-tree-item {
 .io-read { color: #10b981; }
 .io-write { color: #f59e0b; }
 .io-util { color: #6366f1; font-weight: 600; }
+
+/* Fan status panel */
+.fan-status-panel { margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
+.fan-status-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; }
+.fan-status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.fan-status-dot.active { background: #22c55e; box-shadow: 0 0 6px #22c55e88; }
+.fan-status-dot.inactive { background: #ef4444; }
+.fan-status-temp { margin-left: auto; font-weight: 600; color: var(--primary); }
+.fan-bar-row { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; }
+.fan-bar-label { min-width: 32px; color: var(--text-secondary); }
+.fan-bar-track { flex: 1; height: 6px; background: var(--border-color); border-radius: 3px; overflow: hidden; }
+.fan-bar-fill { height: 100%; background: var(--primary); border-radius: 3px; transition: width 0.5s ease; }
+.fan-bar-value { min-width: 90px; text-align: right; color: var(--text-secondary); }

@@ -495,6 +495,10 @@ function stopGlobalPolling() {
         clearInterval(state.pollingIntervals.diskDetection);
         state.pollingIntervals.diskDetection = null;
     }
+    if (state.pollingIntervals.fanStatus) {
+        clearInterval(state.pollingIntervals.fanStatus);
+        state.pollingIntervals.fanStatus = null;
+    }
 }
 
 // Public IP Tracker
@@ -2681,37 +2685,50 @@ async function renderDashboard(quickRefresh) {
         `).join('');
     }
 
-    // Fetch fan mode
-    let fanMode = 'balanced';
-    try {
-        const fanModeRes = await authFetch(`${API_BASE}/system/fan/mode`);
-        if (fanModeRes.ok) {
-            const fanModeData = await fanModeRes.json();
-            fanMode = fanModeData.mode || 'balanced';
-        }
-    } catch (e) {
-        console.error('Error fetching fan mode:', e);
-    }
-
-    // Generate fan mode selector HTML (only mode buttons, no RPM display)
     const fansFullHtml = `
-        <div class="fan-mode-selector">
-            <button class="fan-mode-btn ${fanMode === 'silent' ? 'active' : ''}" data-mode="silent">
-                <span class="mode-icon">🤫</span>
-                <span class="mode-name">Silent</span>
-            </button>
-            <button class="fan-mode-btn ${fanMode === 'balanced' ? 'active' : ''}" data-mode="balanced">
-                <span class="mode-icon">⚖️</span>
-                <span class="mode-name">Balanced</span>
-            </button>
-            <button class="fan-mode-btn ${fanMode === 'performance' ? 'active' : ''}" data-mode="performance">
-                <span class="mode-icon">🚀</span>
-                <span class="mode-name">Performance</span>
-            </button>
+        <div id="fan-status-panel" class="fan-status-panel">
+          <div class="fan-status-loading">Cargando...</div>
         </div>
     `;
 
-    // Fetch disks for storage section
+    // Quick refresh: update only the live stat elements in-place (no DOM rebuild)
+    if (quickRefresh) {
+        const cpuLoadEl = document.getElementById('dash-cpu-load-val');
+        if (cpuLoadEl) {
+            cpuLoadEl.textContent = `${cpuLoad}%`;
+            cpuLoadEl.style.color = cpuLoad > 80 ? '#ef4444' : cpuLoad > 50 ? '#f59e0b' : '#10b981';
+        }
+        const cpuBarEl = document.getElementById('dash-cpu-load-bar');
+        if (cpuBarEl) {
+            cpuBarEl.style.width = `${Math.min(cpuLoad, 100)}%`;
+            cpuBarEl.style.background = cpuLoad > 80 ? '#ef4444' : cpuLoad > 50 ? '#f59e0b' : 'var(--primary)';
+        }
+        const cpuTempEl = document.getElementById('dash-cpu-temp');
+        if (cpuTempEl) {
+            cpuTempEl.textContent = `${cpuTemp}°C`;
+            cpuTempEl.className = `temp-badge ${cpuTemp > 70 ? 'hot' : cpuTemp > 55 ? 'warm' : 'cool'}`;
+        }
+        const coreLoadsEl = document.getElementById('dash-core-loads');
+        if (coreLoadsEl && coreLoadsHtml) coreLoadsEl.innerHTML = coreLoadsHtml;
+        const ramPercentEl = document.getElementById('dash-ram-percent');
+        if (ramPercentEl) ramPercentEl.textContent = `${ramUsedPercent}%`;
+        const ramCircleEl = document.getElementById('dash-ram-circle');
+        if (ramCircleEl) {
+            ramCircleEl.setAttribute('stroke', ramUsedPercent > 80 ? '#ef4444' : ramUsedPercent > 60 ? '#f59e0b' : '#10b981');
+            ramCircleEl.setAttribute('stroke-dasharray', `${ramUsedPercent}, 100`);
+        }
+        const ramUsedEl = document.getElementById('dash-ram-used');
+        if (ramUsedEl) ramUsedEl.textContent = `${stats.ramUsed || 0} GB`;
+        const ramFreeEl = document.getElementById('dash-ram-free');
+        if (ramFreeEl) ramFreeEl.textContent = `${stats.ramFree || 0} GB`;
+        const uptimeEl = document.getElementById('dash-uptime');
+        if (uptimeEl) uptimeEl.textContent = `${t('dashboard.uptime', 'Tiempo Activo')}: ${uptimeStr}`;
+        const publicIpEl = document.getElementById('dash-public-ip');
+        if (publicIpEl) publicIpEl.textContent = publicIP;
+        return;
+    }
+
+    // Fetch disks for storage section (full render only)
     let disksHtml = '';
     try {
         const disksRes = await authFetch(`${API_BASE}/system/disks`);
@@ -2766,12 +2783,7 @@ async function renderDashboard(quickRefresh) {
     }
 
 
-    // Restore scroll position on quick refresh
-    if (quickRefresh && scrollParent && savedScroll > 0) {
-        scrollParent.scrollTop = savedScroll;
-    }
-
-    // Skip heavy widget fetches on quick refresh (polling)
+    // Full render: build complete dashboard HTML
     if (!quickRefresh) {
 
     // Fetch I/O stats for disks
@@ -2801,7 +2813,7 @@ async function renderDashboard(quickRefresh) {
                     <span class="separator">|</span>
                     <span>${escapeHtml(stats.distro || 'Linux')}</span>
                     <span class="separator">|</span>
-                    <span>${t('dashboard.uptime', 'Tiempo Activo')}: ${uptimeStr}</span>
+                    <span id="dash-uptime">${t('dashboard.uptime', 'Tiempo Activo')}: ${uptimeStr}</span>
                 </div>
             </div>
         </div>
@@ -2814,18 +2826,18 @@ async function renderDashboard(quickRefresh) {
                     <span>${stats.cpuPhysicalCores || 0} ${t('dashboard.cores', 'Núcleos')}</span>
                     <span>${stats.cpuCores || 0} ${t('dashboard.threads', 'Hilos')}</span>
                     <span>${stats.cpuSpeed || 0} GHz</span>
-                    <span class="temp-badge ${cpuTemp > 70 ? 'hot' : cpuTemp > 55 ? 'warm' : 'cool'}">${cpuTemp}°C</span>
+                    <span id="dash-cpu-temp" class="temp-badge ${cpuTemp > 70 ? 'hot' : cpuTemp > 55 ? 'warm' : 'cool'}">${cpuTemp}°C</span>
                 </div>
                 <div class="load-section">
                     <div class="load-header">
                         <span>${t('dashboard.load', 'Carga')}</span>
-                        <span style="color: ${cpuLoad > 80 ? '#ef4444' : cpuLoad > 50 ? '#f59e0b' : '#10b981'}">${cpuLoad}%</span>
+                        <span id="dash-cpu-load-val" style="color: ${cpuLoad > 80 ? '#ef4444' : cpuLoad > 50 ? '#f59e0b' : '#10b981'}">${cpuLoad}%</span>
                     </div>
                     <div class="progress-bar-mini">
-                        <div class="progress-fill-mini" style="width: ${Math.min(cpuLoad, 100)}%; background: ${cpuLoad > 80 ? '#ef4444' : cpuLoad > 50 ? '#f59e0b' : 'var(--primary)'}"></div>
+                        <div id="dash-cpu-load-bar" class="progress-fill-mini" style="width: ${Math.min(cpuLoad, 100)}%; background: ${cpuLoad > 80 ? '#ef4444' : cpuLoad > 50 ? '#f59e0b' : 'var(--primary)'}"></div>
                     </div>
                 </div>
-                ${coreLoadsHtml ? `<div class="core-loads-mini">${coreLoadsHtml}</div>` : ''}
+                ${coreLoadsHtml ? `<div id="dash-core-loads" class="core-loads-mini">${coreLoadsHtml}</div>` : ''}
             </div>
 
             <div class="glass-card card-compact">
@@ -2834,15 +2846,15 @@ async function renderDashboard(quickRefresh) {
                     <div class="memory-circle-small">
                         <svg viewBox="0 0 36 36">
                             <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                            <path class="circle-fill" stroke="${ramUsedPercent > 80 ? '#ef4444' : ramUsedPercent > 60 ? '#f59e0b' : '#10b981'}"
+                            <path id="dash-ram-circle" class="circle-fill" stroke="${ramUsedPercent > 80 ? '#ef4444' : ramUsedPercent > 60 ? '#f59e0b' : '#10b981'}"
                                   stroke-dasharray="${ramUsedPercent}, 100"
                                   d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
                         </svg>
-                        <span class="memory-percent-small">${ramUsedPercent}%</span>
+                        <span id="dash-ram-percent" class="memory-percent-small">${ramUsedPercent}%</span>
                     </div>
                     <div class="memory-details-compact">
-                        <div class="mem-row"><span>${t('dashboard.used', 'Usado')}</span><span>${stats.ramUsed || 0} GB</span></div>
-                        <div class="mem-row"><span>${t('dashboard.free', 'Libre')}</span><span>${stats.ramFree || 0} GB</span></div>
+                        <div class="mem-row"><span>${t('dashboard.used', 'Usado')}</span><span id="dash-ram-used">${stats.ramUsed || 0} GB</span></div>
+                        <div class="mem-row"><span>${t('dashboard.free', 'Libre')}</span><span id="dash-ram-free">${stats.ramFree || 0} GB</span></div>
                         <div class="mem-row"><span>${t('dashboard.total', 'Total')}</span><span>${stats.ramTotal || 0} GB</span></div>
                         ${stats.swapTotal && parseFloat(stats.swapTotal) > 0 ? `<div class="mem-row swap"><span>${t('dashboard.swap', 'Swap')}</span><span>${stats.swapUsed || 0}/${stats.swapTotal || 0} GB</span></div>` : ''}
                     </div>
@@ -2859,7 +2871,7 @@ async function renderDashboard(quickRefresh) {
             <div class="glass-card card-compact">
                 <h3>🌐 ${t('dashboard.network', 'Red')}</h3>
                 <div class="network-compact">
-                    <div class="net-row"><span>${t('dashboard.publicIP', 'IP Pública')}</span><span class="ip-value">${publicIP}</span></div>
+                    <div class="net-row"><span>${t('dashboard.publicIP', 'IP Pública')}</span><span id="dash-public-ip" class="ip-value">${publicIP}</span></div>
                     <div class="net-row"><span>${t('dashboard.lanIP', 'IP Local')}</span><span>${lanIP}</span></div>
                     <div class="net-row"><span>${t('dashboard.ddns', 'DDNS')}</span><span>${ddnsCount} ${t('dashboard.services', 'Servicio(s)')}</span></div>
                 </div>
@@ -2895,11 +2907,12 @@ async function renderDashboard(quickRefresh) {
         </div>
     `;
 
-    // Add fan mode button event listeners
-    dashboardContent.querySelectorAll('.fan-mode-btn[data-mode]').forEach(btn => {
-        btn.addEventListener('click', () => setFanMode(btn.dataset.mode));
-    });
-
+    // Load fan status and start polling
+    loadFanStatus();
+    if (state.pollingIntervals.fanStatus) {
+        clearInterval(state.pollingIntervals.fanStatus);
+    }
+    state.pollingIntervals.fanStatus = setInterval(loadFanStatus, 10000);
 
     // Inject I/O stats into disk cards
     if (window._pendingIoStats) {
@@ -3066,6 +3079,52 @@ async function setFanSpeed(fanId, speed) {
 
 window.updateFanPercent = updateFanPercent;
 window.setFanSpeed = setFanSpeed;
+
+// Fan status loader
+async function loadFanStatus() {
+    const panel = document.getElementById('fan-status-panel');
+    if (!panel) return;
+    try {
+        const res = await authFetch(`${API_BASE}/system/fan/status`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const { serviceActive, temp, fans } = data;
+        const activeFans = fans.filter(f => f.rpm > 0 || f.pwmPercent > 0);
+
+        // If already rendered, update in-place to avoid flicker
+        if (panel.dataset.initialized) {
+            const dotEl = panel.querySelector('.fan-status-dot');
+            if (dotEl) dotEl.className = `fan-status-dot ${serviceActive ? 'active' : 'inactive'}`;
+            const tempEl = panel.querySelector('.fan-status-temp');
+            if (tempEl) tempEl.textContent = `🌡️ ${temp}°C`;
+            activeFans.forEach(f => {
+                const fillEl = document.getElementById(`fan-bar-fill-${f.id}`);
+                if (fillEl) fillEl.style.width = `${f.pwmPercent}%`;
+                const valEl = document.getElementById(`fan-bar-value-${f.id}`);
+                if (valEl) valEl.textContent = `${f.pwmPercent}% · ${f.rpm} RPM`;
+            });
+            return;
+        }
+
+        // First render: build full structure with IDs
+        panel.dataset.initialized = '1';
+        panel.innerHTML = `
+            <div class="fan-status-row">
+              <span class="fan-status-dot ${serviceActive ? 'active' : 'inactive'}"></span>
+              <span>${serviceActive ? 'Servicio activo' : 'Servicio detenido'}</span>
+              <span class="fan-status-temp">🌡️ ${temp}°C</span>
+            </div>
+            ${activeFans.map(f => `
+            <div class="fan-bar-row">
+              <span class="fan-bar-label">Fan ${f.id}</span>
+              <div class="fan-bar-track"><div id="fan-bar-fill-${f.id}" class="fan-bar-fill" style="width:${f.pwmPercent}%"></div></div>
+              <span id="fan-bar-value-${f.id}" class="fan-bar-value">${f.pwmPercent}% · ${f.rpm} RPM</span>
+            </div>`).join('')}
+        `;
+    } catch (e) {
+        // fail silently
+    }
+}
 
 // Fan mode control
 async function setFanMode(mode) {

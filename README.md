@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.0
+# HomePiNAS v2.13.1
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.0-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.1-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -66,6 +66,14 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - Restricted sudoers configuration
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
+
+## 🆕 What's New in v2.13.1
+
+### Fixes
+- **📊 Dashboard stats not updating** — CPU, RAM, and public IP cards now update live every 5s via targeted DOM updates instead of full HTML rebuilds
+- **🌀 Fan bars flickering** — Fan status panel now updates in-place on polling; no more flash/reset on each refresh
+- **🔧 EMC2305 driver stability** — `homepinas-fan.service` now disables runtime PM on the I2C device to prevent periodic driver unbind
+- **🔄 Fan script resilience** — `fan-control.sh` now re-discovers and re-binds the hwmon device automatically if it disappears, instead of crashing
 
 ## 🆕 What's New in v2.13.0
 

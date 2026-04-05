@@ -28,6 +28,7 @@ const EMC2305_FAN1_REG = '0x30';
 const EMC2305_FAN2_REG = '0x40';
 const I2CSET_PATH = '/usr/sbin/i2cset';
 const I2CGET_PATH = '/usr/sbin/i2cget';
+const EMC2305_HWMON_PATH = '/sys/bus/i2c/devices/10-002e/hwmon/hwmon3';
 
 const FAN_PRESETS = {
     silent: `# =========================================
@@ -277,9 +278,23 @@ router.post('/fan', requireAuth, (req, res) => {
     try {
         let found = false;
 
+        // Method 0: Direct EMC2305 hwmon path (known real path, fastest)
+        if (!found && fs.existsSync(EMC2305_HWMON_PATH)) {
+            const pwmPath = path.join(EMC2305_HWMON_PATH, `pwm${fanNum}`);
+            if (fs.existsSync(pwmPath)) {
+                execFileSync('sudo', ['tee', pwmPath], {
+                    input: String(pwmValue),
+                    encoding: 'utf8',
+                    timeout: 10000,
+                    stdio: ['pipe', 'pipe', 'pipe']
+                });
+                found = true;
+            }
+        }
+
         // Method 1: Search hwmon devices for pwm control
         const hwmonBase = '/sys/class/hwmon';
-        if (fs.existsSync(hwmonBase)) {
+        if (!found && fs.existsSync(hwmonBase)) {
             const hwmonDirs = fs.readdirSync(hwmonBase);
             for (const hwmon of hwmonDirs) {
                 const pwmPath = path.join(hwmonBase, hwmon, `pwm${fanNum}`);
@@ -364,6 +379,44 @@ router.post('/fan', requireAuth, (req, res) => {
     } catch (e) {
         log.error('Fan control error:', e);
         res.status(500).json({ error: 'Fan control not available on this system' });
+    }
+});
+
+// Fan status endpoint — real-time RPM, PWM, fault and CPU temp from EMC2305 hwmon
+router.get('/fan/status', requireAuth, (req, res) => {
+    try {
+        // Service active check
+        let serviceActive = false;
+        try {
+            const result = execFileSync('systemctl', ['is-active', 'homepinas-fan.service'], {
+                encoding: 'utf8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe']
+            }).trim();
+            serviceActive = result === 'active';
+        } catch (e) {
+            serviceActive = false;
+        }
+
+        // CPU temperature
+        let temp = 0;
+        try {
+            const raw = parseInt(fs.readFileSync('/sys/class/thermal/thermal_zone0/temp', 'utf8').trim()) || 0;
+            temp = Math.round((raw / 1000) * 10) / 10;
+        } catch (e) {}
+
+        // Per-fan data from EMC2305 hwmon
+        const fans = [];
+        for (const n of [1, 2]) {
+            let rpm = 0, pwm = 0, fault = false;
+            try { rpm = parseInt(fs.readFileSync(path.join(EMC2305_HWMON_PATH, `fan${n}_input`), 'utf8').trim()) || 0; } catch (e) {}
+            try { pwm = parseInt(fs.readFileSync(path.join(EMC2305_HWMON_PATH, `pwm${n}`), 'utf8').trim()) || 0; } catch (e) {}
+            try { fault = parseInt(fs.readFileSync(path.join(EMC2305_HWMON_PATH, `fan${n}_fault`), 'utf8').trim()) === 1; } catch (e) {}
+            fans.push({ id: n, rpm, pwm, pwmPercent: Math.round(pwm / 255 * 100), fault });
+        }
+
+        res.json({ serviceActive, temp, fans });
+    } catch (e) {
+        log.error('Fan status error:', e);
+        res.status(500).json({ error: 'Failed to read fan status' });
     }
 });
 

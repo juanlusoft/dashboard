@@ -5,6 +5,16 @@ All notable changes to HomePiNAS are documented in this file.
 
 ---
 
+## [2.13.1] - 2026-04-05
+
+### Fixed
+- **Dashboard stats** — CPU, RAM e IP Pública ahora se actualizan en tiempo real cada 5s mediante updates directos al DOM; antes se congelaban al valor del último render completo
+- **Fan panel flicker** — El panel de ventiladores se actualiza in-place en cada poll; ya no parpadea al reemplazar el innerHTML completo
+- **EMC2305 driver estabilidad** — `homepinas-fan.service` deshabilita runtime PM en el dispositivo I2C para evitar que el kernel desvincule el driver periódicamente
+- **Fan script resilencia** — `fan-control.sh` re-descubre y re-bindea el hwmon automáticamente si desaparece, en lugar de fallar. Corrige conflicto con `homepinas-fanctl.timer` (sistema antiguo) que hacía unbind del driver cada ~30s
+
+---
+
 ## [2.13.0] - 2026-04-05
 
 ### Added
