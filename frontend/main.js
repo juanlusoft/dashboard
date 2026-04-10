@@ -3051,7 +3051,9 @@ async function renderDashboard(quickRefresh) {
                         const isRunning = c.status === 'running';
                         const name = (c.Names && c.Names[0] || c.name || 'unknown').replace(/^\//, '');
                         const nameLower = name.toLowerCase();
-                        const iconKey = iconAliases[nameLower] || nameLower.replace(/-server$/, '').replace(/_/g, '-');
+                        // Strip known prefixes (homestore-, docker-, etc.) to get the base app name
+                        const stripped = nameLower.replace(/^(homestore|docker|stack|my|custom)-/, '').replace(/-server$/, '').replace(/_/g, '-');
+                        const iconKey = iconAliases[nameLower] || iconAliases[stripped] || stripped;
                         const iconUrl = `https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/${iconKey}.png`;
                         const fallbackIcon = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="20" font-size="20">🐳</text></svg>')}`;
                         const statusColor = isRunning ? '#22c55e' : '#ef4444';
