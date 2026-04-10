@@ -3486,7 +3486,7 @@ async function renderStorageDashboard() {
                     </div>
                     <div class="mount-bar-text">
                         <span>${usage}% ${t('storage.used', 'usado')}</span>
-                        <span>${escapeHtml(disk.size || 'N/A')}</span>
+                        <span>${escapeHtml(disk.free || disk.size || 'N/A')} ${t('storage.available', 'disponible')}</span>
                     </div>
                 </div>
                 <div class="mount-size">

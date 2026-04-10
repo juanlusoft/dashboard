@@ -591,6 +591,8 @@ router.get('/disks', async (req, res) => {
 
                 // Get disk usage from mounted partitions
                 let usage = 0;
+                let freeFormatted = null;
+                let usedFormatted = null;
                 try {
                     // Use execFileSync to avoid shell interpolation
                     const dfOutput = execFileSync('df', ['-P'], { encoding: 'utf8' });
@@ -601,6 +603,14 @@ router.get('/disks', async (req, res) => {
                         const parts = diskLine.trim().split(/\s+/);
                         if (parts.length >= 5) {
                             usage = parseInt(parts[4]) || 0; // Use% column
+                            const freeKB = parseInt(parts[3]) || 0;
+                            const usedKB = parseInt(parts[2]) || 0;
+                            const fmt = (kb) => {
+                                const gb = kb / 1024 / 1024;
+                                return gb >= 1024 ? (gb / 1024).toFixed(1) + ' TB' : gb.toFixed(0) + ' GB';
+                            };
+                            freeFormatted = fmt(freeKB);
+                            usedFormatted = fmt(usedKB);
                         }
                     }
                 } catch (e) {}
@@ -610,6 +620,8 @@ router.get('/disks', async (req, res) => {
                     device: dev.device,
                     type: diskType,
                     size: sizeGBraw >= 1024 ? (sizeGBraw / 1024).toFixed(1) + ' TB' : sizeGB + ' GB',
+                    free: freeFormatted,
+                    used: usedFormatted,
                     model: finalModel,
                     serial: serial || 'N/A',
                     temp: temp,
