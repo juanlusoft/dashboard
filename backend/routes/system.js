@@ -388,10 +388,20 @@ router.get('/fan/status', requireAuth, (req, res) => {
         // Service active check
         let serviceActive = false;
         try {
-            const result = execFileSync('systemctl', ['is-active', 'homepinas-fan.service'], {
+            // homepinas-fanctl is a oneshot service triggered by a timer.
+            // Check the timer is active (waiting) — that means fan control is working.
+            const timerResult = execFileSync('systemctl', ['is-active', 'homepinas-fanctl.timer'], {
                 encoding: 'utf8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe']
             }).trim();
-            serviceActive = result === 'active';
+            if (timerResult === 'active') {
+                serviceActive = true;
+            } else {
+                // Fallback: check if the oneshot service itself is active (running right now)
+                const svcResult = execFileSync('systemctl', ['is-active', 'homepinas-fanctl.service'], {
+                    encoding: 'utf8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe']
+                }).trim();
+                serviceActive = svcResult === 'active';
+            }
         } catch (e) {
             serviceActive = false;
         }
