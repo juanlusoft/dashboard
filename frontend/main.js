@@ -10324,7 +10324,7 @@ async function renderActiveBackupView() {
                 <h3 class="abk-stats-title">🖥️ Active Backup</h3>
                 <p class="abk-stats-subtitle">Backups automáticos de equipos remotos — el agente es invisible para el usuario</p>
             </div>
-            <div class="abk-header-actions"><a href="/downloads/HomePiNAS-Agent-v2.tar.gz" class="btn-secondary btn-sm" download>⬇️ Descargar Agente</a> <a href="/docs/active-backup-agent-install.html" target="_blank" class="btn-secondary btn-sm">📖 Guía Instalación</a> <a href="/docs/active-backup-restore.html" target="_blank" class="btn-secondary btn-sm">🔧 Guía Restauración</a> <button class="btn-primary btn-sm" id="ab-add-btn">＋ Añadir Dispositivo</button></div>
+            <div class="abk-header-actions"><a href="/downloads/HomePiNAS-Backup-Setup-1.1.3.exe" class="btn-secondary btn-sm" download>⬇️ Agente Windows</a> <a href="/downloads/HomePiNAS-Agent-v2.tar.gz" class="btn-secondary btn-sm" download>⬇️ Agente Linux</a> <a href="/docs/active-backup-agent-install.html" target="_blank" class="btn-secondary btn-sm">📖 Guía Instalación</a> <a href="/docs/active-backup-restore.html" target="_blank" class="btn-secondary btn-sm">🔧 Guía Restauración</a> <button class="btn-primary btn-sm" id="ab-add-btn">＋ Añadir Dispositivo</button></div>
         </div>
         <div class="abk-stats-grid">
             <div class="abk-stat-item">
