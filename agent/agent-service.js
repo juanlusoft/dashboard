@@ -149,7 +149,7 @@ function getLocalSubnet() {
 
 async function scanSubnet(subnetPrefix) {
   const results = [];
-  const commonPorts = [443, 80, 3000];
+  const commonPorts = [443, 80];
   
   // Scan common IPs (gateway, .100, .101, etc.)
   const targets = [1, 100, 101, 102, 50, 200];
