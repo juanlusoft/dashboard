@@ -3016,17 +3016,79 @@ async function renderDashboard(quickRefresh) {
 
             if (dockerWidget && Array.isArray(containers) && containers.length > 0) {
                 dockerWidget.style.display = 'block';
-                const html = containers.slice(0, 8).map(c => {
-                    const stateColor = c.status === 'running' ? 'var(--success)' : 'var(--danger)';
+                const iconAliases = {
+                    'plex-media-server': 'plex',
+                    'plex': 'plex',
+                    'qbittorrent': 'qbittorrent',
+                    'rsync-server': 'rsync',
+                    'rsync': 'rsync',
+                    'seerr': 'jellyseerr',
+                    'jellyseerr': 'jellyseerr',
+                    'overseerr': 'overseerr',
+                    'sonarr': 'sonarr',
+                    'radarr': 'radarr',
+                    'prowlarr': 'prowlarr',
+                    'bazarr': 'bazarr',
+                    'lidarr': 'lidarr',
+                    'readarr': 'readarr',
+                    'jellyfin': 'jellyfin',
+                    'emby': 'emby',
+                    'portainer': 'portainer',
+                    'nginx': 'nginx',
+                    'traefik': 'traefik',
+                    'nextcloud': 'nextcloud',
+                    'heimdall': 'heimdall',
+                    'pihole': 'pi-hole',
+                    'homeassistant': 'home-assistant',
+                    'home-assistant': 'home-assistant',
+                    'grafana': 'grafana',
+                    'influxdb': 'influxdb',
+                    'vaultwarden': 'vaultwarden',
+                    'bitwarden': 'vaultwarden',
+                };
+                window._dashDockerContainers = containers;
+                const grid = document.createElement('div');
+                grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;';
+
+                window._dashDockerContainers.forEach((c, idx) => {
+                    const isRunning = c.status === 'running';
                     const name = (c.Names && c.Names[0] || c.name || 'unknown').replace(/^\//, '');
-                    const image = c.Image || '';
-                    const shortImage = image.split(':')[0].split('/').pop();
-                    return `<div class="net-row">
-                        <span><span style="color:${stateColor};">●</span> ${escapeHtml(name)}</span>
-                        <span style="font-size:12px;color:var(--text-dim);">${escapeHtml(shortImage)}</span>
-                    </div>`;
-                }).join('');
-                if (dockerContent) dockerContent.innerHTML = html;
+                    const nameLower = name.toLowerCase();
+                    const stripped = nameLower.replace(/^(homestore|docker|stack|my|custom)-/, '').replace(/-server$/, '').replace(/_/g, '-');
+                    const iconKey = iconAliases[nameLower] || iconAliases[stripped] || stripped;
+                    const iconUrl = `https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/${iconKey}.png`;
+                    const fallbackSvg = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="20" font-size="20">🐳</text></svg>')}`;
+                    const statusColor = isRunning ? '#22c55e' : '#ef4444';
+                    // Display name without common prefixes
+                    const displayName = name.replace(/^(homestore|docker|stack|my|custom)-/i, '');
+
+                    const card = document.createElement('div');
+                    card.dataset.dockerIdx = idx;
+                    card.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 12px;background:rgba(255,255,255,0.03);border-radius:10px;cursor:pointer;transition:background 0.15s;min-width:0;';
+
+                    const img = document.createElement('img');
+                    img.src = iconUrl;
+                    img.style.cssText = 'width:44px;height:44px;border-radius:8px;object-fit:contain;flex-shrink:0;';
+                    img.addEventListener('error', () => { img.src = fallbackSvg; });
+
+                    const info = document.createElement('div');
+                    info.style.cssText = 'min-width:0;flex:1;';
+                    info.innerHTML = `
+                        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(displayName)}</div>
+                        <div style="font-size:11px;color:${statusColor};margin-top:3px;display:flex;align-items:center;gap:4px;">
+                            <span style="font-size:9px;">${isRunning ? '▶' : '■'}</span>${escapeHtml(isRunning ? t('docker.started', 'iniciado') : t('docker.stopped_short', 'detenido'))}
+                        </div>`;
+
+                    card.addEventListener('mouseenter', () => { card.style.background = 'rgba(255,255,255,0.07)'; });
+                    card.addEventListener('mouseleave', () => { card.style.background = 'rgba(255,255,255,0.03)'; });
+                    card.addEventListener('click', (e) => showDockerMiniMenu(idx, e, card));
+
+                    card.appendChild(img);
+                    card.appendChild(info);
+                    grid.appendChild(card);
+                });
+
+                if (dockerContent) { dockerContent.innerHTML = ''; dockerContent.appendChild(grid); }
             }
         }
     } catch (e) {
@@ -3035,6 +3097,156 @@ async function renderDashboard(quickRefresh) {
 
     } // end !quickRefresh
 }
+
+// Docker mini context menu for overview widget
+window.showDockerMiniMenu = function(idx, event, el) {
+    event.stopPropagation();
+    const existing = document.getElementById('docker-mini-menu');
+    if (existing) { existing.remove(); return; }
+
+    const c = (window._dashDockerContainers || [])[idx];
+    if (!c) return;
+
+    const isRunning = c.status === 'running';
+    const name = (c.Names && c.Names[0] || c.name || 'unknown').replace(/^\//, '');
+    const id = c.Id || c.id;
+    const image = (c.Image || '').split(':')[0];
+    const hubUrl = `https://hub.docker.com/r/${image}`;
+
+    const menu = document.createElement('div');
+    menu.id = 'docker-mini-menu';
+    menu.style.cssText = `
+        position: fixed; z-index: 9999;
+        background: #fff; color: #111;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.12);
+        min-width: 220px; overflow: hidden;
+        font-size: 14px; font-family: inherit;
+    `;
+
+    const card = el || event.currentTarget || event.target;
+    const rect = card.getBoundingClientRect();
+    let top = rect.bottom + 6;
+    let left = rect.left;
+    if (left + 240 > window.innerWidth) left = window.innerWidth - 248;
+    if (top + 340 > window.innerHeight) top = rect.top - 340;
+    menu.style.top = `${top}px`;
+    menu.style.left = `${left}px`;
+
+    const svgIcons = {
+        play:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>`,
+        stop:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>`,
+        logs:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="15" y2="18"/></svg>`,
+        edit:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>`,
+        trash:   `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`,
+        globe:   `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>`,
+        support: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+        info:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="8"/><line x1="12" y1="12" x2="12" y2="16"/></svg>`,
+        donate:  `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>`,
+    };
+
+    const items = [
+        {
+            icon: isRunning ? svgIcons.stop : svgIcons.play,
+            label: isRunning ? 'Detener' : 'Iniciar',
+            action: async () => {
+                menu.remove();
+                try {
+                    const res = await authFetch(`${API_BASE}/docker/action`, {
+                        method: 'POST',
+                        body: JSON.stringify({ id, action: isRunning ? 'stop' : 'start' })
+                    });
+                    if (!res.ok) throw new Error((await res.json()).error || 'Error');
+                    showNotification(isRunning ? 'Contenedor detenido' : 'Contenedor iniciado', 'success');
+                    renderDashboard();
+                } catch (e) { showNotification(e.message, 'error'); }
+            }
+        },
+        {
+            icon: svgIcons.logs,
+            label: 'Registros',
+            action: () => { menu.remove(); openContainerLogs(id, name); }
+        },
+        {
+            icon: svgIcons.edit,
+            label: 'Editar',
+            action: () => { menu.remove(); renderContent('docker'); }
+        },
+        {
+            icon: svgIcons.trash,
+            label: 'Eliminar',
+            danger: true,
+            action: async () => {
+                menu.remove();
+                const confirmed = await showConfirmModal('Eliminar contenedor', `¿Eliminar "${name}"? Esta acción no se puede deshacer.`);
+                if (!confirmed) return;
+                try {
+                    const stopRes = await authFetch(`${API_BASE}/docker/action`, {
+                        method: 'POST',
+                        body: JSON.stringify({ id, action: 'stop' })
+                    });
+                    // ignore stop errors (already stopped)
+                    const rmRes = await authFetch(`${API_BASE}/docker/containers/${encodeURIComponent(id)}`, { method: 'DELETE' });
+                    if (!rmRes.ok) throw new Error('No se pudo eliminar el contenedor');
+                    showNotification('Contenedor eliminado', 'success');
+                    renderDashboard();
+                } catch (e) {
+                    showNotification(e.message, 'error');
+                    renderContent('docker');
+                }
+            }
+        },
+        { separator: true },
+        {
+            icon: svgIcons.globe,
+            label: 'Página del proyecto',
+            action: () => { menu.remove(); window.open(hubUrl, '_blank', 'noopener'); }
+        },
+        {
+            icon: svgIcons.support,
+            label: 'Soporte',
+            action: () => { menu.remove(); window.open(hubUrl + '/tags', '_blank', 'noopener'); }
+        },
+        {
+            icon: svgIcons.info,
+            label: 'Más información',
+            action: () => { menu.remove(); window.open(hubUrl, '_blank', 'noopener'); }
+        },
+        {
+            icon: svgIcons.donate,
+            label: 'Donación',
+            action: () => { menu.remove(); window.open('https://www.buymeacoffee.com/', '_blank', 'noopener'); }
+        },
+    ];
+
+    items.forEach(item => {
+        if (item.separator) {
+            const sep = document.createElement('div');
+            sep.style.cssText = 'height:1px;background:#e5e7eb;margin:2px 0;';
+            menu.appendChild(sep);
+            return;
+        }
+        const row = document.createElement('div');
+        row.style.cssText = `display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;transition:background 0.12s;color:${item.danger ? '#ef4444' : '#111'};`;
+        row.innerHTML = `<span style="width:18px;display:flex;align-items:center;flex-shrink:0;">${item.icon}</span><span>${item.label}</span>`;
+        row.onmouseenter = () => row.style.background = item.danger ? '#fef2f2' : '#f3f4f6';
+        row.onmouseleave = () => row.style.background = '';
+        row.onclick = item.action;
+        menu.appendChild(row);
+    });
+
+    document.body.appendChild(menu);
+
+    setTimeout(() => {
+        function outsideClick(e) {
+            if (!menu.contains(e.target)) {
+                menu.remove();
+                document.removeEventListener('click', outsideClick);
+            }
+        }
+        document.addEventListener('click', outsideClick);
+    }, 0);
+};
 
 // Fan speed control - update percentage display while dragging
 function updateFanPercent(fanId, value) {
