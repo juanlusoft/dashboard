@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.5
+# HomePiNAS v2.13.6
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.5-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.6-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -66,6 +66,15 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - Restricted sudoers configuration
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
+
+## 🆕 What's New in v2.13.6
+
+### Mejoras por Javier (PRs #12–#15)
+- **📡 Gráfica de red en tiempo real** — Ancho de banda por interfaz con selector y escala automática
+- **💾 Columna disco en gestor de archivos** — Muestra en qué disco físico está cada archivo (MergerFS)
+- **🔧 Fix espacio libre real** — Muestra GB disponibles en lugar del tamaño total del disco
+- **🌡️ Fix estado ventilador** — Detecta correctamente el timer `homepinas-fanctl.timer`
+- **🔘 Fix botón Mover Ahora** — Ancho automático para que no se deforme en la tarjeta de caché
 
 ## 🆕 What's New in v2.13.5
 
