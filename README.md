@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.2
+# HomePiNAS v2.13.3
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.2-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.3-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -67,14 +67,13 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
 
-## 🆕 What's New in v2.13.2
+## 🆕 What's New in v2.13.3
 
-### Fixes
-- **🕐 SMART Power-On Hours** — Fixed critical overflow bug (~82Bx) on Seagate drives showing trillions of years; now uses normalized value for attribute 9
-- **🌐 Network Gateway/DNS** — Fixed nmcli regex parsing; Gateway and DNS now display correctly in the Network section
-- **🐳 Docker Widget** — Fixed container status indicator showing red for running containers (wrong field `State` → `status`)
-- **📁 NFS Section UI** — Full NFS management UI added, matching Samba section: share list, add/delete shares, restart button, active connections counter
-- **🔌 NFS Connection Counter** — Backend now tracks active NFS client connections via `ss -tun`
+### Agente Windows - Active Backup
+- **🔍 Detección segura** — Firma oculta `hnv2` para identificar HomePiNAS sin depender del nombre del host
+- **🔐 Credenciales obligatorias** — Usuario y contraseña requeridos en la conexión manual
+- **🔌 Puerto corregido** — Puerto por defecto corregido de 3001 a 443
+- **🗑️ mDNS eliminado** — Sin dependencias de nombre de host ni hostnames hardcodeados
 
 ## 🆕 What's New in v2.13.0
 
