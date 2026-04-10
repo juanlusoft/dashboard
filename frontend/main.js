@@ -2888,7 +2888,7 @@ async function renderDashboard(quickRefresh) {
         <div id="cache-status-widget" class="glass-card storage-overview dash-storage-full" style="display: none;">
             <div class="storage-array-header">
                 <h3>⚡ ${t('dashboard.cache', 'Estado de la Caché')}</h3>
-                <button id="cache-mover-btn" class="btn-primary" style="padding: 6px 14px; font-size: 13px; border-radius: 6px;">
+                <button id="cache-mover-btn" class="btn-primary" style="padding: 6px 14px; font-size: 13px; border-radius: 6px; width: auto; align-self: center;">
                     🚀 ${t('dashboard.moveNow', 'Mover Ahora')}
                 </button>
             </div>
