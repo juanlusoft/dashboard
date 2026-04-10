@@ -14,7 +14,7 @@ const { requireAuth } = require('../../middleware/auth');
 const { logSecurityEvent } = require('../../utils/security');
 const { getData, saveData } = require('../../utils/data');
 const { sanitizeDiskId, validateDiskConfig, sanitizePathWithinBase } = require('../../utils/sanitize');
-const { STORAGE_MOUNT_BASE, POOL_MOUNT, SNAPRAID_CONF, formatSize } = require('./shared');
+const { STORAGE_MOUNT_BASE, POOL_MOUNT, SNAPRAID_CONF, formatSize, formatBytes } = require('./shared');
 
 
 // SnapRAID sync progress tracking
