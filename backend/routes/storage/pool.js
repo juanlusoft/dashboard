@@ -85,9 +85,9 @@ router.get('/pool/status', requireAuth, async (req, res) => {
                 if (parts.length >= 5) {
                     const total = parseInt(parts[1]) || 0;
                     const used = parseInt(parts[2]) || 0;
-                    const free = parseInt(parts[3]) || 0;
-                    const usedPercent = parseInt(parts[4]) || 0;
-                    
+                    const free = total - used; // Calculate from total-used to avoid reserved-space confusion
+                    const usedPercent = total > 0 ? Math.round((used / total) * 100) : 0;
+
                     status.capacity.total = formatSize(total);
                     status.capacity.used = formatSize(used);
                     status.capacity.free = formatSize(free);
