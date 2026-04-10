@@ -19,4 +19,17 @@ function formatSize(gb) {
     return Math.round(num) + ' GB';
 }
 
-module.exports = { STORAGE_MOUNT_BASE, POOL_MOUNT, SNAPRAID_CONF, formatSize };
+/**
+ * Format bytes to human-readable size
+ * @param {number} bytes - Size in bytes
+ * @returns {string} Formatted size string
+ */
+function formatBytes(bytes) {
+    const num = parseInt(bytes) || 0;
+    if (num >= 1024 ** 4) return (num / 1024 ** 4).toFixed(1) + ' TB';
+    if (num >= 1024 ** 3) return (num / 1024 ** 3).toFixed(1) + ' GB';
+    if (num >= 1024 ** 2) return (num / 1024 ** 2).toFixed(0) + ' MB';
+    return num + ' B';
+}
+
+module.exports = { STORAGE_MOUNT_BASE, POOL_MOUNT, SNAPRAID_CONF, formatSize, formatBytes };

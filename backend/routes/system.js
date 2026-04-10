@@ -388,10 +388,20 @@ router.get('/fan/status', requireAuth, (req, res) => {
         // Service active check
         let serviceActive = false;
         try {
-            const result = execFileSync('systemctl', ['is-active', 'homepinas-fan.service'], {
+            // homepinas-fanctl is a oneshot service triggered by a timer.
+            // Check the timer is active (waiting) — that means fan control is working.
+            const timerResult = execFileSync('systemctl', ['is-active', 'homepinas-fanctl.timer'], {
                 encoding: 'utf8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe']
             }).trim();
-            serviceActive = result === 'active';
+            if (timerResult === 'active') {
+                serviceActive = true;
+            } else {
+                // Fallback: check if the oneshot service itself is active (running right now)
+                const svcResult = execFileSync('systemctl', ['is-active', 'homepinas-fanctl.service'], {
+                    encoding: 'utf8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe']
+                }).trim();
+                serviceActive = svcResult === 'active';
+            }
         } catch (e) {
             serviceActive = false;
         }
@@ -591,6 +601,8 @@ router.get('/disks', async (req, res) => {
 
                 // Get disk usage from mounted partitions
                 let usage = 0;
+                let freeFormatted = null;
+                let usedFormatted = null;
                 try {
                     // Use execFileSync to avoid shell interpolation
                     const dfOutput = execFileSync('df', ['-P'], { encoding: 'utf8' });
@@ -601,6 +613,14 @@ router.get('/disks', async (req, res) => {
                         const parts = diskLine.trim().split(/\s+/);
                         if (parts.length >= 5) {
                             usage = parseInt(parts[4]) || 0; // Use% column
+                            const freeKB = parseInt(parts[3]) || 0;
+                            const usedKB = parseInt(parts[2]) || 0;
+                            const fmt = (kb) => {
+                                const gb = kb / 1024 / 1024;
+                                return gb >= 1024 ? (gb / 1024).toFixed(1) + ' TB' : gb.toFixed(0) + ' GB';
+                            };
+                            freeFormatted = fmt(freeKB);
+                            usedFormatted = fmt(usedKB);
                         }
                     }
                 } catch (e) {}
@@ -610,6 +630,8 @@ router.get('/disks', async (req, res) => {
                     device: dev.device,
                     type: diskType,
                     size: sizeGBraw >= 1024 ? (sizeGBraw / 1024).toFixed(1) + ' TB' : sizeGB + ' GB',
+                    free: freeFormatted,
+                    used: usedFormatted,
                     model: finalModel,
                     serial: serial || 'N/A',
                     temp: temp,
