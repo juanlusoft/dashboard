@@ -1,6 +1,6 @@
 /**
  * NAS Discovery - Find HomePiNAS on the local network
- * Methods: mDNS/Bonjour, hostname, subnet scan
+ * Identifies HomePiNAS by checking for _sig:'hnv2' in /api/system/status
  */
 
 const https = require('https');
@@ -8,34 +8,23 @@ const os = require('os');
 
 class NASDiscovery {
   constructor() {
-    this.timeout = 5000;
+    this.timeout = 3000;
   }
 
-  async discover() {
+  async discover(manualIP = null) {
     const results = [];
 
-    // Method 1: Try mDNS/Bonjour
+    // Method 1: Manual IP provided by user
+    if (manualIP) {
+      const result = await this._checkHost(manualIP, 443);
+      if (result) return [result];
+    }
+
+    // Method 2: Subnet scan
     try {
-      const mdnsResults = await this._discoverMDNS();
-      results.push(...mdnsResults);
+      const scanResults = await this._scanSubnet();
+      results.push(...scanResults);
     } catch (e) {}
-
-    // Method 2: Try common hostnames
-    const hostnames = ['homepinas.local', 'homepinas', 'nas.local'];
-    for (const host of hostnames) {
-      try {
-        const result = await this._checkHost(host, 443);
-        if (result) results.push(result);
-      } catch (e) {}
-    }
-
-    // Method 3: Subnet scan
-    if (results.length === 0) {
-      try {
-        const scanResults = await this._scanSubnet();
-        results.push(...scanResults);
-      } catch (e) {}
-    }
 
     // Deduplicate by IP
     const seen = new Set();
@@ -46,64 +35,29 @@ class NASDiscovery {
     });
   }
 
-  async _discoverMDNS() {
-    return new Promise((resolve) => {
-      const results = [];
-      try {
-        const { Bonjour } = require('bonjour-service');
-        const bonjour = new Bonjour();
-
-        const browser = bonjour.find({ type: 'https' }, (service) => {
-          if (service.name && service.name.toLowerCase().includes('homepinas')) {
-            // Prefer IPv4 addresses over IPv6
-            const addresses = service.addresses || [];
-            const ipv4 = addresses.find(a => /^\d+\.\d+\.\d+\.\d+$/.test(a));
-            const addr = ipv4 || service.host?.replace(/\.local\.?$/, '.local') || addresses[0];
-            if (addr) {
-              results.push({
-                address: addr,
-                port: service.port || 443,
-                name: service.name,
-                method: 'mdns',
-              });
-            }
-          }
-        });
-
-        setTimeout(() => {
-          browser.stop();
-          bonjour.destroy();
-          resolve(results);
-        }, 3000);
-      } catch (e) {
-        resolve([]);
-      }
-    });
-  }
-
   async _checkHost(host, port) {
     return new Promise((resolve) => {
-      // Discovery uses rejectUnauthorized:false since we don't know the cert yet.
-      // The agent will pin the cert fingerprint after first successful connection.
-      const discoveryAgent = new https.Agent({ rejectUnauthorized: false });
+      const agent = new https.Agent({ rejectUnauthorized: false });
       const req = https.get({
         hostname: host,
         port,
-        path: '/api/system/stats',
+        path: '/api/system/status',
         timeout: this.timeout,
-        agent: discoveryAgent,
+        agent,
       }, (res) => {
         let data = '';
         res.on('data', (chunk) => { data += chunk; });
         res.on('end', () => {
           try {
             const json = JSON.parse(data);
-            if (json.cpuModel || json.hostname) {
+            // Identify HomePiNAS by hidden signature
+            if (json._sig === 'hnv2') {
               resolve({
                 address: host,
                 port,
-                name: json.hostname || 'HomePiNAS',
-                method: 'hostname',
+                name: 'HomePiNAS',
+                version: json.version || '',
+                method: host === host ? 'scan' : 'manual',
               });
             } else {
               resolve(null);
@@ -133,7 +87,7 @@ class NASDiscovery {
 
       promises.push(
         this._checkHost(ip, 443).then(result => {
-          if (result) results.push(result);
+          if (result) results.push({ ...result, method: 'scan' });
         }).catch(() => {})
       );
 

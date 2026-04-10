@@ -13,19 +13,23 @@
     <h1>HomePiNAS Backup</h1>
     <p class="subtitle">Conecta con tu NAS para proteger tu equipo</p>
 
-    <button id="btn-discover" class="btn btn-primary btn-large">🔍 Buscar NAS en mi red</button>
+    <button id="btn-discover" class="btn btn-primary btn-large">🔍 Buscar NAS automáticamente</button>
 
     <div id="discover-results" class="hidden">
       <div id="nas-list"></div>
     </div>
 
     <div class="manual-connect">
-      <p>O introduce la dirección manualmente:</p>
+      <p>O introduce los datos manualmente:</p>
       <div class="input-row">
         <input type="text" id="nas-address" placeholder="192.168.1.x">
-        <input type="number" id="nas-port" value="3001" style="width:80px">
-        <button id="btn-connect" class="btn">Conectar</button>
+        <input type="number" id="nas-port" value="443" style="width:80px">
       </div>
+      <div class="input-row" style="margin-top:8px">
+        <input type="text" id="nas-username" placeholder="Usuario" autocomplete="username">
+        <input type="password" id="nas-password" placeholder="Contraseña" autocomplete="current-password">
+      </div>
+      <button id="btn-connect" class="btn btn-primary" style="margin-top:8px;width:100%">Conectar</button>
     </div>
   </div>
 

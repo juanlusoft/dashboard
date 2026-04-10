@@ -122,19 +122,19 @@ document.getElementById('btn-discover').addEventListener('click', async () => {
 
 document.getElementById('btn-connect').addEventListener('click', () => {
   const addr = document.getElementById('nas-address').value.trim();
-  const port = parseInt(document.getElementById('nas-port').value) || 3001;
-  if (!addr) return;
-  if (port < 1 || port > 65535) {
-    alert('Puerto inválido (debe ser entre 1 y 65535)');
-    return;
-  }
-  connectToNAS(addr, port);
+  const port = parseInt(document.getElementById('nas-port').value) || 443;
+  const username = document.getElementById('nas-username').value.trim();
+  const password = document.getElementById('nas-password').value;
+  if (!addr) { alert('Introduce la dirección IP del NAS'); return; }
+  if (!username || !password) { alert('Introduce usuario y contraseña'); return; }
+  if (port < 1 || port > 65535) { alert('Puerto inválido (debe ser entre 1 y 65535)'); return; }
+  connectToNAS(addr, port, username, password);
 });
 
-async function connectToNAS(address, port) {
+async function connectToNAS(address, port, username, password) {
   showLoading('Conectando y registrando en el NAS...');
   try {
-    const result = await window.api.connectNAS({ address, port });
+    const result = await window.api.connectNAS({ address, port, username, password });
 
     if (result.success) {
       if (result.status === 'approved') {

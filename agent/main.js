@@ -293,15 +293,19 @@ function setupIPC() {
   }));
 
   // Discover and register with NAS
-  ipcMain.handle('connect-nas', async (_, { address, port }) => {
+  ipcMain.handle('connect-nas', async (_, { address, port, username, password }) => {
     try {
       const parsedPort = port || 443;
       if (parsedPort < 1 || parsedPort > 65535) {
         return { success: false, error: 'Puerto inválido (debe ser entre 1 y 65535)' };
       }
 
-      // Test connection
-      await api.testConnection(address, parsedPort);
+      // Authenticate with credentials
+      try {
+        await api.authenticate(address, parsedPort, username, password);
+      } catch (authErr) {
+        return { success: false, error: 'Usuario o contraseña incorrectos' };
+      }
 
       // Register agent
       const os = require('os');
@@ -338,9 +342,9 @@ function setupIPC() {
     }
   });
 
-  ipcMain.handle('discover-nas', async () => {
+  ipcMain.handle('discover-nas', async (_, manualIP = null) => {
     try {
-      const results = await discovery.discover();
+      const results = await discovery.discover(manualIP || null);
       return { success: true, results };
     } catch (err) {
       return { success: false, error: err.message };

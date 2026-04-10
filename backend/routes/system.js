@@ -638,7 +638,8 @@ router.get('/status', async (req, res) => {
         storageConfig: data.storageConfig,
         poolConfigured: data.poolConfigured || false,
         network: data.network,
-        version
+        version,
+        _sig: 'hnv2'
     });
 });
 
