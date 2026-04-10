@@ -3233,7 +3233,7 @@ select option,
 /* Table header */
 .fm-table-header {
     display: grid;
-    grid-template-columns: 36px 32px 1fr 90px 150px 90px 60px;
+    grid-template-columns: 36px 32px 1fr 90px 150px 90px 70px 60px;
     padding: 10px 16px;
     background: var(--hover-bg, var(--bg-hover));
     font-weight: 600;
@@ -3252,7 +3252,7 @@ select option,
 }
 .fm-row {
     display: grid;
-    grid-template-columns: 36px 32px 1fr 90px 150px 90px 60px;
+    grid-template-columns: 36px 32px 1fr 90px 150px 90px 70px 60px;
     padding: 8px 16px;
     align-items: center;
     gap: 4px;

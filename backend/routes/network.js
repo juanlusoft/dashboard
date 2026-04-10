@@ -267,4 +267,39 @@ router.post('/configure', requireAuth, (req, res) => {
     }
 });
 
+// Network bandwidth stats from /proc/net/dev
+const _netPrev = {};
+router.get('/stats', requireAuth, (req, res) => {
+    try {
+        const raw = fs.readFileSync('/proc/net/dev', 'utf8');
+        const now = Date.now();
+        const stats = [];
+
+        for (const line of raw.split('\n').slice(2)) {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length < 10) continue;
+            const iface = parts[0].replace(':', '');
+            if (iface === 'lo') continue;
+
+            const rxBytes = parseInt(parts[1]) || 0;
+            const txBytes = parseInt(parts[9]) || 0;
+
+            let rxSpeed = 0, txSpeed = 0;
+            if (_netPrev[iface]) {
+                const dt = (now - _netPrev[iface].ts) / 1000;
+                if (dt > 0) {
+                    rxSpeed = Math.max(0, (rxBytes - _netPrev[iface].rx) / dt);
+                    txSpeed = Math.max(0, (txBytes - _netPrev[iface].tx) / dt);
+                }
+            }
+            _netPrev[iface] = { rx: rxBytes, tx: txBytes, ts: now };
+            stats.push({ iface, rxSpeed, txSpeed, rxBytes, txBytes });
+        }
+
+        res.json(stats);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read network stats' });
+    }
+});
+
 module.exports = router;
