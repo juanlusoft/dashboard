@@ -293,18 +293,11 @@ function setupIPC() {
   }));
 
   // Discover and register with NAS
-  ipcMain.handle('connect-nas', async (_, { address, port, username, password }) => {
+  ipcMain.handle('connect-nas', async (_, { address, port }) => {
     try {
       const parsedPort = port || 443;
       if (parsedPort < 1 || parsedPort > 65535) {
         return { success: false, error: 'Puerto inválido (debe ser entre 1 y 65535)' };
-      }
-
-      // Authenticate with credentials
-      try {
-        await api.authenticate(address, parsedPort, username, password);
-      } catch (authErr) {
-        return { success: false, error: 'Usuario o contraseña incorrectos' };
       }
 
       // Register agent
