@@ -18,6 +18,36 @@ const { getData } = require('../utils/data');
 
 // Base storage directory - all operations are confined here
 const STORAGE_BASE = '/mnt/storage';
+const DISK_BASE = '/mnt/disks';
+
+// Detect which physical disk a MergerFS file lives on
+let _diskDirs = null;
+function getDiskDirs() {
+    if (_diskDirs) return _diskDirs;
+    try {
+        _diskDirs = fs.readdirSync(DISK_BASE)
+            .filter(d => /^(disk|cache)\d+$/.test(d))
+            .sort((a, b) => {
+                // cache first, then disk, numerically
+                const typeA = a.startsWith('cache') ? 0 : 1;
+                const typeB = b.startsWith('cache') ? 0 : 1;
+                if (typeA !== typeB) return typeA - typeB;
+                return parseInt(a.match(/\d+/)[0]) - parseInt(b.match(/\d+/)[0]);
+            });
+    } catch { _diskDirs = []; }
+    return _diskDirs;
+}
+
+function getFileDisk(fullPath) {
+    const relPath = path.relative(STORAGE_BASE, fullPath);
+    if (!relPath || relPath.startsWith('..')) return null;
+    for (const disk of getDiskDirs()) {
+        try {
+            if (fs.existsSync(path.join(DISK_BASE, disk, relPath))) return disk;
+        } catch {}
+    }
+    return null;
+}
 const INDEPENDENT_BASE = '/mnt/independent';
 
 // MIME type mapping based on file extension
@@ -325,6 +355,7 @@ router.get('/list', requirePermission('read'), (req, res) => {
           type: stat.isDirectory() ? 'directory' : 'file',
           modified: stat.mtime,
           permissions: '0' + (stat.mode & parseInt('777', 8)).toString(8),
+          disk: stat.isDirectory() ? null : getFileDisk(fullPath),
         });
       } catch {
         // Skip entries we can't stat (broken symlinks, permission issues)
