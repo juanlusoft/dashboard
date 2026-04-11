@@ -534,8 +534,7 @@ router.post('/compose/up', requireAuth, async (req, res) => {
 
         // SECURITY: Use execFile with explicit arguments instead of shell interpolation
         const { execFileSync } = require('child_process');
-        const output = execFileSync('docker', ['compose', 'up', '-d'], {
-            cwd: composeDir,
+        const output = execFileSync('docker', ['compose', '-f', composeFile, 'up', '-d'], {
             encoding: 'utf8',
             timeout: 300000 // 5 minutes
         });
@@ -586,8 +585,7 @@ router.post('/compose/down', requireAuth, async (req, res) => {
 
         // SECURITY: Use execFile with explicit arguments
         const { execFileSync } = require('child_process');
-        const output = execFileSync('docker', ['compose', 'down'], {
-            cwd: composeDir,
+        const output = execFileSync('docker', ['compose', '-f', composeFile, 'down'], {
             encoding: 'utf8',
             timeout: 120000
         });
@@ -627,8 +625,8 @@ router.delete('/compose/:name', requireAuth, async (req, res) => {
         // Stop containers first
         try {
             const { execFileSync } = require('child_process');
-            execFileSync('docker', ['compose', 'down'], {
-                cwd: composeDir,
+            const composeFile = path.join(composeDir, 'docker-compose.yml');
+            execFileSync('docker', ['compose', '-f', composeFile, 'down'], {
                 encoding: 'utf8',
                 timeout: 60000
             });

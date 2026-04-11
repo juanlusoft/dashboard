@@ -21,11 +21,34 @@ const SYNCTHING_API_URL = 'http://127.0.0.1:8384';
 const STORAGE_BASE = '/mnt/storage';
 
 let syncthingApiKey = null;
+let syncthingConfigMtime = null;
+let syncthingConfigPath = null;
 
 // Helper: Get Syncthing API key from config
 async function getApiKey() {
-    if (syncthingApiKey) return syncthingApiKey;
-    
+    // Check if cached key is still valid by verifying config file mtime
+    if (syncthingApiKey && syncthingConfigPath) {
+        try {
+            const stat = await fs.stat(syncthingConfigPath);
+            const currentMtime = stat.mtimeMs;
+
+            // If mtime hasn't changed, return cached key
+            if (currentMtime === syncthingConfigMtime) {
+                return syncthingApiKey;
+            }
+
+            // mtime changed, invalidate cache
+            syncthingApiKey = null;
+            syncthingConfigMtime = null;
+            syncthingConfigPath = null;
+        } catch (e) {
+            // Config file disappeared, invalidate cache
+            syncthingApiKey = null;
+            syncthingConfigMtime = null;
+            syncthingConfigPath = null;
+        }
+    }
+
     for (const configDir of SYNCTHING_CONFIG_DIRS) {
         try {
             const configPath = path.join(configDir, 'config.xml');
@@ -33,6 +56,16 @@ async function getApiKey() {
             const match = configXml.match(/<apikey>([^<]+)<\/apikey>/);
             if (match) {
                 syncthingApiKey = match[1];
+
+                // Cache the mtime for future invalidation checks
+                try {
+                    const stat = await fs.stat(configPath);
+                    syncthingConfigMtime = stat.mtimeMs;
+                    syncthingConfigPath = configPath;
+                } catch (e) {
+                    // Ignore stat errors
+                }
+
                 log.info('Found Syncthing API key in:', configDir);
                 return syncthingApiKey;
             }
@@ -547,6 +580,34 @@ router.post('/folders/:id/share', requireAuth, async (req, res) => {
         
         await syncthingApi('/rest/config', 'PUT', config);
         
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /cloud-sync/folders/:id/unshare - Remove a device from a shared folder
+router.post('/folders/:id/unshare', requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { deviceId } = req.body;
+
+        if (!deviceId) {
+            return res.status(400).json({ error: 'Device ID is required' });
+        }
+
+        const config = await syncthingApi('/rest/config');
+
+        const folder = config.folders?.find(f => f.id === id);
+        if (!folder) {
+            return res.status(404).json({ error: 'Folder not found' });
+        }
+
+        // Remove device from folder
+        folder.devices = (folder.devices || []).filter(d => d.deviceID !== deviceId);
+
+        await syncthingApi('/rest/config', 'PUT', config);
+
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });

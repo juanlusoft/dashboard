@@ -15,7 +15,7 @@ const { execFileSync } = require('child_process');
 
 const { requireAuth } = require('../middleware/auth');
 const { logSecurityEvent } = require('../utils/security');
-const { getData } = require('../utils/data');
+const { getData, saveData } = require('../utils/data');
 const { validateFanId, validateFanMode } = require('../utils/sanitize');
 
 // Fan mode presets configuration (v1.5.5 with hysteresis)
@@ -433,19 +433,12 @@ router.get('/fan/status', requireAuth, (req, res) => {
 // Get current fan mode
 router.get('/fan/mode', requireAuth, (req, res) => {
     try {
-        let currentMode = 'balanced';
-        try {
-            let configContent = '';
-            try { configContent = fs.readFileSync(FANCTL_CONF, 'utf8'); } catch (e) {}
+        // Read mode from data.json first (authoritative source)
+        const data = getData();
+        let currentMode = (data.system && data.system.fanMode) || 'balanced';
 
-            if (configContent.includes('SILENT preset')) {
-                currentMode = 'silent';
-            } else if (configContent.includes('PERFORMANCE preset')) {
-                currentMode = 'performance';
-            } else if (configContent.includes('BALANCED preset') || configContent.includes('Custom curve')) {
-                currentMode = 'balanced';
-            }
-        } catch (e) {
+        // Validate the mode is one of the known presets
+        if (!['silent', 'balanced', 'performance'].includes(currentMode)) {
             currentMode = 'balanced';
         }
 
@@ -486,6 +479,12 @@ router.post('/fan/mode', requireAuth, (req, res) => {
         try {
             execFileSync('sudo', ['systemctl', 'restart', 'homepinas-fanctl'], { encoding: 'utf8', timeout: 10000 });
         } catch (e) {}
+
+        // Save mode to data.json for persistent tracking
+        const data = getData();
+        if (!data.system) data.system = {};
+        data.system.fanMode = validatedMode;
+        saveData(data);
 
         logSecurityEvent('FAN_MODE_CHANGE', { mode: validatedMode, user: req.user.username }, req.ip);
         res.json({ success: true, message: `Fan mode set to ${validatedMode}`, mode: validatedMode });

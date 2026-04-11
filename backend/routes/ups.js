@@ -422,12 +422,13 @@ setInterval(async () => {
         message: 'Automatic shutdown triggered due to critical battery level'
       });
 
-      try {
-        execFileSync('sudo', ['shutdown', '-h', '+1', 'HomePiNAS: UPS battery critical'], { timeout: 15000 });
-      } catch (shutdownErr) {
-        log.error('[UPS] Failed to execute shutdown command:', shutdownErr.message);
-        shutdownInitiated = false;
-      }
+      execFile('sudo', ['shutdown', '-h', '+1', 'HomePiNAS: UPS battery critical'], { timeout: 15000 }, (shutdownErr) => {
+        if (shutdownErr) {
+          console.error('[UPS] Failed to execute shutdown command:', shutdownErr.message);
+          log.error('[UPS] Failed to execute shutdown command:', shutdownErr.message);
+          shutdownInitiated = false;
+        }
+      });
     }
   } catch (err) {
     log.error('[UPS] Error in critical battery monitor:', err);

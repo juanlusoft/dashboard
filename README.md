@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.14
+# HomePiNAS v2.13.15
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.14-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.15-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -66,6 +66,16 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - Restricted sudoers configuration
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
+
+## 🆕 What's New in v2.13.15
+
+### Fixes calidad — tercera ronda
+- **🔧 cloud-sync.js** — Endpoint `POST /folders/:id/unshare` añadido; ahora se pueden quitar dispositivos de carpetas Syncthing
+- **🔧 vpn.js** — Detección de interfaz de red mejorada: 3 pasos (ip route → ip link UP → fallback `end0`)
+- **🔧 ups.js** — Shutdown async (`execFile`); resetea `shutdownInitiated` si el comando falla
+- **🔧 docker.js** — `docker compose up/down` usa flag `-f <ruta_completa>` explícita
+- **🔧 system.js** — Modo ventilador persiste en `data.json`; ya no depende de parsear comentarios del archivo de config
+- **🔧 cloud-sync.js** — Cache de API key de Syncthing se invalida cuando cambia el mtime del config.xml
 
 ## 🆕 What's New in v2.13.14
 

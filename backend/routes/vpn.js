@@ -129,6 +129,7 @@ async function isServiceEnabled() {
  * En Pi CM5 puede ser end0, eth1, wlan0, etc.
  */
 async function getDefaultInterface() {
+    // Step 1: try ip route show default
     try {
         const { stdout } = await execFileAsync('ip', ['route', 'show', 'default']);
         const match = stdout.match(/dev\s+(\S+)/);
@@ -137,16 +138,23 @@ async function getDefaultInterface() {
         log.warn('[VPN] No se pudo detectar interfaz por defecto via ip route:', e.message);
     }
 
-    // Fallback: buscar primera interfaz IPv4 no-interna
-    const interfaces = os.networkInterfaces();
-    for (const [name, addrs] of Object.entries(interfaces)) {
-        for (const addr of addrs) {
-            if (addr.family === 'IPv4' && !addr.internal) {
-                return name;
+    // Step 2: try ip link show — find first UP interface that is not lo
+    try {
+        const { stdout } = await execFileAsync('ip', ['link', 'show']);
+        const lines = stdout.split('\n');
+        for (const line of lines) {
+            // Lines like: "2: end0: <BROADCAST,MULTICAST,UP,LOWER_UP> ..."
+            const match = line.match(/^\d+:\s+(\S+?)(?:@\S+)?:\s+<[^>]*\bUP\b/);
+            if (match && match[1] !== 'lo') {
+                return match[1];
             }
         }
+    } catch (e) {
+        log.warn('[VPN] No se pudo detectar interfaz via ip link show:', e.message);
     }
-    return 'eth0';
+
+    // Step 3: final fallback — end0 is the default NIC name on Raspberry Pi CM5
+    return 'end0';
 }
 
 /**
