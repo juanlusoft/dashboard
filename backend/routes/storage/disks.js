@@ -33,7 +33,7 @@ let snapraidSyncStatus = {
 
 router.post('/disks/add-to-pool', requireAuth, async (req, res) => {
     try {
-        const { diskId, format, role = 'data', force = false } = req.body;
+        const { diskId, format, role = 'data', force = false, filesystem = 'ext4' } = req.body;
         
         // ══════════════════════════════════════════════════════════════════
         // VALIDATION PHASE
