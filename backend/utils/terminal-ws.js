@@ -117,17 +117,25 @@ function setupTerminalWebSocket(server) {
             const args = cmdParts.slice(1);
             
             // SECURITY: Only spawn the exact validated command
+            // Use an explicit environment whitelist to avoid leaking secrets from process.env
+            const safeEnv = {
+                PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+                HOME: process.env.HOME || '/root',
+                USER: process.env.USER || 'root',
+                LOGNAME: process.env.LOGNAME || 'root',
+                SHELL: process.env.SHELL || '/bin/bash',
+                TERM: 'xterm-256color',
+                COLORTERM: 'truecolor',
+                LANG: process.env.LANG || 'en_US.UTF-8',
+                LC_ALL: process.env.LC_ALL || 'en_US.UTF-8',
+                TMPDIR: process.env.TMPDIR || '/tmp',
+            };
             ptyProcess = pty.spawn(cmd, args, {
                 name: 'xterm-256color',
                 cols: 80,
                 rows: 24,
                 cwd: process.env.HOME || '/home',
-                env: {
-                    ...process.env,
-                    TERM: 'xterm-256color',
-                    COLORTERM: 'truecolor',
-                    LANG: 'en_US.UTF-8'
-                }
+                env: safeEnv,
             });
         } catch (err) {
             log.error('[Terminal] Failed to spawn PTY:', err);

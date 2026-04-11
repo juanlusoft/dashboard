@@ -4,7 +4,57 @@
  */
 
 const https = require('https');
+const crypto = require('crypto');
 const os = require('os');
+const Store = require('electron-store');
+
+// Persistent store for TOFU certificate fingerprints
+const store = new Store({ encryptionKey: 'homepinas-agent-store-v2' });
+
+/**
+ * Get the SHA-256 fingerprint of a TLS peer certificate.
+ * @param {import('tls').TLSSocket} socket
+ * @returns {string|null} hex fingerprint or null
+ */
+function getCertFingerprint(socket) {
+  try {
+    const cert = socket.getPeerCertificate();
+    if (!cert || !cert.raw) return null;
+    return crypto.createHash('sha256').update(cert.raw).digest('hex');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Verify or record the TOFU fingerprint for a given host.
+ * Returns true if the connection is trusted, false if fingerprint mismatch.
+ * @param {string} host
+ * @param {import('tls').TLSSocket} socket
+ * @returns {boolean}
+ */
+function verifyTOFU(host, socket) {
+  const fingerprint = getCertFingerprint(socket);
+  if (!fingerprint) return false;
+
+  const storeKey = `tofu_fingerprint_${host}`;
+  const saved = store.get(storeKey);
+
+  if (!saved) {
+    // First connection: trust and save
+    store.set(storeKey, fingerprint);
+    console.info(`[TOFU] Trusted and saved certificate for ${host}: ${fingerprint}`);
+    return true;
+  }
+
+  if (saved === fingerprint) {
+    return true;
+  }
+
+  // Fingerprint mismatch — possible MITM
+  console.error(`[TOFU] Certificate mismatch for ${host}! Expected ${saved}, got ${fingerprint}`);
+  return false;
+}
 
 class NASDiscovery {
   constructor() {
@@ -37,7 +87,14 @@ class NASDiscovery {
 
   async _checkHost(host, port) {
     return new Promise((resolve) => {
-      const agent = new https.Agent({ rejectUnauthorized: false });
+      // TOFU: accept self-signed certs but verify/pin fingerprint
+      const agent = new https.Agent({
+        rejectUnauthorized: false,
+        checkServerIdentity: (hostname, cert) => {
+          // Actual TOFU check happens after connection via socket event below
+          return undefined;
+        },
+      });
       const req = https.get({
         hostname: host,
         port,
@@ -45,6 +102,14 @@ class NASDiscovery {
         timeout: this.timeout,
         agent,
       }, (res) => {
+        // TOFU verification: check fingerprint once socket is available
+        if (res.socket) {
+          if (!verifyTOFU(host, res.socket)) {
+            req.destroy();
+            return resolve(null);
+          }
+        }
+
         let data = '';
         res.on('data', (chunk) => { data += chunk; });
         res.on('end', () => {
@@ -57,7 +122,7 @@ class NASDiscovery {
                 port,
                 name: 'HomePiNAS',
                 version: json.version || '',
-                method: host === host ? 'scan' : 'manual',
+                method: 'scan',
               });
             } else {
               resolve(null);

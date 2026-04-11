@@ -47,6 +47,7 @@ function validateLines(linesParam) {
 /**
  * Validate the 'filter' query parameter.
  * Alphanumeric + spaces + basic punctuation only, max 100 chars.
+ * SECURITY: Does NOT allow slashes to prevent path traversal risks.
  * @param {string|undefined} filterParam - The raw filter parameter
  * @returns {{ valid: boolean, value?: string, error?: string }}
  */
@@ -57,8 +58,9 @@ function validateFilter(filterParam) {
   if (filterParam.length > 100) {
     return { valid: false, error: 'Filter must not exceed 100 characters' };
   }
-  // Allow alphanumeric, spaces, dots, dashes, underscores, colons, slashes, brackets
-  if (!/^[a-zA-Z0-9\s.\-_:\/\[\]()]+$/.test(filterParam)) {
+  // SECURITY: Allow only alphanumeric, spaces, dots, dashes, underscores, colons, brackets
+  // Explicitly NO slashes to prevent path traversal and command injection
+  if (!/^[a-zA-Z0-9\s.\-_:\[\]()]+$/.test(filterParam)) {
     return { valid: false, error: 'Filter contains invalid characters. Only alphanumeric, spaces, and basic punctuation are allowed.' };
   }
   return { valid: true, value: filterParam };

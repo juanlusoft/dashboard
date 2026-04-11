@@ -21,26 +21,35 @@ const { getData, saveData } = require('../utils/data');
 /** Regex to validate standard 5-field cron expressions */
 const CRON_REGEX = /^(\*|[0-9,\-\/]+)\s+(\*|[0-9,\-\/]+)\s+(\*|[0-9,\-\/]+)\s+(\*|[0-9,\-\/]+)\s+(\*|[0-9,\-\/]+)$/;
 
-/** Dangerous command patterns that must be blocked for safety */
+/** Dangerous command patterns that must be blocked for safety (regex-based for robustness) */
 const DANGEROUS_PATTERNS = [
-  'rm -rf /',
-  'mkfs',
-  'dd if=',
-  ':(){ :|:& };:',
-  '> /dev/sda',
-  'chmod -R 777 /',
-  '$(', '`',       // command substitution
-  '| ', ' |',      // pipes
-  '; ',             // command chaining
-  '&& ', '|| ',    // logical operators
-  '> /dev/',        // writing to devices
-  '/etc/shadow',    // sensitive files
-  '/etc/passwd',
-  'curl ', 'wget ', // downloads
-  'python ', 'perl ', 'ruby ', // script interpreters
-  'nc ', 'ncat ',   // netcat
-  'base64',         // encoding tricks
-  'eval ',          // eval
+  /rm\s+-[rf]{1,2}\s/i,            // rm -rf / rm -fr (with flexible spacing)
+  /rm\s+-[rf]{1,2}$/i,             // rm -rf at end of string
+  /mkfs/i,                          // filesystem format
+  /dd\s+if=/i,                      // dd direct disk write
+  /:\(\)\s*\{.*\}/,                 // fork bomb
+  />\s*\/dev\/sd/i,                 // write to block device
+  /chmod.*777/i,                    // world-writable chmod
+  /\$\(/,                           // command substitution $()
+  /`/,                              // backtick command substitution
+  /\|\s*/,                          // pipes
+  /;\s*/,                           // command chaining
+  /&&/,                             // logical AND chaining
+  /\|\|/,                           // logical OR chaining
+  />\s*\/dev\//i,                   // writing to any device
+  /\/etc\/shadow/i,                 // sensitive file access
+  /\/etc\/passwd/i,                 // sensitive file access
+  /wget\s+https?:\/\//i,            // wget download from internet
+  /curl\s+https?:\/\//i,            // curl download from internet
+  /python\s.*-c\s/i,               // python inline code execution
+  /perl\s.*-e\s/i,                  // perl inline code execution
+  /ruby\s.*-e\s/i,                  // ruby inline code execution
+  /bash\s+-[ic]/i,                  // bash reverse shell flags
+  /sh\s+-[ic]/i,                    // sh reverse shell flags
+  /\bnc\s+/i,                       // netcat
+  /\bnetcat\s+/i,                   // netcat (long form)
+  /base64/i,                        // encoding tricks
+  /\beval\s/i,                      // eval execution
 ];
 
 /**
@@ -56,14 +65,13 @@ function isValidCron(expr) {
 /**
  * Check if a command contains dangerous patterns.
  * @param {string} command - The shell command to check
- * @returns {string|null} The matched dangerous pattern, or null if safe
+ * @returns {string|null} The matched dangerous pattern description, or null if safe
  */
 function findDangerousPattern(command) {
   if (!command || typeof command !== 'string') return null;
-  const lower = command.toLowerCase();
   for (const pattern of DANGEROUS_PATTERNS) {
-    if (lower.includes(pattern.toLowerCase())) {
-      return pattern;
+    if (pattern.test(command)) {
+      return pattern.toString();
     }
   }
   return null;

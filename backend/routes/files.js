@@ -248,8 +248,13 @@ const storage = multer.diskStorage({
     cb(null, tmpUploadDir);
   },
   filename: (req, file, cb) => {
-    // Unique temp name to avoid collisions
-    cb(null, `${Date.now()}-${file.originalname}`);
+    // Sanitize filename to prevent path traversal and special characters
+    const ext = path.extname(file.originalname).replace(/[^a-zA-Z0-9.]/g, '').substring(0, 10);
+    const base = path.basename(file.originalname, path.extname(file.originalname))
+        .replace(/[^a-zA-Z0-9._-]/g, '_')
+        .substring(0, 100);
+    const hash = require('crypto').randomBytes(8).toString('hex');
+    cb(null, `${Date.now()}-${hash}-${base}${ext ? '.' + ext : ''}`);
   },
 });
 

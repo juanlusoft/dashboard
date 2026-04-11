@@ -278,6 +278,17 @@ function sanitizeForLog(str) {
         .replace(/token[=:]\s*\S+/gi, 'token=[REDACTED]')
         .replace(/key[=:]\s*\S+/gi, 'key=[REDACTED]')
         .replace(/secret[=:]\s*\S+/gi, 'secret=[REDACTED]')
+        // Samba credentials
+        .replace(/samba_?pass(word)?[=:]\s*\S+/gi, 'samba_pass=[REDACTED]')
+        // API keys
+        .replace(/api_?key[=:]\s*\S+/gi, 'api_key=[REDACTED]')
+        .replace(/apikey[=:]\s*\S+/gi, 'apikey=[REDACTED]')
+        // Authorization headers / bearer tokens
+        .replace(/authorization[=:]\s*\S+/gi, 'authorization=[REDACTED]')
+        .replace(/bearer\s+\S+/gi, 'bearer [REDACTED]')
+        // Credentials and private keys
+        .replace(/credential[=:]\s*\S+/gi, 'credential=[REDACTED]')
+        .replace(/private_?key[=:]\s*\S+/gi, 'private_key=[REDACTED]')
         .substring(0, 500);
 }
 

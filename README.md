@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.11
+# HomePiNAS v2.13.12
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.11-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.12-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -66,6 +66,22 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - Restricted sudoers configuration
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
+
+## 🆕 What's New in v2.13.12
+
+### Auditoría de Seguridad — 14 fixes
+- **🔴 IP dinámica** — Eliminada IP hardcodeada en Active Backup, detección automática
+- **🔴 Rate limiting agente** — Endpoints `/agent/*` protegidos contra fuerza bruta (30 req/15min)
+- **🔴 Path traversal backup** — Validación de base path en descarga de ficheros de backup
+- **🔴 SSH key injection** — Validación de formato de clave SSH antes de incluir en instrucciones
+- **🟠 TLS agente TOFU** — Trust-on-First-Use para certificados autofirmados del NAS
+- **🟠 Multer filename** — Sanitización de nombres de fichero en subidas
+- **🟠 PTY env whitelist** — Terminal solo hereda variables de entorno seguras
+- **🟠 Error handler** — Errores 500 devuelven mensaje genérico al cliente
+- **🟠 Cron validation** — Patrones peligrosos detectados con regex (bypass por espacios resuelto)
+- **🟡 Logs filter** — Slashes eliminados del parámetro de filtro
+- **🟡 Session timeout** — Reducido a 30 min por defecto, configurable hasta 8h máximo
+- **🟢 sanitizeForLog** — Ampliado para cubrir más campos sensibles
 
 ## 🆕 What's New in v2.13.8
 

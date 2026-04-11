@@ -28,6 +28,16 @@ if (!fs.existsSync(BACKUP_BASE)) {
 }
 
 const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
+
+const agentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.headers['x-agent-token'] || req.ip,
+  message: { error: 'Too many requests' },
+});
 
 // ══════════════════════════════════════════
 // AGENT ENDPOINTS (no auth — use agentToken)
@@ -37,7 +47,7 @@ const crypto = require('crypto');
  * POST /agent/register - Agent announces itself to the NAS
  * No auth required — agent just says "I exist"
  */
-router.post('/agent/register', (req, res) => {
+router.post('/agent/register', agentLimiter, (req, res) => {
   const { hostname, ip, os: agentOS, mac } = req.body;
   if (!hostname) return res.status(400).json({ error: 'hostname is required' });
 
@@ -98,7 +108,7 @@ router.post('/agent/register', (req, res) => {
  * GET /agent/poll - Agent checks for config and tasks
  * Auth via X-Agent-Token header
  */
-router.get('/agent/poll', (req, res) => {
+router.get('/agent/poll', agentLimiter, (req, res) => {
   const token = req.headers['x-agent-token'];
   if (!token) return res.status(401).json({ error: 'Missing agent token' });
 
@@ -168,7 +178,7 @@ router.get('/agent/poll', (req, res) => {
  * POST /agent/report - Agent reports backup result
  * Auth via X-Agent-Token header
  */
-router.post('/agent/report', (req, res) => {
+router.post('/agent/report', agentLimiter, (req, res) => {
   const token = req.headers['x-agent-token'];
   if (!token) return res.status(401).json({ error: 'Missing agent token' });
 
@@ -395,8 +405,8 @@ async function createImageBackupShare(device, username) {
 }
 
 // ── Helper: generate instructions for image backup ──
-function getImageBackupInstructions(device, uncPath, nasHostname) {
-  const nasIP = '192.168.1.123'; // TODO: detect dynamically
+function getImageBackupInstructions(device, uncPath, nasHostname, req) {
+  const nasIP = (req && (req.hostname || req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket?.localAddress)) || getLocalIPs()[0] || '127.0.0.1';
   const shareName = device.sambaShare;
   
   if (device.os === 'windows') {
@@ -578,16 +588,22 @@ router.get('/devices/:id/instructions', async (req, res) => {
   if (device.backupType === 'image') {
     const nasHostname = os.hostname();
     const uncPath = `\\\\${nasHostname}\\${device.sambaShare}`;
-    const instructions = getImageBackupInstructions(device, uncPath, nasHostname);
+    const instructions = getImageBackupInstructions(device, uncPath, nasHostname, req);
     res.json({ success: true, instructions });
   } else {
     const pubKey = await ensureSSHKey();
+    // Validate SSH public key format before embedding in instructions
+    const sshKeyPattern = /^(ssh-rsa|ssh-ed25519|ssh-ecdsa|ecdsa-sha2-nistp[0-9]+)\s+[A-Za-z0-9+/=]+(\s+.*)?$/;
+    const safePubKey = (pubKey || '').trim();
+    if (!sshKeyPattern.test(safePubKey)) {
+      return res.status(500).json({ error: 'Invalid SSH key format generated' });
+    }
     res.json({
       success: true,
-      sshPublicKey: pubKey,
+      sshPublicKey: safePubKey,
       instructions: {
         title: 'Configurar acceso SSH',
-        command: `mkdir -p ~/.ssh && echo '${pubKey}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`,
+        command: `mkdir -p ~/.ssh && echo '${safePubKey}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`,
       },
     });
   }
@@ -666,7 +682,7 @@ router.post('/devices', async (req, res) => {
         sambaSetup = {
           sharePath: uncPath,
           shareUser: req.user.username,
-          instructions: getImageBackupInstructions(device, uncPath, nasHostname),
+          instructions: getImageBackupInstructions(device, uncPath, nasHostname, req),
         };
       } catch (sambaErr) {
         log.error('Failed to create Samba share for image backup:', sambaErr.message);
@@ -683,8 +699,14 @@ router.post('/devices', async (req, res) => {
     if (isImage) {
       response.sambaSetup = sambaSetup;
     } else {
-      response.sshPublicKey = pubKey;
-      response.setupInstructions = `En el equipo "${name}" (${ip}), ejecuta:\n\nmkdir -p ~/.ssh && echo '${pubKey}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`;
+      // Validate SSH public key format before embedding in instructions
+      const sshKeyPattern = /^(ssh-rsa|ssh-ed25519|ssh-ecdsa|ecdsa-sha2-nistp[0-9]+)\s+[A-Za-z0-9+/=]+(\s+.*)?$/;
+      const safePubKey = (pubKey || '').trim();
+      if (!sshKeyPattern.test(safePubKey)) {
+        return res.status(500).json({ error: 'Invalid SSH key format generated' });
+      }
+      response.sshPublicKey = safePubKey;
+      response.setupInstructions = `En el equipo "${name}" (${ip}), ejecuta:\n\nmkdir -p ~/.ssh && echo '${safePubKey}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`;
     }
 
   // Update last seen timestamp
@@ -1042,9 +1064,16 @@ router.get('/devices/:id/download', (req, res) => {
     }
   }
 
-  const cleanPath = filePath.replace(/\0/g, '').replace(/^\/+/, '');
-  const fullPath = path.resolve(basePath, cleanPath);
+  const sanitizedFile = filePath.replace(/\0/g, '').replace(/^\/+/, '');
+  const fullPath = path.resolve(basePath, sanitizedFile);
 
+  // Ensure the resolved path stays within the BACKUP_BASE directory
+  const requestedPath = path.resolve(BACKUP_BASE, sanitizedFile);
+  if (!requestedPath.startsWith(BACKUP_BASE + path.sep) && requestedPath !== BACKUP_BASE) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  // Also enforce device-scoped boundary
   if (!fullPath.startsWith(path.resolve(BACKUP_BASE, safe))) {
     return res.status(403).json({ error: 'Access denied' });
   }

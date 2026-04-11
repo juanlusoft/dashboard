@@ -10,12 +10,35 @@ const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const Database = require('better-sqlite3');
+const { getData } = require('./data');
 
 const SESSION_DB_PATH = path.join(__dirname, '..', 'config', 'sessions.db');
 const SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours absolute expiration
-const SESSION_IDLE_TIMEOUT = 2 * 60 * 60 * 1000; // 2 hours idle timeout
+const SESSION_IDLE_TIMEOUT = 2 * 60 * 60 * 1000; // 2 hours idle timeout (DEPRECATED: use getSessionTimeout() instead)
 
 let sessionDb = null;
+
+/**
+ * SECURITY: Get session idle timeout with configurable and absolute maximum.
+ * Reads from getData().sessionConfig?.idleTimeoutMinutes, with a maximum of 8 hours.
+ * Default is 30 minutes.
+ * @returns {number} Timeout in milliseconds
+ */
+function getSessionTimeout() {
+    try {
+        const config = getData();
+        const minutes = config.sessionConfig?.idleTimeoutMinutes;
+        if (minutes && minutes > 0 && Number.isFinite(minutes)) {
+            const timeoutMs = minutes * 60 * 1000;
+            // Absolute maximum: 8 hours
+            return Math.min(timeoutMs, 8 * 60 * 60 * 1000);
+        }
+    } catch (e) {
+        // Silently fall back to default on any error
+    }
+    // Default: 30 minutes
+    return 30 * 60 * 1000;
+}
 
 /**
  * Initialize SQLite session database
@@ -126,9 +149,10 @@ function validateSession(sessionId) {
             return null;
         }
 
-        // Check idle timeout (2h from last activity)
+        // Check idle timeout (configurable, from last activity)
         const lastActivity = session.last_activity || session.expires_at - SESSION_DURATION;
-        if (now - lastActivity > SESSION_IDLE_TIMEOUT) {
+        const idleTimeout = getSessionTimeout();
+        if (now - lastActivity > idleTimeout) {
             destroySession(sessionId);
             return null;
         }
@@ -188,12 +212,13 @@ function cleanExpiredSessions() {
 
     try {
         const now = Date.now();
-        const idleThreshold = now - SESSION_IDLE_TIMEOUT;
-        
+        const idleTimeout = getSessionTimeout();
+        const idleThreshold = now - idleTimeout;
+
         // Delete sessions that are expired OR idle too long
         const stmt = sessionDb.prepare(`
-            DELETE FROM sessions 
-            WHERE expires_at < ? 
+            DELETE FROM sessions
+            WHERE expires_at < ?
             OR (last_activity IS NOT NULL AND last_activity < ?)
         `);
         const result = stmt.run(now, idleThreshold);
@@ -305,6 +330,7 @@ module.exports = {
     clearAllSessions,
     cleanExpiredSessions,
     startSessionCleanup,
+    getSessionTimeout,
     SESSION_DURATION,
     SESSION_IDLE_TIMEOUT,
     // CSRF token persistence

@@ -16,7 +16,10 @@ const log = require('../utils/logger');
  */
 function errorHandler(err, req, res, next) {
     const status = err.status || err.statusCode || 500;
-    const message = err.expose ? err.message : 'Internal server error';
+    // Only expose the real message for operational/client errors (4xx) or explicitly marked errors.
+    // Server errors (5xx) get a generic message to avoid leaking internal details.
+    const isOperationalError = err.expose === true || status < 500;
+    const clientMessage = isOperationalError ? err.message : 'Internal server error';
 
     log.error(`${req.method} ${req.path} → ${status}:`, err.message);
 
@@ -28,7 +31,7 @@ function errorHandler(err, req, res, next) {
         return next(err);
     }
 
-    res.status(status).json({ error: message });
+    res.status(status).json({ error: clientMessage });
 }
 
 /**
