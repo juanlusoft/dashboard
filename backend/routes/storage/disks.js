@@ -215,17 +215,20 @@ router.post('/disks/add-to-pool', requireAuth, async (req, res) => {
         }
         
         // Step 3: Format if requested
+        log.info(`Step 3 check: format=${format}, partitionPath=${partitionPath}, filesystem=${filesystem}`);
         if (format) {
             const label = `${role}_${safeDiskId}`.substring(0, 16);
             try {
-                log.info(`Formatting ${partitionPath} as ${filesystem}...`);
+                log.info(`Formatting ${partitionPath} as ${filesystem || 'ext4'} with label ${label}...`);
                 if (filesystem === 'xfs') {
-                    execFileSync('sudo', ['mkfs.xfs', '-f', '-L', label, partitionPath], { encoding: 'utf8', timeout: 300000 });
+                    execFileSync('/sbin/mkfs.xfs', ['-f', '-L', label, partitionPath], { encoding: 'utf8', timeout: 300000, stdio: ['pipe','pipe','pipe'] });
                 } else {
-                    execFileSync('sudo', ['mkfs.ext4', '-F', '-L', label, partitionPath], { encoding: 'utf8', timeout: 300000 });
+                    execFileSync('/sbin/mkfs.ext4', ['-F', '-L', label, partitionPath], { encoding: 'utf8', timeout: 300000, stdio: ['pipe','pipe','pipe'] });
                 }
+                log.info(`Format complete: ${partitionPath}`);
             } catch (e) {
-                return res.status(500).json({ 
+                log.info(`Format error: ${e.message} | stderr: ${e.stderr || ''}`);
+                return res.status(500).json({
                     error: 'Format failed',
                     details: e.message
                 });
