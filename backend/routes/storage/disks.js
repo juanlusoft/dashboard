@@ -587,10 +587,16 @@ router.post('/disks/unignore', requireAuth, async (req, res) => {
 // Helper: Get next disk index for mount point
 async function getNextDiskIndex() {
     try {
-        const existing = fs.readdirSync(STORAGE_MOUNT_BASE);
-        const disks = existing.filter(d => d.startsWith('disk'));
-        const indices = disks.map(d => parseInt(d.replace('disk', '')) || 0);
-        return Math.max(0, ...indices) + 1;
+        // Use first available index not already mounted
+        const mountsRaw = execFileSync('mount', [], { encoding: 'utf8' });
+        const mountedIndices = new Set();
+        for (const line of mountsRaw.split('\n')) {
+            const m = line.match(/\/mnt\/disks\/disk(\d+)\s/);
+            if (m) mountedIndices.add(parseInt(m[1]));
+        }
+        let i = 1;
+        while (mountedIndices.has(i)) i++;
+        return i;
     } catch (e) {
         return 1;
     }
