@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.7
+# HomePiNAS v2.13.8
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.7-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.8-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -66,6 +66,12 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - Restricted sudoers configuration
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
+
+## 🆕 What's New in v2.13.8
+
+### Fix formateo de disco en Raspberry Pi
+- **⏱️ udevadm settle** — Espera a que el kernel registre la nueva partición antes de formatear
+- **🔧 Race condition** — Eliminado el problema de timing que causaba "Format failed" en la Pi
 
 ## 🆕 What's New in v2.13.7
 

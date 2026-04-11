@@ -198,8 +198,9 @@ router.post('/disks/add-to-pool', requireAuth, async (req, res) => {
                 execFileSync('sudo', ['parted', '-s', devicePath, 'mkpart', 'primary', 'ext4', '0%', '100%'], { encoding: 'utf8', timeout: 30000 });
                 execFileSync('sync', [], { encoding: 'utf8' });
                 execFileSync('sudo', ['partprobe', devicePath], { encoding: 'utf8', timeout: 10000 });
-                // Wait for partition to appear
-                execFileSync('sleep', ['2'], { encoding: 'utf8' });
+                // Wait for kernel to register new partition
+                try { execFileSync('sudo', ['udevadm', 'settle', '--timeout=10'], { encoding: 'utf8', timeout: 12000 }); } catch(e) {}
+                execFileSync('sleep', ['3'], { encoding: 'utf8' });
                 hasPartition = true;
             } catch (e) {
                 if (!hasPartition) {
