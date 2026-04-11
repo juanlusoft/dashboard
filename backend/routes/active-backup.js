@@ -313,9 +313,9 @@ async function notifyBackupFailure(device, error) {
   const message = `⚠️ Active Backup FAILED\n\nDevice: ${device.name} (${device.ip})\nTime: ${new Date().toLocaleString('es-ES')}\nError: ${error}`;
 
   // Telegram notification
-  if (notifConfig.telegram && notifConfig.telegram.enabled && notifConfig.telegram.token && notifConfig.telegram.chatId) {
+  if (notifConfig.telegram && notifConfig.telegram.enabled && notifConfig.telegram.botToken && notifConfig.telegram.chatId) {
     try {
-      const url = `https://api.telegram.org/bot${notifConfig.telegram.token}/sendMessage`;
+      const url = `https://api.telegram.org/bot${notifConfig.telegram.botToken}/sendMessage`;
       await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

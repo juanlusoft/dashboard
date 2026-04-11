@@ -8,7 +8,7 @@
 const log = require('../utils/logger');
 const express = require('express');
 const router = express.Router();
-const { execFile } = require('child_process');
+const { execFile, execFileSync } = require('child_process');
 const { requireAuth } = require('../middleware/auth');
 const { logSecurityEvent } = require('../utils/security');
 const { getData, saveData } = require('../utils/data');
@@ -358,5 +358,63 @@ function recordUpsEvent(type, details) {
     log.error('Error recording UPS event:', err);
   }
 }
+
+// --- Critical Battery Shutdown Monitor ---
+
+let shutdownInitiated = false;
+
+/**
+ * Poll UPS status every 60 seconds and initiate a safe shutdown
+ * if battery is below criticalThreshold and shutdownOnCritical is enabled.
+ */
+setInterval(async () => {
+  if (shutdownInitiated) return;
+
+  try {
+    const data = getData();
+    const config = (data.ups && data.ups.config) || {};
+    const shutdownOnCritical = config.shutdownOnCritical || false;
+    const criticalThreshold = (typeof config.criticalThreshold === 'number') ? config.criticalThreshold : 10;
+
+    if (!shutdownOnCritical) return;
+
+    // Get current UPS status
+    let upsStatus = null;
+    const apcData = await getApcaccessStatus();
+    if (apcData && Object.keys(apcData).length > 0) {
+      upsStatus = normalizeApcaccess(apcData);
+    } else {
+      const nutData = await getUpscStatus();
+      if (nutData && Object.keys(nutData).length > 0) {
+        upsStatus = normalizeUpsc(nutData);
+      }
+    }
+
+    if (!upsStatus || !upsStatus.available) return;
+
+    const charge = upsStatus.batteryCharge;
+    if (typeof charge !== 'number') return;
+
+    if (charge <= criticalThreshold) {
+      log.warn(`[UPS] Battery critical: ${charge}% <= threshold ${criticalThreshold}%. Initiating shutdown.`);
+      shutdownInitiated = true;
+
+      recordUpsEvent('critical_shutdown', {
+        batteryCharge: charge,
+        criticalThreshold,
+        message: 'Automatic shutdown triggered due to critical battery level'
+      });
+
+      try {
+        execFileSync('sudo', ['shutdown', '-h', '+1', 'HomePiNAS: UPS battery critical'], { timeout: 15000 });
+      } catch (shutdownErr) {
+        log.error('[UPS] Failed to execute shutdown command:', shutdownErr.message);
+        shutdownInitiated = false;
+      }
+    }
+  } catch (err) {
+    log.error('[UPS] Error in critical battery monitor:', err);
+  }
+}, 60 * 1000);
 
 module.exports = router;

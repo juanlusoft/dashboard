@@ -634,20 +634,19 @@ router.post("/cache/mover/trigger", requireAuth, async (req, res) => {
             encoding: 'utf8',
             timeout: 60000  // 1 minute timeout
         });
-        
-        res.json({ 
-            success: true, 
-            message: 'Cache mover ejecutado correctamente' 
+
+        res.json({
+            success: true,
+            message: 'Cache mover ejecutado correctamente'
         });
     } catch (e) {
         log.error('Cache mover trigger error:', e);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Error al ejecutar cache mover',
-            details: e.message 
+            details: e.message
         });
     }
 });
-module.exports = router;
 
 /**
  * GET /cache/status - Cache disk status and MergerFS policy info
@@ -677,7 +676,7 @@ router.get('/cache/status', requireAuth, async (req, res) => {
                 });
                 const lines = dfOutput.trim().split('\n');
                 if (lines.length >= 2) {
-                    const parts = lines[1].split(/\\s+/);
+                    const parts = lines[1].split(/\s+/);
                     const total = parseInt(parts[1]) || 0;
                     const used = parseInt(parts[2]) || 0;
                     const available = parseInt(parts[3]) || 0;
@@ -711,19 +710,19 @@ router.get('/cache/status', requireAuth, async (req, res) => {
             if (mergerfsLine) {
                 // FIX: Extract options from either (opts) format or mount line format
                 let opts = null;
-                const optsMatch = mergerfsLine.match(/\\(([^)]+)\\)/);
+                const optsMatch = mergerfsLine.match(/\(([^)]+)\)/);
                 if (optsMatch) {
                     opts = optsMatch[1];
                 } else {
                     // Alternative: options might be space-separated after type
-                    const altMatch = mergerfsLine.match(/type fuse\\.mergerfs \\((.+?)\\)$/);
+                    const altMatch = mergerfsLine.match(/type fuse\.mergerfs \((.+?)\)$/);
                     if (altMatch) opts = altMatch[1];
                 }
-                
+
                 if (opts) {
-                    const createMatch = opts.match(/category\\.create=(\\w+)/);
-                    const moveMatch = opts.match(/moveonenospc=(\\w+)/);
-                    const minFreeMatch = opts.match(/minfreespace=(\\S+?)(?:,|$)/);
+                    const createMatch = opts.match(/category\.create=(\w+)/);
+                    const moveMatch = opts.match(/moveonenospc=(\w+)/);
+                    const minFreeMatch = opts.match(/minfreespace=(\S+?)(?:,|$)/);
                     mergerfsPolicy = {
                         createPolicy: createMatch ? createMatch[1] : 'lfs',  // FIX: default to lfs instead of unknown
                         moveOnNoSpace: moveMatch ? moveMatch[1] === 'true' : false,
@@ -753,7 +752,7 @@ router.get('/cache/status', requireAuth, async (req, res) => {
                         });
                         const lines = dfOutput.trim().split('\n');
                         if (lines.length >= 2) {
-                            const parts = lines[1].split(/\\s+/);
+                            const parts = lines[1].split(/\s+/);
                             const inodesUsed = parseInt(parts[2]) || 0;
                             cacheFileCount += inodesUsed;
                         }
@@ -770,7 +769,7 @@ router.get('/cache/status', requireAuth, async (req, res) => {
                     });
                     const lines = dfOutput.trim().split('\n');
                     if (lines.length >= 2) {
-                        const parts = lines[1].split(/\\s+/);
+                        const parts = lines[1].split(/\s+/);
                         const inodesUsed = parseInt(parts[2]) || 0;
                         dataFileCount += inodesUsed;
                     }
@@ -793,8 +792,8 @@ router.get('/cache/status', requireAuth, async (req, res) => {
             } catch (e) {}
             try {
                 const conf = fs.readFileSync('/usr/local/bin/homepinas-cache-mover.conf', 'utf8');
-                const ageMatch = conf.match(/CACHE_AGE_MINUTES=(\\d+)/);
-                const threshMatch = conf.match(/CACHE_USAGE_THRESHOLD=(\\d+)/);
+                const ageMatch = conf.match(/CACHE_AGE_MINUTES=(\d+)/);
+                const threshMatch = conf.match(/CACHE_USAGE_THRESHOLD=(\d+)/);
                 moverStatus.ageMinutes = ageMatch ? parseInt(ageMatch[1]) : 120;
                 moverStatus.usageThreshold = threshMatch ? parseInt(threshMatch[1]) : 80;
             } catch (e) {}

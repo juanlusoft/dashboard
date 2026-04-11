@@ -433,7 +433,7 @@ router.post('/disks/remove-from-pool', requireAuth, async (req, res) => {
  */
 router.post('/disks/mount-standalone', requireAuth, async (req, res) => {
     try {
-        const { diskId, format, name } = req.body;
+        const { diskId, format, name, filesystem = 'ext4' } = req.body;
         
         const safeDiskId = sanitizeDiskId(diskId);
         if (!safeDiskId) {
@@ -707,6 +707,36 @@ function updateMergerFSFstab(sources, policy = 'mfs') {
     } catch (e) {
         log.error('Failed to update MergerFS systemd unit:', e);
         // Don't throw - the mount worked, persistence is just for reboot
+    }
+}
+
+function updateMergerFSSystemdUnit(sources, policy = 'mfs') {
+    try {
+        // Update the fstab mergerfs line to persist across reboots
+        const fstabPath = '/etc/fstab';
+        const fstab = fs.readFileSync(fstabPath, 'utf8');
+        const mergerfsLine = `${sources} ${POOL_MOUNT} fuse.mergerfs defaults,allow_other,nonempty,use_ino,cache.files=partial,dropcacheonclose=true,category.create=${policy},moveonenospc=true,nofail 0 0`;
+
+        // Replace existing mergerfs line or append
+        const lines = fstab.split('\n');
+        const mergerfsIdx = lines.findIndex(l => l.includes('fuse.mergerfs') && l.includes(POOL_MOUNT));
+
+        let newFstab;
+        if (mergerfsIdx >= 0) {
+            lines[mergerfsIdx] = mergerfsLine;
+            newFstab = lines.join('\n');
+        } else {
+            newFstab = fstab.trimEnd() + '\n# MergerFS Pool\n' + mergerfsLine + '\n';
+        }
+
+        const tmpPath = '/tmp/homepinas-fstab-tmp';
+        fs.writeFileSync(tmpPath, newFstab, 'utf8');
+        execFileSync('sudo', ['cp', tmpPath, fstabPath], { encoding: 'utf8' });
+        fs.unlinkSync(tmpPath);
+        log.info('Updated fstab mergerfs entry');
+    } catch (e) {
+        log.error('Failed to update fstab:', e.message);
+        throw e;
     }
 }
 

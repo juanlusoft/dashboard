@@ -239,7 +239,7 @@ router.get('/users', async (req, res) => {
         const userDetails = [];
         for (const username of users) {
             try {
-                const { stdout: info } = await execFileAsync('samba-tool', ['user', 'show', username]);
+                const { stdout: info } = await execFileAsync('sudo', ['samba-tool', 'user', 'show', username]);
                 const user = { username };
 
                 for (const line of info.split('\n')) {

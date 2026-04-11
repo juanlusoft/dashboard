@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.12
+# HomePiNAS v2.13.13
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.12-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.13-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -66,6 +66,15 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - Restricted sudoers configuration
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
+
+## 🆕 What's New in v2.13.13
+
+### Fixes de calidad — Auditoría de código
+- **🔧 disks.js** — `filesystem` undefined en mount-standalone (siempre usaba ext4); `updateMergerFSSystemdUnit` no definida (crash al quitar disco del pool)
+- **🔧 badblocks.js** — 10 regexes corruptos con doble escape (`/\\s+/` → `/\s+/`); doble `module.exports` eliminado
+- **🔧 ups.js** — `shutdownOnCritical` ahora realmente apaga el sistema cuando la batería baja del umbral
+- **🔧 active-backup.js** — Campo Telegram `token` → `botToken` (notificaciones de fallo nunca se enviaban)
+- **🔧 active-directory.js** — `samba-tool user show` añadido sudo (fallaba en producción)
 
 ## 🆕 What's New in v2.13.12
 
