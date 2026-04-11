@@ -1036,17 +1036,86 @@ async function applyDiskActions() {
                 }
             } else if (res) {
                 const err = await res.json().catch(() => ({ error: 'Error desconocido' }));
+
+                // 409: disk has existing data — ask user what to do
+                if (res.status === 409 && err.requiresConfirmation) {
+                    updateDiskProgressStep(disk.id, 'mount', 'pending', 'Esperando confirmación...');
+                    const resultEl = document.getElementById(`progress-${disk.id}-result`);
+                    if (resultEl) {
+                        resultEl.style.display = 'block';
+                        resultEl.innerHTML = `
+                            <div style="margin-top:8px;">
+                                <p style="color:var(--warning,#f59e0b);margin:0 0 10px;">⚠️ El disco contiene datos. ¿Qué deseas hacer?</p>
+                                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                    <button id="btn-force-${disk.id}" class="btn-primary" style="font-size:12px;padding:6px 12px;">Añadir sin formatear (mantener datos)</button>
+                                    <button id="btn-format-${disk.id}" class="btn-danger" style="font-size:12px;padding:6px 12px;">Formatear (borrar todo)</button>
+                                </div>
+                            </div>`;
+
+                        // Force (keep data)
+                        document.getElementById(`btn-force-${disk.id}`).addEventListener('click', async () => {
+                            resultEl.innerHTML = '';
+                            updateDiskProgressStep(disk.id, 'mount', 'running', 'Añadiendo al pool...');
+                            updateDiskProgressStep(disk.id, 'pool', 'running', 'Añadir al pool...');
+                            try {
+                                const r2 = await authFetch(`${API_BASE}/storage/disks/add-to-pool`, {
+                                    method: 'POST',
+                                    body: JSON.stringify({ diskId: disk.id, format: false, force: true, role: action === 'pool-cache' ? 'cache' : 'data' })
+                                });
+                                const d2 = await r2.json().catch(() => ({}));
+                                if (r2.ok) {
+                                    updateDiskProgressStep(disk.id, 'mount', 'done', 'Disco montado');
+                                    updateDiskProgressStep(disk.id, 'pool', 'done', 'Añadido al pool');
+                                    resultEl.innerHTML = `<span class="dash-status-success">✅ ${escapeHtml(d2.message || 'Completado')}</span>`;
+                                } else {
+                                    updateDiskProgressStep(disk.id, 'pool', 'error', 'Error');
+                                    resultEl.innerHTML = `<span class="dash-status-error">&#10060; ${escapeHtml(d2.error || 'Error')}</span>`;
+                                }
+                            } catch(e2) {
+                                resultEl.innerHTML = `<span class="dash-status-error">&#10060; ${escapeHtml(e2.message)}</span>`;
+                            }
+                        });
+
+                        // Format (wipe data)
+                        document.getElementById(`btn-format-${disk.id}`).addEventListener('click', async () => {
+                            if (!confirm(`¿Seguro que quieres BORRAR TODOS LOS DATOS de ${disk.id}?`)) return;
+                            resultEl.innerHTML = '';
+                            updateDiskProgressStep(disk.id, 'format', 'running', 'Formateando disco...');
+                            updateDiskProgressStep(disk.id, 'pool', 'pending', 'Añadir al pool...');
+                            try {
+                                const r2 = await authFetch(`${API_BASE}/storage/disks/add-to-pool`, {
+                                    method: 'POST',
+                                    body: JSON.stringify({ diskId: disk.id, format: true, force: false, role: action === 'pool-cache' ? 'cache' : 'data' })
+                                });
+                                const d2 = await r2.json().catch(() => ({}));
+                                if (r2.ok) {
+                                    updateDiskProgressStep(disk.id, 'format', 'done', 'Disco formateado');
+                                    updateDiskProgressStep(disk.id, 'mount', 'done', 'Disco montado');
+                                    updateDiskProgressStep(disk.id, 'pool', 'done', 'Añadido al pool');
+                                    resultEl.innerHTML = `<span class="dash-status-success">✅ ${escapeHtml(d2.message || 'Completado')}</span>`;
+                                } else {
+                                    updateDiskProgressStep(disk.id, 'format', 'error', 'Error al formatear');
+                                    resultEl.innerHTML = `<span class="dash-status-error">&#10060; ${escapeHtml(d2.error || 'Error')}</span>`;
+                                }
+                            } catch(e2) {
+                                resultEl.innerHTML = `<span class="dash-status-error">&#10060; ${escapeHtml(e2.message)}</span>`;
+                            }
+                        });
+                    }
+                    continue; // don't push to results as error
+                }
+
                 results.push({ disk: disk.id, success: false, message: err.error });
-                
+
                 // Update UI: error
                 if (format) updateDiskProgressStep(disk.id, 'format', 'error', 'Error al formatear');
                 updateDiskProgressStep(disk.id, 'mount', 'error', 'Error');
-                
+
                 // Show error
-                const resultEl = document.getElementById(`progress-${disk.id}-result`);
-                if (resultEl) {
-                    resultEl.style.display = 'block';
-                    resultEl.innerHTML = `<span class="dash-status-error">&#10060; ${escapeHtml(err.error)}</span>`;
+                const resultEl2 = document.getElementById(`progress-${disk.id}-result`);
+                if (resultEl2) {
+                    resultEl2.style.display = 'block';
+                    resultEl2.innerHTML = `<span class="dash-status-error">&#10060; ${escapeHtml(err.error)}</span>`;
                 }
             }
         } catch (e) {

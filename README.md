@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.6
+# HomePiNAS v2.13.7
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.6-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.7-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -66,6 +66,13 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - Restricted sudoers configuration
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
+
+## 🆕 What's New in v2.13.7
+
+### Fix añadir disco a pool con datos existentes
+- **🔧 Confirmación inteligente** — Al detectar disco con filesystem, ahora pregunta qué hacer en lugar de fallar
+- **➕ Añadir sin formatear** — Opción para incorporar el disco manteniendo sus datos actuales
+- **🗑️ Formatear con confirmación** — Opción de formatear con doble confirmación para evitar borrados accidentales
 
 ## 🆕 What's New in v2.13.6
 
