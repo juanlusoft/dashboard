@@ -230,7 +230,7 @@ router.post('/configure', requireAuth, (req, res) => {
                             while (n & 0x80) { bits++; n = (n << 1) & 0xFF; }
                             return acc + bits;
                         }, 0);
-                        
+
                         content += `\ninterface ${id}\nstatic ip_address=${config.ip}/${cidr}\n`;
                         if (config.gateway) content += `static routers=${config.gateway}\n`;
                         if (config.dns) {
@@ -238,8 +238,11 @@ router.post('/configure', requireAuth, (req, res) => {
                             content += `static domain_name_servers=${dnsStr}\n`;
                         }
                     }
-                    
-                    fs.writeFileSync(dhcpcdConf, content);
+
+                    const tmpPath = '/tmp/homepinas-dhcpcd-tmp';
+                    fs.writeFileSync(tmpPath, content, 'utf8');
+                    execFileSync('sudo', ['cp', tmpPath, dhcpcdConf], { encoding: 'utf8', timeout: 10000 });
+                    fs.unlinkSync(tmpPath);
                     execFileSync('sudo', ['systemctl', 'restart', 'dhcpcd'], { encoding: 'utf8', timeout: 15000 });
                     
                     res.json({

@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.13
+# HomePiNAS v2.13.14
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.13-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.14-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -66,6 +66,17 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - Restricted sudoers configuration
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
+
+## 🆕 What's New in v2.13.14
+
+### Fixes restantes — segunda ronda de auditoría
+- **🔧 snapraid.js** — Scrub convertido a async (spawn); ya no bloquea el event loop durante el proceso de 2h; nuevo endpoint `GET /snapraid/scrub/progress`
+- **🔧 backup.js** — `syncBackupCronJobs()` escribe jobs activados al crontab del sistema cuando se crean/editan/borran
+- **🔧 badblocks.js** — `formatBytes` añadido al import desde `./shared`
+- **🔧 ups.js** — `notifyOnPower` detecta cambios AC/batería y genera eventos en el historial
+- **🔧 network.js** — `dhcpcd.conf` ahora se escribe con `sudo cp` desde tmp (respeta permisos de root)
+- **🔧 users.js** — `/sbin/nologin` → `/usr/sbin/nologin` (compatible con Debian Bookworm)
+- **🔧 scheduler.js** — Pipes `|` y `;` permitidos en comandos legítimos; solo se bloquean patrones realmente peligrosos
 
 ## 🆕 What's New in v2.13.13
 

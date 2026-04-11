@@ -10,7 +10,7 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
-const { execFile, spawn } = require('child_process');
+const { execFile, execFileSync, spawn } = require('child_process');
 const { requireAuth } = require('../middleware/auth');
 const { logSecurityEvent } = require('../utils/security');
 const { getData, saveData } = require('../utils/data');
@@ -142,6 +142,7 @@ router.post('/jobs', (req, res) => {
     if (!data.backups) data.backups = [];
     data.backups.push(job);
     saveData(data);
+    syncBackupCronJobs(data.backups);
 
     logSecurityEvent('backup_job_created', { jobId: job.id, name: job.name, user: req.user });
 
@@ -220,6 +221,7 @@ router.put('/jobs/:id', (req, res) => {
     job.updatedAt = new Date().toISOString();
     data.backups[jobIndex] = job;
     saveData(data);
+    syncBackupCronJobs(data.backups);
 
     logSecurityEvent('backup_job_updated', { jobId: job.id, name: job.name, user: req.user });
 
@@ -254,6 +256,7 @@ router.delete('/jobs/:id', (req, res) => {
 
     const removed = data.backups.splice(jobIndex, 1)[0];
     saveData(data);
+    syncBackupCronJobs(data.backups);
 
     logSecurityEvent('backup_job_deleted', { jobId: removed.id, name: removed.name, user: req.user });
 
@@ -559,6 +562,41 @@ router.post('/jobs/:id/restore', (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to start restore' });
   }
 });
+
+// --- Cron Sync Helper ---
+
+/**
+ * Sync enabled backup jobs with schedule to the system crontab.
+ * Uses the existing POST /api/backup/jobs/:id/run endpoint via curl.
+ * @param {Array} jobs - Array of backup job objects
+ */
+function syncBackupCronJobs(jobs) {
+    try {
+        // Read current crontab
+        let currentCrontab = '';
+        try {
+            currentCrontab = execFileSync('crontab', ['-l'], { encoding: 'utf8' });
+        } catch(e) { currentCrontab = ''; }
+
+        // Remove existing homepinas backup entries
+        const lines = currentCrontab.split('\n')
+            .filter(l => !l.includes('# homepinas-backup:'));
+
+        // Add enabled jobs with schedule
+        for (const job of jobs) {
+            if (job.enabled !== false && job.schedule && job.schedule.enabled && job.schedule.cron) {
+                const cmd = `curl -s -X POST http://localhost:${process.env.HTTP_PORT || 80}/api/backup/jobs/${job.id}/run # homepinas-backup:${job.id}`;
+                lines.push(`${job.schedule.cron} ${cmd}`);
+            }
+        }
+
+        const newCrontab = lines.filter(l => l.trim()).join('\n') + '\n';
+        execFileSync('crontab', ['-'], { input: newCrontab, encoding: 'utf8' });
+        log.info('Synced backup cron jobs');
+    } catch(e) {
+        log.error('Failed to sync backup cron:', e.message);
+    }
+}
 
 // --- Retention Helper ---
 

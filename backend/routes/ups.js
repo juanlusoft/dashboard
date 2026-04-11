@@ -362,6 +362,7 @@ function recordUpsEvent(type, details) {
 // --- Critical Battery Shutdown Monitor ---
 
 let shutdownInitiated = false;
+let lastPowerStatus = null;
 
 /**
  * Poll UPS status every 60 seconds and initiate a safe shutdown
@@ -394,6 +395,22 @@ setInterval(async () => {
 
     const charge = upsStatus.batteryCharge;
     if (typeof charge !== 'number') return;
+
+    // Detect power status changes
+    const currentPowerStatus = upsStatus.status;
+    if (lastPowerStatus !== null && lastPowerStatus !== currentPowerStatus) {
+      // Power status changed
+      const config = (data.ups && data.ups.config) || {};
+      if (config.notifyOnPower) {
+        recordUpsEvent('power_change', {
+          from: lastPowerStatus,
+          to: currentPowerStatus,
+          batteryCharge: charge,
+          message: `Power status changed from ${lastPowerStatus} to ${currentPowerStatus}`
+        });
+      }
+    }
+    lastPowerStatus = currentPowerStatus;
 
     if (charge <= criticalThreshold) {
       log.warn(`[UPS] Battery critical: ${charge}% <= threshold ${criticalThreshold}%. Initiating shutdown.`);

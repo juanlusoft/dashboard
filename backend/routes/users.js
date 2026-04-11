@@ -107,7 +107,7 @@ async function createSambaUser(username, password) {
   const { execFileSync, spawn } = require('child_process');
 
   try {
-    execFileSync('sudo', ['useradd', '-M', '-s', '/sbin/nologin', username], { encoding: 'utf8' });
+    execFileSync('sudo', ['useradd', '-M', '-s', '/usr/sbin/nologin', username], { encoding: 'utf8' });
   } catch (err) {
     // User might already exist, that's OK
   }

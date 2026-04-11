@@ -32,9 +32,7 @@ const DANGEROUS_PATTERNS = [
   /chmod.*777/i,                    // world-writable chmod
   /\$\(/,                           // command substitution $()
   /`/,                              // backtick command substitution
-  /\|\s*/,                          // pipes
-  /;\s*/,                           // command chaining
-  /&&/,                             // logical AND chaining
+  /&&\s*(?:rm|mkfs|dd|chmod|sh|bash)/i,  // logical AND chaining with dangerous commands
   /\|\|/,                           // logical OR chaining
   />\s*\/dev\//i,                   // writing to any device
   /\/etc\/shadow/i,                 // sensitive file access
