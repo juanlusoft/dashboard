@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.15
+# HomePiNAS v2.13.16
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.15-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.16-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -66,6 +66,15 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - Restricted sudoers configuration
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
+
+## 🆕 What's New in v2.13.16
+
+### Fix ventilador EMC2305 — verificado en hardware real
+- **🔧 system.js** — Registros tach corregidos: fan1 usa `0x3E`/`0x3F` (antes `0x46`/`0x47` que era fan3)
+- **🔧 system.js** — Fórmula RPM corregida: `(msb<<5)|(lsb>>3)` en lugar de `(msb<<8)|lsb`
+- **🔧 system.js** — `GET /fan/status` ahora lee RPM y PWM por I2C directo si hwmon no está disponible
+- **🔧 system.js** — `EMC2305_HWMON_PATH` dinámico: busca el número de hwmon real en lugar de hardcodear hwmon3
+- **🔧 system.js** — Detección de chip mejorada: comprueba registro Product ID (0xFD) en lugar de 0x00
 
 ## 🆕 What's New in v2.13.15
 

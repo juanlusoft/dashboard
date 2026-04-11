@@ -24,11 +24,27 @@ const FANCTL_CONF = '/usr/local/bin/homepinas-fanctl.conf';
 // EMC2305 I2C constants
 const EMC2305_I2C_BUS = 10;
 const EMC2305_I2C_ADDR = '0x2e';
-const EMC2305_FAN1_REG = '0x30';
-const EMC2305_FAN2_REG = '0x40';
+const EMC2305_FAN1_REG = '0x30'; // PWM setting register fan1
+const EMC2305_FAN2_REG = '0x40'; // PWM setting register fan2
+// Tach reading registers (MSB/LSB): fan1=0x3E/0x3F, fan2=0x42/0x43, fan3=0x46/0x47
+const EMC2305_TACH_REGS = [
+    { name: 'EMC2305 Fan 1', msbReg: '0x3e', lsbReg: '0x3f' },
+    { name: 'EMC2305 Fan 2', msbReg: '0x42', lsbReg: '0x43' }
+];
 const I2CSET_PATH = '/usr/sbin/i2cset';
 const I2CGET_PATH = '/usr/sbin/i2cget';
-const EMC2305_HWMON_PATH = '/sys/bus/i2c/devices/10-002e/hwmon/hwmon3';
+const EMC2305_I2C_DEVICE = '/sys/bus/i2c/devices/10-002e';
+
+// Find the real hwmon path for EMC2305 (hwmon number varies by kernel boot order)
+function getEmc2305HwmonPath() {
+    try {
+        const hwmonDir = path.join(EMC2305_I2C_DEVICE, 'hwmon');
+        if (!fs.existsSync(hwmonDir)) return null;
+        const entries = fs.readdirSync(hwmonDir);
+        if (entries.length > 0) return path.join(hwmonDir, entries[0]);
+    } catch (e) {}
+    return null;
+}
 
 const FAN_PRESETS = {
     silent: `# =========================================
@@ -180,28 +196,23 @@ router.get('/stats', requireAuth, async (req, res) => {
             // Detect EMC2305 fans via I2C (driver may not create hwmon entries)
             if (fs.existsSync(I2CGET_PATH) && fs.existsSync(`/dev/i2c-${EMC2305_I2C_BUS}`)) {
                 try {
-                    // Check if emc2305 responds on i2c bus
-                    execFileSync(I2CGET_PATH, ['-y', String(EMC2305_I2C_BUS), EMC2305_I2C_ADDR, '0x00'], {
+                    // Check if emc2305 responds on i2c bus (read product ID register 0xFD)
+                    execFileSync(I2CGET_PATH, ['-y', String(EMC2305_I2C_BUS), EMC2305_I2C_ADDR, '0xfd'], {
                         encoding: 'utf8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe']
                     });
-                    // Read tachometer registers for RPM (registers 0x46-0x47 fan1, 0x48-0x49 fan2)
-                    const emc2305FanRegs = [
-                        { name: 'EMC2305 Fan 1', highReg: '0x46', lowReg: '0x47' },
-                        { name: 'EMC2305 Fan 2', highReg: '0x48', lowReg: '0x49' }
-                    ];
                     // Check if already listed via hwmon (avoid duplicates)
-                    const hasEmc = fanList.some(f => f.name.includes('emc2305') || f.name.includes('EMC2305'));
+                    const hasEmc = fanList.some(f => f.name.toLowerCase().includes('emc'));
                     if (!hasEmc) {
-                        for (const fan of emc2305FanRegs) {
+                        for (const fan of EMC2305_TACH_REGS) {
                             try {
-                                const highByte = parseInt(execFileSync(I2CGET_PATH, ['-y', String(EMC2305_I2C_BUS), EMC2305_I2C_ADDR, fan.highReg], {
+                                const msb = parseInt(execFileSync(I2CGET_PATH, ['-y', String(EMC2305_I2C_BUS), EMC2305_I2C_ADDR, fan.msbReg], {
                                     encoding: 'utf8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe']
                                 }).trim(), 16) || 0;
-                                const lowByte = parseInt(execFileSync(I2CGET_PATH, ['-y', String(EMC2305_I2C_BUS), EMC2305_I2C_ADDR, fan.lowReg], {
+                                const lsb = parseInt(execFileSync(I2CGET_PATH, ['-y', String(EMC2305_I2C_BUS), EMC2305_I2C_ADDR, fan.lsbReg], {
                                     encoding: 'utf8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe']
                                 }).trim(), 16) || 0;
-                                // EMC2305 tach: RPM = 3932160 / (high<<8 | low) when non-zero
-                                const tachCount = (highByte << 8) | lowByte;
+                                // EMC2305 tach: 13-bit value, RPM = 3932160 / tachCount
+                                const tachCount = (msb << 5) | (lsb >> 3);
                                 const rpm = tachCount > 0 ? Math.round(3932160 / tachCount) : 0;
                                 fanList.push({ id: fanList.length + 1, name: fan.name, rpm });
                             } catch (e) {}
@@ -278,9 +289,10 @@ router.post('/fan', requireAuth, (req, res) => {
     try {
         let found = false;
 
-        // Method 0: Direct EMC2305 hwmon path (known real path, fastest)
-        if (!found && fs.existsSync(EMC2305_HWMON_PATH)) {
-            const pwmPath = path.join(EMC2305_HWMON_PATH, `pwm${fanNum}`);
+        // Method 0: Direct EMC2305 hwmon path (dynamic, fastest when driver exposes hwmon)
+        const emc2305Hwmon = getEmc2305HwmonPath();
+        if (!found && emc2305Hwmon) {
+            const pwmPath = path.join(emc2305Hwmon, `pwm${fanNum}`);
             if (fs.existsSync(pwmPath)) {
                 execFileSync('sudo', ['tee', pwmPath], {
                     input: String(pwmValue),
@@ -413,13 +425,33 @@ router.get('/fan/status', requireAuth, (req, res) => {
             temp = Math.round((raw / 1000) * 10) / 10;
         } catch (e) {}
 
-        // Per-fan data from EMC2305 hwmon
+        // Per-fan data: try hwmon first, fall back to I2C direct reads
         const fans = [];
-        for (const n of [1, 2]) {
+        const hwmonPath = getEmc2305HwmonPath();
+        const i2cAvailable = fs.existsSync(I2CGET_PATH) && fs.existsSync(`/dev/i2c-${EMC2305_I2C_BUS}`);
+        const pwmRegs = { 1: EMC2305_FAN1_REG, 2: EMC2305_FAN2_REG };
+        for (let n = 1; n <= 2; n++) {
             let rpm = 0, pwm = 0, fault = false;
-            try { rpm = parseInt(fs.readFileSync(path.join(EMC2305_HWMON_PATH, `fan${n}_input`), 'utf8').trim()) || 0; } catch (e) {}
-            try { pwm = parseInt(fs.readFileSync(path.join(EMC2305_HWMON_PATH, `pwm${n}`), 'utf8').trim()) || 0; } catch (e) {}
-            try { fault = parseInt(fs.readFileSync(path.join(EMC2305_HWMON_PATH, `fan${n}_fault`), 'utf8').trim()) === 1; } catch (e) {}
+            if (hwmonPath) {
+                try { rpm = parseInt(fs.readFileSync(path.join(hwmonPath, `fan${n}_input`), 'utf8').trim()) || 0; } catch (e) {}
+                try { pwm = parseInt(fs.readFileSync(path.join(hwmonPath, `pwm${n}`), 'utf8').trim()) || 0; } catch (e) {}
+                try { fault = parseInt(fs.readFileSync(path.join(hwmonPath, `fan${n}_fault`), 'utf8').trim()) === 1; } catch (e) {}
+            }
+            // Fallback to I2C direct reads if hwmon not available
+            if (rpm === 0 && i2cAvailable && EMC2305_TACH_REGS[n - 1]) {
+                try {
+                    const tachReg = EMC2305_TACH_REGS[n - 1];
+                    const msb = parseInt(execFileSync(I2CGET_PATH, ['-y', String(EMC2305_I2C_BUS), EMC2305_I2C_ADDR, tachReg.msbReg], { encoding: 'utf8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] }).trim(), 16) || 0;
+                    const lsb = parseInt(execFileSync(I2CGET_PATH, ['-y', String(EMC2305_I2C_BUS), EMC2305_I2C_ADDR, tachReg.lsbReg], { encoding: 'utf8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] }).trim(), 16) || 0;
+                    const tachCount = (msb << 5) | (lsb >> 3);
+                    rpm = tachCount > 0 ? Math.round(3932160 / tachCount) : 0;
+                } catch (e) {}
+            }
+            if (pwm === 0 && i2cAvailable && pwmRegs[n]) {
+                try {
+                    pwm = parseInt(execFileSync(I2CGET_PATH, ['-y', String(EMC2305_I2C_BUS), EMC2305_I2C_ADDR, pwmRegs[n]], { encoding: 'utf8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] }).trim(), 16) || 0;
+                } catch (e) {}
+            }
             fans.push({ id: n, rpm, pwm, pwmPercent: Math.round(pwm / 255 * 100), fault });
         }
 
