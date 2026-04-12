@@ -9,37 +9,13 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 
 const { requireAuth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/rbac');
 const { logSecurityEvent } = require('../utils/security');
 const { validateUsername, validatePassword } = require('../utils/sanitize');
 const { getData, saveData } = require('../utils/data');
+const { destroyByUsername } = require('../utils/session');
 
 const BCRYPT_ROUNDS = 12;
-
-/**
- * Middleware: require admin role
- * Looks up the user's role from data since sessions only store username.
- */
-function requireAdmin(req, res, next) {
-  const data = getData();
-  // Legacy single-user: always admin
-  if (data.user && !data.users?.length && data.user.username === req.user.username) {
-    req.user.role = 'admin';
-    return next();
-  }
-  // Multi-user: look up role
-  const users = data.users || [];
-  const user = users.find(u => u.username === req.user.username);
-  if (user) {
-    req.user.role = user.role || 'user';
-  } else if (data.user && data.user.username === req.user.username) {
-    // Legacy fallback
-    req.user.role = 'admin';
-  }
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin required' });
-  }
-  next();
-}
 
 /**
  * Get the users array from data, handling legacy single-user format.
@@ -188,7 +164,7 @@ router.put('/me/password', async (req, res) => {
 
     // Validate new password strength
     if (!validatePassword(newPassword)) {
-      return res.status(400).json({ error: 'Invalid password. Must be 6-128 characters' });
+      return res.status(400).json({ error: 'La contraseña debe tener mínimo 8 caracteres e incluir letras y números' });
     }
 
     const users = getUsers();
@@ -213,6 +189,9 @@ router.put('/me/password', async (req, res) => {
     // Hash and save new password
     users[userIndex].password = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     saveUsers(users);
+
+    // Invalidate all sessions for this user (forces re-login on other devices)
+    destroyByUsername(req.user.username);
 
     // Update Samba password too
     try {
@@ -263,7 +242,7 @@ router.get('/', requireAdmin, (req, res) => {
  */
 router.post('/', requireAdmin, async (req, res) => {
   try {
-    const { username, password, role } = req.body;
+    const { username, password, role, email, displayName } = req.body;
 
     // Validate username
     if (!username) {
@@ -278,7 +257,7 @@ router.post('/', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Password is required' });
     }
     if (!validatePassword(password)) {
-      return res.status(400).json({ error: 'Invalid password. Must be 6-128 characters' });
+      return res.status(400).json({ error: 'La contraseña debe tener mínimo 8 caracteres e incluir letras y números' });
     }
 
     // Validate role
@@ -286,6 +265,13 @@ router.post('/', requireAdmin, async (req, res) => {
     const userRole = role || 'user';
     if (!validRoles.includes(userRole)) {
       return res.status(400).json({ error: `Invalid role. Must be one of: ${validRoles.join(', ')}` });
+    }
+
+    // Validate email if provided
+    if (email !== undefined && email !== '') {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ error: 'Invalid email address' });
+      }
     }
 
     // Check if username already exists
@@ -299,6 +285,8 @@ router.post('/', requireAdmin, async (req, res) => {
       username,
       password: hashedPassword,
       role: userRole,
+      ...(email !== undefined && email !== '' ? { email } : {}),
+      ...(displayName !== undefined && displayName !== '' ? { displayName } : {}),
       createdAt: new Date().toISOString(),
       lastLogin: null,
     };
@@ -334,7 +322,7 @@ router.post('/', requireAdmin, async (req, res) => {
 router.put('/:username', requireAdmin, async (req, res) => {
   try {
     const targetUsername = req.params.username;
-    const { role, password } = req.body;
+    const { role, password, email, displayName } = req.body;
 
     const users = getUsers();
     const userIndex = users.findIndex(
@@ -354,10 +342,23 @@ router.put('/:username', requireAdmin, async (req, res) => {
       users[userIndex].role = role;
     }
 
+    // Validate and update email if provided
+    if (email !== undefined) {
+      if (email !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ error: 'Invalid email address' });
+      }
+      users[userIndex].email = email;
+    }
+
+    // Update displayName if provided
+    if (displayName !== undefined) {
+      users[userIndex].displayName = displayName;
+    }
+
     // Validate and update password if provided
     if (password !== undefined) {
       if (!validatePassword(password)) {
-        return res.status(400).json({ error: 'Invalid password. Must be 6-128 characters' });
+        return res.status(400).json({ error: 'La contraseña debe tener mínimo 8 caracteres e incluir letras y números' });
       }
       users[userIndex].password = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
@@ -382,12 +383,19 @@ router.put('/:username', requireAdmin, async (req, res) => {
 
     saveUsers(users);
 
+    // Invalidate sessions if password was changed
+    if (password !== undefined) {
+      destroyByUsername(targetUsername);
+    }
+
     logSecurityEvent('USER_UPDATED', req.user.username, {
       ip: req.ip,
       targetUser: targetUsername,
       updatedFields: [
         ...(role !== undefined ? ['role'] : []),
         ...(password !== undefined ? ['password'] : []),
+        ...(email !== undefined ? ['email'] : []),
+        ...(displayName !== undefined ? ['displayName'] : []),
       ],
     });
 
@@ -426,6 +434,9 @@ router.delete('/:username', requireAdmin, async (req, res) => {
     const deletedUser = users[userIndex];
     users.splice(userIndex, 1);
     saveUsers(users);
+
+    // Invalidate all sessions for the deleted user
+    destroyByUsername(deletedUser.username);
 
     // Remove from Samba
     await removeSambaUser(deletedUser.username);

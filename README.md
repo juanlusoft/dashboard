@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.22
+# HomePiNAS v2.13.23
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.22-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.23-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -66,6 +66,24 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - Restricted sudoers configuration
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
+
+## 🆕 What's New in v2.13.23
+
+### Auditoría de usuarios — 14 fixes (críticos → bajos)
+- **🔴 C1** — 2FA arreglado para usuarios multi-usuario (buscaba en admin legacy en lugar de `data.users`)
+- **🔴 C2** — Sesiones invalidadas al eliminar usuario (`destroyByUsername`)
+- **🔴 C3** — Sesiones invalidadas al cambiar contraseña (propia y por admin)
+- **🟠 A1** — Docker, red, discos y SnapRAID ahora requieren rol admin (antes solo requireAuth)
+- **🟠 A2** — Recovery codes para 2FA: 8 códigos de un solo uso generados al activar
+- **🟠 A3** — Reset de emergencia restringido a localhost (antes accesible desde la red local)
+- **🟡 M1** — `lastLogin` se actualiza correctamente en cada login (auth y 2FA)
+- **🟡 M2** — `createSambaUser()` unificado en `utils/sambaUser.js` (eliminada duplicación)
+- **🟡 M3** — Límite de 5 sesiones simultáneas por usuario
+- **🟡 M4** — Admin puede deshabilitar 2FA de otro usuario desde el dashboard
+- **🟢 B1** — Contraseña mínima 8 caracteres + al menos una letra y un número
+- **🟢 B2** — `requireAdmin` unificado usando `rbac.js` en todos los routers
+- **🟢 B3** — Badge de estado 2FA visible en tabla de usuarios; botón "Desactivar 2FA" para admins
+- **🟢 B4** — Campos `email` y `displayName` añadidos a usuarios (opcionales)
 
 ## 🆕 What's New in v2.13.22
 

@@ -8,8 +8,10 @@
 const log = require('../utils/logger');
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { TOTP, Secret } = require('otpauth');
 const { requireAuth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/rbac');
 const { logSecurityEvent } = require('../utils/security');
 const { sanitizeForLog } = require('../utils/sanitize');
 const { getData, saveData } = require('../utils/data');
@@ -180,15 +182,25 @@ router.post('/verify', async (req, res) => {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
+    // Generate 8 single-use recovery codes
+    const recoveryCodes = Array.from({ length: 8 }, () =>
+      crypto.randomBytes(4).toString('hex').toUpperCase()
+    );
+
     found.user.totpSecret = secret;
     found.user.totpEnabled = true;
+    found.user.recoveryCodes = recoveryCodes;
     saveData(data);
 
     logSecurityEvent('TOTP_ENABLED', {
       user: req.user.username
     }, req.ip);
 
-    res.json({ success: true, message: '2FA has been enabled successfully' });
+    res.json({
+      success: true,
+      message: '2FA has been enabled successfully',
+      recoveryCodes
+    });
   } catch (error) {
     log.error('Error verifying TOTP:', error);
     res.status(500).json({ success: false, error: 'Failed to verify TOTP code' });
@@ -208,11 +220,7 @@ router.post('/validate', async (req, res) => {
       return res.status(400).json({ success: false, error: 'TOTP token is required' });
     }
 
-    // Sanitize token - should be exactly 6 digits
     const cleanToken = token.trim();
-    if (!/^\d{6}$/.test(cleanToken)) {
-      return res.status(400).json({ success: false, error: 'Token must be exactly 6 digits' });
-    }
 
     // Get user's stored TOTP secret
     const data = getData();
@@ -228,6 +236,25 @@ router.post('/validate', async (req, res) => {
 
     if (!user.totpEnabled || !user.totpSecret) {
       return res.status(400).json({ success: false, error: '2FA is not enabled for this account' });
+    }
+
+    // Check if the token looks like a recovery code (8 hex chars uppercase)
+    if (/^[0-9A-F]{8}$/.test(cleanToken)) {
+      const codes = user.recoveryCodes || [];
+      const codeIndex = codes.indexOf(cleanToken);
+      if (codeIndex !== -1) {
+        // Consume the recovery code (single-use)
+        user.recoveryCodes.splice(codeIndex, 1);
+        saveData(data);
+        logSecurityEvent('TOTP_RECOVERY_CODE_USED', { user: req.user.username }, req.ip);
+        return res.json({ success: true, message: 'Recovery code accepted' });
+      }
+      // Fall through to TOTP validation — invalid recovery code treated as bad token
+    }
+
+    // Sanitize token - should be exactly 6 digits for TOTP
+    if (!/^\d{6}$/.test(cleanToken)) {
+      return res.status(400).json({ success: false, error: 'Token must be exactly 6 digits or a valid recovery code' });
     }
 
     // Validate the token against stored secret
@@ -292,6 +319,7 @@ router.delete('/disable', async (req, res) => {
 
     // Remove TOTP data and disable 2FA
     delete user.totpSecret;
+    delete user.recoveryCodes;
     user.totpEnabled = false;
     saveData(data);
 
@@ -302,6 +330,50 @@ router.delete('/disable', async (req, res) => {
     res.json({ success: true, message: '2FA has been disabled' });
   } catch (error) {
     log.error('Error disabling TOTP:', error);
+    res.status(500).json({ success: false, error: 'Failed to disable 2FA' });
+  }
+});
+
+/**
+ * DELETE /admin/:username
+ * Admin-only: disable 2FA for another user.
+ * Does not require password confirmation (admin privilege sufficient).
+ */
+router.delete('/admin/:username', requireAdmin, async (req, res) => {
+  try {
+    const { username } = req.params;
+
+    if (!username || typeof username !== 'string') {
+      return res.status(400).json({ success: false, error: 'Username is required' });
+    }
+
+    const data = getData();
+    const found = findUserInData(data, username);
+
+    if (!found) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const user = found.user;
+
+    if (!user.totpEnabled) {
+      return res.status(400).json({ success: false, error: '2FA is not currently enabled for this user' });
+    }
+
+    // Disable 2FA and remove all TOTP data
+    user.totpEnabled = false;
+    delete user.totpSecret;
+    delete user.recoveryCodes;
+    saveData(data);
+
+    logSecurityEvent('TOTP_ADMIN_DISABLED', {
+      admin: req.user.username,
+      targetUser: username
+    }, req.ip);
+
+    res.json({ success: true });
+  } catch (error) {
+    log.error('Error in admin TOTP disable:', error);
     res.status(500).json({ success: false, error: 'Failed to disable 2FA' });
   }
 });

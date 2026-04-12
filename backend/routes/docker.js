@@ -22,6 +22,7 @@ const path = require('path');
 // Note: child_process used via local require() in handlers that need execFileSync
 
 const { requireAuth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/rbac');
 const { logSecurityEvent } = require('../utils/security');
 const { validateDockerAction, validateContainerId, sanitizeComposeName, validateComposeContent } = require('../utils/sanitize');
 
@@ -213,7 +214,7 @@ router.get('/containers', requireAuth, async (req, res) => {
 });
 
 // Container action (start, stop, restart)
-router.post('/action', requireAuth, async (req, res) => {
+router.post('/action', requireAdmin, async (req, res) => {
     const { id, action } = req.body;
 
     // SECURITY: Validate container ID format (hex string, 12-64 chars)
@@ -503,7 +504,7 @@ router.get('/compose/list', requireAuth, async (req, res) => {
 });
 
 // Run docker-compose up
-router.post('/compose/up', requireAuth, async (req, res) => {
+router.post('/compose/up', requireAdmin, async (req, res) => {
     const { name } = req.body;
 
     if (!name) {
@@ -554,7 +555,7 @@ router.post('/compose/up', requireAuth, async (req, res) => {
 });
 
 // Stop docker-compose
-router.post('/compose/down', requireAuth, async (req, res) => {
+router.post('/compose/down', requireAdmin, async (req, res) => {
     const { name } = req.body;
 
     if (!name) {
@@ -602,7 +603,7 @@ router.post('/compose/down', requireAuth, async (req, res) => {
 });
 
 // Delete compose file
-router.delete('/compose/:name', requireAuth, async (req, res) => {
+router.delete('/compose/:name', requireAdmin, async (req, res) => {
     // SECURITY: Use dedicated sanitization function
     const safeName = sanitizeComposeName(req.params.name);
     if (!safeName) {

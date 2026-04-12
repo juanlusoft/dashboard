@@ -9,7 +9,6 @@ const log = require('../utils/logger');
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
-const { spawn, execFileSync } = require('child_process');
 
 const { authLimiter } = require('../middleware/rateLimit');
 const { logSecurityEvent } = require('../utils/security');
@@ -18,6 +17,8 @@ const { createSession, destroySession } = require('../utils/session');
 const { validateUsername, validatePassword, sanitizeUsername } = require('../utils/sanitize');
 const { getCsrfToken, clearCsrfToken } = require('../middleware/csrf');
 const { TOTP, Secret } = require('otpauth');
+// NOTE: users.js should also import createSambaUser from here instead of defining its own copy.
+const { createSambaUser } = require('../utils/sambaUser');
 
 const SALT_ROUNDS = 12;
 
@@ -44,70 +45,6 @@ function validateTOTP(secret, token) {
         secret: Secret.fromBase32(secret)
     });
     return totp.validate({ token, window: 1 }) !== null;
-}
-
-/**
- * Create Samba user with same credentials (SECURE VERSION)
- */
-async function createSambaUser(username, password) {
-    const safeUsername = sanitizeUsername(username);
-    if (!safeUsername) {
-        log.error('Invalid username format for Samba user');
-        return false;
-    }
-
-    try {
-        // Check if system user exists
-        try {
-            execFileSync('id', [safeUsername], { encoding: 'utf8' });
-        } catch (e) {
-            execFileSync('sudo', ['useradd', '-M', '-s', '/sbin/nologin', safeUsername], { encoding: 'utf8' });
-        }
-
-        // Add user to sambashare group
-        execFileSync('sudo', ['usermod', '-aG', 'sambashare', safeUsername], { encoding: 'utf8' });
-
-        // Set Samba password using stdin (password never visible in process list)
-        await new Promise((resolve, reject) => {
-            const smbpasswd = spawn('sudo', ['smbpasswd', '-a', '-s', safeUsername], {
-                stdio: ['pipe', 'pipe', 'pipe']
-            });
-
-            smbpasswd.stdin.write(password + '\n');
-            smbpasswd.stdin.write(password + '\n');
-            smbpasswd.stdin.end();
-
-            let stderr = '';
-            smbpasswd.stderr.on('data', (data) => { stderr += data.toString(); });
-
-            smbpasswd.on('close', (code) => {
-                if (code === 0) resolve();
-                else reject(new Error(`smbpasswd failed: ${stderr}`));
-            });
-
-            smbpasswd.on('error', reject);
-        });
-
-        // Enable the Samba user
-        execFileSync('sudo', ['smbpasswd', '-e', safeUsername], { encoding: 'utf8' });
-
-        // Set ownership of storage pool directory (ONLY if mergerfs pool is mounted)
-        try {
-            const mountCheck = execFileSync('mountpoint', ['-q', '/mnt/storage'], { encoding: 'utf8' });
-            execFileSync('sudo', ['chown', `${safeUsername}:sambashare`, '/mnt/storage'], { encoding: 'utf8' });
-            execFileSync('sudo', ['chmod', '2775', '/mnt/storage'], { encoding: 'utf8' });
-        } catch (e) {}
-
-        // Restart Samba
-        execFileSync('sudo', ['systemctl', 'restart', 'smbd'], { encoding: 'utf8' });
-        execFileSync('sudo', ['systemctl', 'restart', 'nmbd'], { encoding: 'utf8' });
-
-        log.info(`Samba user ${safeUsername} created successfully`);
-        return true;
-    } catch (e) {
-        log.error('Failed to create Samba user:', e.message);
-        return false;
-    }
 }
 
 // Initial setup - create admin account
@@ -241,6 +178,10 @@ router.post('/login', authLimiter, async (req, res) => {
             }
             
             // No 2FA - create full session
+            // FIX M1: record lastLogin before creating the session
+            matchedUser.lastLogin = new Date().toISOString();
+            saveData(data);
+
             const sessionId = createSession(matchedUser.username);
             const csrfToken = getCsrfToken(sessionId);
             logSecurityEvent('LOGIN_SUCCESS', { username: matchedUser.username }, req.ip);
@@ -290,30 +231,44 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
 
         // Get user data
         const data = getData();
-        if (!data.user || data.user.username !== pending.username) {
+
+        // FIX C1: look up the user in data.users first, fall back to legacy data.user
+        let foundUser = null;
+        if (data.users && Array.isArray(data.users)) {
+            foundUser = data.users.find(u => u.username === pending.username) || null;
+        }
+        if (!foundUser && data.user && data.user.username === pending.username) {
+            foundUser = data.user;
+        }
+
+        if (!foundUser) {
             pending2FASessions.delete(pendingToken);
             return res.status(401).json({ success: false, message: 'User not found' });
         }
 
-        // Validate TOTP code
-        if (!validateTOTP(data.user.totpSecret, cleanCode)) {
+        // Validate TOTP code against the found user's secret
+        if (!validateTOTP(foundUser.totpSecret, cleanCode)) {
             logSecurityEvent('2FA_INVALID_CODE', { username: pending.username }, req.ip);
             return res.status(401).json({ success: false, message: 'Invalid 2FA code' });
         }
 
         // Success - clean up pending session and create real session
         pending2FASessions.delete(pendingToken);
-        
+
+        // FIX M1: record lastLogin before creating the session
+        foundUser.lastLogin = new Date().toISOString();
+        saveData(data);
+
         const sessionId = createSession(pending.username);
         const csrfToken = getCsrfToken(sessionId);
-        
+
         logSecurityEvent('LOGIN_2FA_SUCCESS', { username: pending.username }, req.ip);
-        
+
         res.json({
             success: true,
             sessionId,
             csrfToken,
-            user: { username: data.user.username }
+            user: { username: foundUser.username, role: foundUser.role || 'admin' }
         });
     } catch (e) {
         log.error('2FA verification error:', e);
@@ -370,7 +325,12 @@ router.post('/setup/reset', resetLimiter, (req, res) => {
     const fs = require('fs');
     const { DATA_FILE } = require('../utils/data');
     const { clearAllSessions } = require('../utils/session');
-    
+
+    // SECURITY: Only allow reset from localhost
+    if (req.ip !== '127.0.0.1' && req.ip !== '::1' && req.ip !== '::ffff:127.0.0.1') {
+        return res.status(403).json({ error: 'Reset only allowed from localhost' });
+    }
+
     // Require confirmation phrase to prevent accidental/malicious resets
     const { confirm } = req.body || {};
     if (confirm !== 'RESET') {

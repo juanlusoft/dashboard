@@ -101,6 +101,57 @@ function initSessionDb() {
 }
 
 /**
+ * Destroy all sessions for a given username
+ */
+function destroyByUsername(username) {
+    if (!sessionDb || !username) return;
+
+    try {
+        const stmt = sessionDb.prepare('DELETE FROM sessions WHERE username = ?');
+        stmt.run(username);
+    } catch (e) {
+        log.error('Failed to destroy sessions by username:', e.message);
+    }
+}
+
+/**
+ * Enforce a per-user session limit by removing the oldest sessions.
+ * If the user already has >= maxSessions active sessions, the oldest ones
+ * (by last_activity ASC) are deleted until only (maxSessions - 1) remain,
+ * leaving room for the new session that is about to be inserted.
+ */
+function destroyOldestSessionsIfOverLimit(username, maxSessions = 5) {
+    if (!sessionDb || !username) return;
+
+    try {
+        const countStmt = sessionDb.prepare(
+            'SELECT COUNT(*) AS cnt FROM sessions WHERE username = ?'
+        );
+        const { cnt } = countStmt.get(username);
+
+        if (cnt >= maxSessions) {
+            // Delete the oldest (cnt - maxSessions + 1) sessions to free up one slot
+            const deleteCount = cnt - maxSessions + 1;
+            const deleteStmt = sessionDb.prepare(`
+                DELETE FROM sessions
+                WHERE session_id IN (
+                    SELECT session_id FROM sessions
+                    WHERE username = ?
+                    ORDER BY last_activity ASC
+                    LIMIT ?
+                )
+            `);
+            const result = deleteStmt.run(username, deleteCount);
+            if (result.changes > 0) {
+                log.info(`Evicted ${result.changes} oldest session(s) for user "${username}" (limit: ${maxSessions})`);
+            }
+        }
+    } catch (e) {
+        log.error('Failed to enforce session limit:', e.message);
+    }
+}
+
+/**
  * Create a new session
  */
 function createSession(username) {
@@ -113,6 +164,9 @@ function createSession(username) {
     }
 
     try {
+        // Enforce per-user session limit before inserting the new session
+        destroyOldestSessionsIfOverLimit(username);
+
         const stmt = sessionDb.prepare(`
             INSERT INTO sessions (session_id, username, expires_at)
             VALUES (?, ?, ?)
@@ -327,6 +381,8 @@ module.exports = {
     createSession,
     validateSession,
     destroySession,
+    destroyByUsername,
+    destroyOldestSessionsIfOverLimit,
     clearAllSessions,
     cleanExpiredSessions,
     startSessionCleanup,

@@ -14,6 +14,7 @@ const fs = require('fs');
 const { execFileSync } = require('child_process');
 
 const { requireAuth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/rbac');
 const { logSecurityEvent } = require('../utils/security');
 const {
     validateInterfaceName,
@@ -104,7 +105,7 @@ router.get('/interfaces', requireAuth, async (req, res) => {
 });
 
 // Configure network interface
-router.post('/configure', requireAuth, (req, res) => {
+router.post('/configure', requireAdmin, (req, res) => {
     try {
         const { id, config } = req.body;
 

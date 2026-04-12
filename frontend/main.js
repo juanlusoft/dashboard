@@ -8426,12 +8426,23 @@ async function loadUsers() {
             }
 
             const roleSpan = document.createElement('span');
+            roleSpan.style.display = 'flex';
+            roleSpan.style.gap = '4px';
+            roleSpan.style.flexWrap = 'wrap';
+            roleSpan.style.alignItems = 'center';
             const roleBadge = document.createElement('span');
             const roleClass = user.role === 'admin' ? 'users-role-admin' :
                 user.role === 'user' ? 'users-role-user' : 'users-role-readonly';
             roleBadge.className = `users-role-badge ${roleClass}`;
             roleBadge.textContent = user.role === 'admin' ? 'Admin' : user.role === 'user' ? 'Usuario' : 'Solo lectura';
             roleSpan.appendChild(roleBadge);
+
+            // 2FA status badge
+            const tfaBadge = document.createElement('span');
+            tfaBadge.className = user.totpEnabled ? 'users-role-badge users-role-admin' : 'users-role-badge users-role-readonly';
+            tfaBadge.style.fontSize = '11px';
+            tfaBadge.textContent = user.totpEnabled ? '2FA' : 'Sin 2FA';
+            roleSpan.appendChild(tfaBadge);
 
             const createdSpan = document.createElement('span');
             createdSpan.className = 'users-date-text';
@@ -8467,6 +8478,30 @@ async function loadUsers() {
                 delBtn.className = 'users-action-btn users-action-btn-danger';
                 delBtn.addEventListener('click', () => deleteUser(user.username));
                 actionsDiv.appendChild(delBtn);
+
+                // Disable 2FA button — only shown when user has 2FA enabled
+                if (user.totpEnabled) {
+                    const disable2faBtn = document.createElement('button');
+                    disable2faBtn.textContent = '🔓';
+                    disable2faBtn.title = 'Desactivar 2FA';
+                    disable2faBtn.className = 'users-action-btn users-action-btn-danger';
+                    disable2faBtn.addEventListener('click', async () => {
+                        if (!confirm(`¿Desactivar 2FA para el usuario "${escapeHtml(user.username)}"?`)) return;
+                        try {
+                            const r = await authFetch(`${API_BASE}/totp/admin/${encodeURIComponent(user.username)}`, { method: 'DELETE' });
+                            const d = await r.json().catch(() => ({}));
+                            if (r.ok && d.success) {
+                                showNotification(`2FA desactivado para ${user.username}`, 'success');
+                                await loadUsers();
+                            } else {
+                                showNotification(d.error || 'Error al desactivar 2FA', 'error');
+                            }
+                        } catch (err) {
+                            showNotification('Error al desactivar 2FA', 'error');
+                        }
+                    });
+                    actionsDiv.appendChild(disable2faBtn);
+                }
             }
 
             row.appendChild(nameSpan);

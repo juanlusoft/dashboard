@@ -29,7 +29,9 @@ function validateUsername(username) {
 
 function validatePassword(password) {
     if (!password || typeof password !== 'string') return false;
-    if (password.length < 6 || password.length > 128) return false;
+    if (password.length < 8 || password.length > 128) return false;
+    if (!/[a-zA-Z]/.test(password)) return false;
+    if (!/[0-9]/.test(password)) return false;
     return true;
 }
 

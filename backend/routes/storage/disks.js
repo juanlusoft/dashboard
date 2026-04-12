@@ -11,6 +11,7 @@ const path = require('path');
 const { execFileSync, spawn } = require('child_process');
 
 const { requireAuth } = require('../../middleware/auth');
+const { requireAdmin } = require('../../middleware/rbac');
 const { logSecurityEvent } = require('../../utils/security');
 const { getData, saveData } = require('../../utils/data');
 const { sanitizeDiskId, validateDiskConfig, sanitizePathWithinBase } = require('../../utils/sanitize');
@@ -31,7 +32,7 @@ let snapraidSyncStatus = {
 
 // Get storage pool status (real-time)
 
-router.post('/disks/add-to-pool', requireAuth, async (req, res) => {
+router.post('/disks/add-to-pool', requireAdmin, async (req, res) => {
     try {
         const { diskId, format, role = 'data', force = false, filesystem = 'ext4' } = req.body;
         
@@ -336,7 +337,7 @@ router.post('/disks/add-to-pool', requireAuth, async (req, res) => {
  * POST /disks/remove-from-pool
  * Body: { diskId: 'sdb' }
  */
-router.post('/disks/remove-from-pool', requireAuth, async (req, res) => {
+router.post('/disks/remove-from-pool', requireAdmin, async (req, res) => {
     try {
         const { diskId } = req.body;
         
@@ -431,7 +432,7 @@ router.post('/disks/remove-from-pool', requireAuth, async (req, res) => {
  * POST /disks/mount-standalone
  * Body: { diskId: 'sdb', format: true/false, name: 'backups' }
  */
-router.post('/disks/mount-standalone', requireAuth, async (req, res) => {
+router.post('/disks/mount-standalone', requireAdmin, async (req, res) => {
     try {
         const { diskId, format, name, filesystem = 'ext4' } = req.body;
         
