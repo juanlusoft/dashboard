@@ -13758,6 +13758,23 @@ body.fm-dragging .fm-tree-item {
     border-radius: 10px;
     flex-shrink: 0;
     line-height: 1;
+    width: auto;
+    background: var(--primary);
+    border: none;
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 2px 8px var(--primary-glow);
+}
+
+.homeai-send-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px var(--primary-glow);
+}
+
+.homeai-send-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
 /* ── Responsive ─────────────────────────────────────────────────────────────── */

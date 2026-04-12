@@ -340,7 +340,7 @@ function renderHomeAIActive() {
                     placeholder="Escribe tu pregunta... (Enter para enviar, Shift+Enter para nueva línea)"
                     rows="2"
                 ></textarea>
-                <button id="homeai-send-btn" class="btn-primary homeai-send-btn">
+                <button id="homeai-send-btn" class="homeai-send-btn">
                     ➤
                 </button>
             </div>
