@@ -62,10 +62,19 @@ fi
 # INSTALACIÓN DE OLLAMA NATIVA (ARM64)
 # =============================================================================
 echo "[PROGRESS] 15% - Instalando Ollama para ARM64..."
-if command -v ollama &> /dev/null; then
+if [[ -x /usr/local/bin/ollama ]]; then
     echo "[INFO] Ollama ya está instalado, saltando instalación"
 else
-    curl -fsSL https://ollama.com/install.sh | sh
+    # El install.sh puede salir con código 9 si el grupo 'ollama' ya existe pero el
+    # usuario no — el binario queda instalado igualmente, por eso ignoramos ese error.
+    curl -fsSL https://ollama.com/install.sh | sh || {
+        if [[ -x /usr/local/bin/ollama ]]; then
+            echo "[INFO] Ollama instalado correctamente (advertencia de usuario/grupo ignorada)"
+        else
+            echo "[ERROR] Falló la instalación de Ollama"
+            exit 1
+        fi
+    }
 fi
 
 # =============================================================================
