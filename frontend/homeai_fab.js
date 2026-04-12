@@ -58,13 +58,18 @@ import { escapeHtml } from './modules/utils.js';
   }
 
   // ── Comprobar estado de HomeAI ───────────────────────────────────────────
+  // Usa fetch silencioso para NO triggear logout si la sesión ha expirado.
+  // checkStatus es un chequeo de fondo — no debe expulsar al usuario.
   async function checkStatus() {
     setBadge('loading');
     setSubtitle('Comprobando...');
     try {
-      // authFetch es la función de autenticación global de main.js
-      const fetchFn = (typeof authFetch === 'function') ? authFetch : fetch;
-      const res = await fetchFn(`${API_BASE}/homeai/status`);
+      // Fetch silencioso: envía la sesión pero NO provoca logout en 401/403
+      const sessionId = sessionStorage.getItem('sessionId');
+      const headers = { 'Content-Type': 'application/json' };
+      if (sessionId) headers['X-Session-Id'] = sessionId;
+
+      const res = await fetch(`${API_BASE}/homeai/status`, { headers, cache: 'no-store' });
       if (!res.ok) throw new Error('no_api');
       const data = await res.json();
 
@@ -217,10 +222,8 @@ import { escapeHtml } from './modules/utils.js';
     const thinkingEl = appendThinking();
 
     try {
-      const fetchFn = (typeof authFetch === 'function') ? authFetch : fetch;
-      const res = await fetchFn(`${API_BASE}/homeai/chat`, {
+      const res = await authFetch(`${API_BASE}/homeai/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: fabState.chatHistory, stream: false })
       });
 
