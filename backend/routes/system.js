@@ -125,6 +125,47 @@ HYST_TEMP=2
 `
 };
 
+// INA238 Power Monitor
+function readIna238() {
+    try {
+        const hwmonBase = '/sys/class/hwmon';
+        if (!fs.existsSync(hwmonBase)) return null;
+        const hwmonDirs = fs.readdirSync(hwmonBase);
+        let inaPath = null;
+        for (const hwmon of hwmonDirs) {
+            const namePath = path.join(hwmonBase, hwmon, 'name');
+            try {
+                const name = fs.readFileSync(namePath, 'utf8').trim();
+                if (name === 'ina238') {
+                    inaPath = path.join(hwmonBase, hwmon);
+                    break;
+                }
+            } catch (e) {}
+        }
+        if (!inaPath) return null;
+
+        const readVal = (file) => {
+            try { return parseInt(fs.readFileSync(path.join(inaPath, file), 'utf8').trim()); } catch (e) { return null; }
+        };
+
+        const voltRaw  = readVal('in1_input');
+        const currRaw  = readVal('curr1_input');
+        const powerRaw = readVal('power1_input');
+        const tempRaw  = readVal('temp1_input');
+
+        if (voltRaw === null && currRaw === null && powerRaw === null) return null;
+
+        return {
+            volts:    voltRaw  !== null ? parseFloat((voltRaw  / 1000).toFixed(2))    : null,
+            amps:     currRaw  !== null ? parseFloat((currRaw  / 1000).toFixed(2))    : null,
+            watts:    powerRaw !== null ? parseFloat((powerRaw / 1000000).toFixed(2)) : null,
+            chipTemp: tempRaw  !== null ? parseFloat((tempRaw  / 1000).toFixed(2))    : null
+        };
+    } catch (e) {
+        return null;
+    }
+}
+
 // System Hardware Telemetry
 // Cache static system info (doesn't change between reboots)
 let staticInfoCache = null;
@@ -256,6 +297,7 @@ router.get('/stats', requireAuth, async (req, res) => {
             swapUsed: (mem.swapused / 1024 / 1024 / 1024).toFixed(1),
             swapTotal: (mem.swaptotal / 1024 / 1024 / 1024).toFixed(1),
             fans,
+            power: readIna238(),
             uptime: si.time().uptime,
             hostname: osInfo.hostname,
             platform: osInfo.platform,

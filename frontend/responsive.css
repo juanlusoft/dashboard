@@ -69,6 +69,10 @@
     .dashboard-grid-4 {
         grid-template-columns: repeat(2, 1fr);
     }
+
+    .dashboard-grid-5 {
+        grid-template-columns: repeat(2, 1fr);
+    }
     
     .storage-mount-row {
         grid-template-columns: 150px 1fr 120px 80px;
@@ -128,7 +132,12 @@
         grid-template-columns: 1fr;
         gap: 15px;
     }
-    
+
+    .dashboard-grid-5 {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
     .grid-container {
         grid-template-columns: 1fr;
         gap: 15px;

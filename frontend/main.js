@@ -2794,6 +2794,21 @@ async function renderDashboard(quickRefresh) {
         if (uptimeEl) uptimeEl.textContent = `${t('dashboard.uptime', 'Tiempo Activo')}: ${uptimeStr}`;
         const publicIpEl = document.getElementById('dash-public-ip');
         if (publicIpEl) publicIpEl.textContent = publicIP;
+        if (stats.power) {
+            const pwrCard = document.getElementById('dash-power-card');
+            if (pwrCard) pwrCard.style.display = '';
+            const wattsEl = document.getElementById('dash-power-watts');
+            if (wattsEl) {
+                wattsEl.textContent = stats.power.watts;
+                wattsEl.style.color = stats.power.watts > 50 ? '#ef4444' : stats.power.watts > 30 ? '#f59e0b' : '#10b981';
+            }
+            const voltsEl = document.getElementById('dash-power-volts');
+            if (voltsEl) voltsEl.textContent = stats.power.volts + ' V';
+            const ampsEl = document.getElementById('dash-power-amps');
+            if (ampsEl) ampsEl.textContent = stats.power.amps + ' A';
+            const chiptempEl = document.getElementById('dash-power-chiptemp');
+            if (chiptempEl) chiptempEl.textContent = stats.power.chipTemp + '°C';
+        }
         return;
     }
 
@@ -2887,7 +2902,7 @@ async function renderDashboard(quickRefresh) {
             </div>
         </div>
 
-        <div class="dashboard-grid-4">
+        <div class="dashboard-grid-5">
             <div class="glass-card card-compact">
                 <h3>🖥️ ${t('dashboard.cpu', 'CPU')}</h3>
                 <div class="cpu-model-compact">${escapeHtml(cpuModel)}</div>
@@ -2943,6 +2958,18 @@ async function renderDashboard(quickRefresh) {
                     <div class="net-row"><span>${t('dashboard.publicIP', 'IP Pública')}</span><span id="dash-public-ip" class="ip-value">${publicIP}</span></div>
                     <div class="net-row"><span>${t('dashboard.lanIP', 'IP Local')}</span><span>${lanIP}</span></div>
                     <div class="net-row"><span>${t('dashboard.ddns', 'DDNS')}</span><span>${ddnsCount} ${t('dashboard.services', 'Servicio(s)')}</span></div>
+                </div>
+            </div>
+
+            <div class="glass-card card-compact" id="dash-power-card" ${stats.power ? '' : 'style="display:none"'}>
+                <h3>⚡ Consumo</h3>
+                <div class="power-compact">
+                    <div class="power-main-val"><span id="dash-power-watts">${stats.power ? stats.power.watts : '--'}</span><span class="power-unit">W</span></div>
+                    <div class="power-details">
+                        <div class="pwr-row"><span>Voltaje</span><span id="dash-power-volts">${stats.power ? stats.power.volts + ' V' : '-- V'}</span></div>
+                        <div class="pwr-row"><span>Corriente</span><span id="dash-power-amps">${stats.power ? stats.power.amps + ' A' : '-- A'}</span></div>
+                        <div class="pwr-row"><span>Chip temp</span><span id="dash-power-chiptemp">${stats.power ? stats.power.chipTemp + '°C' : '--°C'}</span></div>
+                    </div>
                 </div>
             </div>
         </div>

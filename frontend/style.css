@@ -1562,6 +1562,49 @@ input:checked+.slider:before {
     }
 }
 
+/* ===== 5-Column Dashboard Layout (INA238 Power Card) ===== */
+
+.dashboard-grid-5 {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
+    margin-bottom: 16px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.dashboard-grid-5 > .glass-card {
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+@media (max-width: 1400px) {
+    .dashboard-grid-5 {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 900px) {
+    .dashboard-grid-5 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .dashboard-grid-5 {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Power Card Styles */
+.power-compact { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.power-main-val { font-size: 2.2rem; font-weight: 700; line-height: 1; }
+.power-unit { font-size: 1rem; font-weight: 400; color: var(--text-dim); margin-left: 4px; }
+.power-details { width: 100%; }
+.pwr-row { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; color: var(--text-dim); }
+.pwr-row span:last-child { color: var(--text); font-weight: 500; }
+
 .card-compact {
     padding: 20px;
 }

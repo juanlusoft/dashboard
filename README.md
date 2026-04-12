@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.16
+# HomePiNAS v2.13.17
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.16-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.17-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -66,6 +66,14 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - Restricted sudoers configuration
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
+
+## 🆕 What's New in v2.13.17
+
+### ⚡ Monitor de Consumo Eléctrico (INA238)
+- **Nueva tarjeta en el dashboard** — muestra vatios, voltaje, corriente y temperatura del chip en tiempo real
+- **Detección automática** — busca el chip INA238 en los dispositivos hwmon del sistema
+- **Color dinámico** — verde (<30W), naranja (30–50W), rojo (>50W)
+- **Se oculta automáticamente** si el hardware no está presente
 
 ## 🆕 What's New in v2.13.16
 
