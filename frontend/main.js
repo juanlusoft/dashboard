@@ -2762,6 +2762,19 @@ async function renderDashboard(quickRefresh) {
 
     // Quick refresh: update only the live stat elements in-place (no DOM rebuild)
     if (quickRefresh) {
+        // Update static CPU fields if they were 0 on first render (stats loaded after initial paint)
+        if (stats.cpuPhysicalCores) {
+            const el = document.getElementById('dash-cpu-physical-cores');
+            if (el) el.textContent = `${stats.cpuPhysicalCores} ${t('dashboard.cores', 'Núcleos')}`;
+        }
+        if (stats.cpuCores) {
+            const el = document.getElementById('dash-cpu-cores');
+            if (el) el.textContent = `${stats.cpuCores} ${t('dashboard.threads', 'Hilos')}`;
+        }
+        if (stats.cpuSpeed) {
+            const el = document.getElementById('dash-cpu-speed');
+            if (el) el.textContent = `${stats.cpuSpeed} GHz`;
+        }
         const cpuLoadEl = document.getElementById('dash-cpu-load-val');
         if (cpuLoadEl) {
             cpuLoadEl.textContent = `${cpuLoad}%`;
@@ -2907,9 +2920,9 @@ async function renderDashboard(quickRefresh) {
                 <h3>🖥️ ${t('dashboard.cpu', 'CPU')}</h3>
                 <div class="cpu-model-compact">${escapeHtml(cpuModel)}</div>
                 <div class="cpu-specs-row">
-                    <span>${stats.cpuPhysicalCores || 0} ${t('dashboard.cores', 'Núcleos')}</span>
-                    <span>${stats.cpuCores || 0} ${t('dashboard.threads', 'Hilos')}</span>
-                    <span>${stats.cpuSpeed || 0} GHz</span>
+                    <span id="dash-cpu-physical-cores">${stats.cpuPhysicalCores || 0} ${t('dashboard.cores', 'Núcleos')}</span>
+                    <span id="dash-cpu-cores">${stats.cpuCores || 0} ${t('dashboard.threads', 'Hilos')}</span>
+                    <span id="dash-cpu-speed">${stats.cpuSpeed || 0} GHz</span>
                     <span id="dash-cpu-temp" class="temp-badge ${cpuTemp > 70 ? 'hot' : cpuTemp > 55 ? 'warm' : 'cool'}">${cpuTemp}°C</span>
                 </div>
                 <div class="load-section">
