@@ -6,7 +6,7 @@
 
 # Version - CHANGE THIS FOR EACH RELEASE
 # Version is read from package.json after clone/pull - this is a fallback display only
-APP_VERSION="2.13.21"
+APP_VERSION="2.13.22"
 
 # Parse command line arguments
 CLEAN_INSTALL=false
@@ -1549,6 +1549,78 @@ if ! sudo -n -u $REAL_USER true 2>/dev/null; then
         fi
     fi
 fi
+
+# ===== INA238 Power Monitor Setup =====
+setup_ina238() {
+    echo -e "${BLUE}Setting up INA238 power monitor...${NC}"
+
+    # Check if already active in hwmon
+    for name_file in /sys/class/hwmon/hwmon*/name; do
+        if [ -f "$name_file" ]; then
+            local chip_name
+            chip_name=$(cat "$name_file" 2>/dev/null)
+            if echo "$chip_name" | grep -q "^ina238"; then
+                echo -e "${GREEN}INA238 already active (hwmon)${NC}"
+                return 0
+            fi
+        fi
+    done
+
+    # Scan all I2C buses for INA238
+    local INA_BUS=""
+    local INA_ADDR=""
+    local INA_ADDRS="0x40 0x41 0x44 0x45 0x48 0x49 0x4c 0x4d"
+
+    if [ ! -x /usr/sbin/i2cget ]; then
+        echo -e "${YELLOW}i2cget not found — skipping INA238 scan${NC}"
+        return 0
+    fi
+
+    for i2c_dev in /dev/i2c-*; do
+        [ -e "$i2c_dev" ] || continue
+        local bus
+        bus="${i2c_dev#/dev/i2c-}"
+        for addr in $INA_ADDRS; do
+            if /usr/sbin/i2cget -y "$bus" "$addr" 0x00 >/dev/null 2>&1; then
+                INA_BUS="$bus"
+                INA_ADDR="$addr"
+                echo -e "${GREEN}INA238 found on i2c-${INA_BUS} at ${INA_ADDR}${NC}"
+                break 2
+            fi
+        done
+    done
+
+    if [ -z "$INA_BUS" ]; then
+        echo -e "${YELLOW}INA238 not found on any I2C bus — skipping${NC}"
+        return 0
+    fi
+
+    # Instantiate the driver
+    echo "ina238 ${INA_ADDR}" > "/sys/bus/i2c/devices/i2c-${INA_BUS}/new_device" 2>/dev/null || true
+
+    # Create startup service
+    cat > /etc/systemd/system/homepinas-ina238.service <<EOF
+[Unit]
+Description=HomePiNAS INA238 Power Monitor Activation
+Before=homepinas.service
+After=sysinit.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'echo "ina238 ${INA_ADDR}" > /sys/bus/i2c/devices/i2c-${INA_BUS}/new_device'
+RemainAfterExit=yes
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable homepinas-ina238.service
+    echo -e "${GREEN}INA238 service enabled (i2c-${INA_BUS} @ ${INA_ADDR})${NC}"
+}
+
+setup_ina238
 
 # Create SnapRAID sync script
 cat > /usr/local/bin/homepinas-snapraid-sync.sh <<'SYNCEOF'

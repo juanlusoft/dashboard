@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.21
+# HomePiNAS v2.13.22
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.21-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.22-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -66,6 +66,12 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - Restricted sudoers configuration
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
+
+## 🆕 What's New in v2.13.22
+
+### Auto-activación INA238 sin intervención manual
+- **🔧 install.sh** — `setup_ina238()` escanea buses I2C, activa el driver y crea servicio systemd para persistir en reinicios
+- **🔧 system.js** — `readIna238()` intenta activar el driver automáticamente si el chip está en I2C pero no en hwmon; guarda bus/addr en data.json para no re-escanear
 
 ## 🆕 What's New in v2.13.21
 

@@ -127,21 +127,80 @@ HYST_TEMP=2
 
 // INA238 Power Monitor
 function readIna238() {
-    try {
+    const INA238_ADDRS = ['0x40', '0x41', '0x44', '0x45', '0x48', '0x49', '0x4c', '0x4d'];
+
+    // Helper: scan hwmon for ina238, returns path or null
+    function findIna238Hwmon() {
         const hwmonBase = '/sys/class/hwmon';
         if (!fs.existsSync(hwmonBase)) return null;
-        const hwmonDirs = fs.readdirSync(hwmonBase);
-        let inaPath = null;
-        for (const hwmon of hwmonDirs) {
+        for (const hwmon of fs.readdirSync(hwmonBase)) {
             const namePath = path.join(hwmonBase, hwmon, 'name');
             try {
                 const name = fs.readFileSync(namePath, 'utf8').trim();
                 if (name === 'ina238' || name.startsWith('ina238')) {
-                    inaPath = path.join(hwmonBase, hwmon);
-                    break;
+                    return path.join(hwmonBase, hwmon);
                 }
             } catch (e) {}
         }
+        return null;
+    }
+
+    try {
+        let inaPath = findIna238Hwmon();
+
+        // If not found in hwmon, attempt to activate the driver
+        if (!inaPath) {
+            try {
+                const data = getData();
+                let inaConfig = (data && data.ina238Config) ? data.ina238Config : null;
+
+                if (!inaConfig) {
+                    // Scan I2C buses dynamically — only done once
+                    if (fs.existsSync(I2CGET_PATH)) {
+                        const i2cDevs = fs.readdirSync('/dev').filter(f => f.startsWith('i2c-'));
+                        outer: for (const dev of i2cDevs) {
+                            const bus = dev.replace('i2c-', '');
+                            for (const addr of INA238_ADDRS) {
+                                try {
+                                    execFileSync(I2CGET_PATH, ['-y', bus, addr, '0x00'], {
+                                        encoding: 'utf8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe']
+                                    });
+                                    inaConfig = { bus, addr };
+                                    break outer;
+                                } catch (e) {}
+                            }
+                        }
+                    }
+
+                    if (inaConfig) {
+                        // Persist config to skip scanning next time
+                        try {
+                            const d = getData() || {};
+                            d.ina238Config = inaConfig;
+                            saveData(d);
+                        } catch (e) {}
+                    }
+                }
+
+                if (inaConfig) {
+                    // Instantiate the driver via sysfs
+                    try {
+                        fs.writeFileSync(
+                            `/sys/bus/i2c/devices/i2c-${inaConfig.bus}/new_device`,
+                            `ina238 ${inaConfig.addr}`
+                        );
+                    } catch (e) {}
+
+                    // Wait 500 ms for the driver to enumerate, then re-scan hwmon
+                    const waitUntil = Date.now() + 500;
+                    while (Date.now() < waitUntil) { /* spin */ }
+                    inaPath = findIna238Hwmon();
+                }
+            } catch (e) {
+                // I2C not available on this system — not an error
+            }
+        }
+
         if (!inaPath) return null;
 
         const readVal = (file) => {
