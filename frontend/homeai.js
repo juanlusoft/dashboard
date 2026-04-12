@@ -11,7 +11,7 @@ let homeaiPollingTimer = null;
 
 // ─── FUNCIÓN PRINCIPAL ──────────────────────────────────────────────────────
 async function renderHomeAIView() {
-    const content = document.getElementById('main-content');
+    const content = document.getElementById('dashboard-content');
     content.innerHTML = `<div class="loading-spinner"><div class="spinner"></div><p>Cargando HomeAI...</p></div>`;
 
     // Cancelar cualquier polling anterior
@@ -55,7 +55,7 @@ async function renderHomeAIView() {
 
 // ─── ESTADO: NO INSTALADO ───────────────────────────────────────────────────
 function renderHomeAINotInstalled(defaultNvmePath) {
-    const content = document.getElementById('main-content');
+    const content = document.getElementById('dashboard-content');
     content.innerHTML = `
         <div class="section-header">
             <h2>🤖 HomeAI</h2>
@@ -136,7 +136,7 @@ function renderHomeAINotInstalled(defaultNvmePath) {
 
 // ─── ESTADO: INSTALANDO ──────────────────────────────────────────────────────
 function renderHomeAIInstalling(state) {
-    const content = document.getElementById('main-content');
+    const content = document.getElementById('dashboard-content');
     const progress = state.progress || 0;
     const step = escapeHtml(state.step || 'Preparando...');
 
@@ -228,7 +228,7 @@ function startHomeAIInstallPolling() {
 
 // ─── ESTADO: DESINSTALANDO ───────────────────────────────────────────────────
 function renderHomeAIUninstalling(state) {
-    const content = document.getElementById('main-content');
+    const content = document.getElementById('dashboard-content');
     const progress = state.progress || 0;
     content.innerHTML = `
         <div class="section-header">
@@ -290,7 +290,7 @@ function startHomeAIUninstallPolling() {
 
 // ─── ESTADO: ACTIVO (chat) ───────────────────────────────────────────────────
 function renderHomeAIActive() {
-    const content = document.getElementById('main-content');
+    const content = document.getElementById('dashboard-content');
 
     // Reconstruir historial de chat previo
     const historyHtml = homeaiChatHistory.map(msg => {
@@ -392,7 +392,7 @@ function renderHomeAIActive() {
 
 // ─── ESTADO: INACTIVO (instalado pero servicio detenido) ────────────────────
 function renderHomeAIInactive(status) {
-    const content = document.getElementById('main-content');
+    const content = document.getElementById('dashboard-content');
     content.innerHTML = `
         <div class="section-header">
             <h2>🤖 HomeAI</h2>
