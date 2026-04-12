@@ -148,7 +148,7 @@ router.get('/smart/:device', requireAuth, async (req, res) => {
 });
 
 // POST /storage/smart/:device/test - Run SMART self-test
-router.post('/smart/:device/test', requireAdmin, async (req, res) => {
+router.post('/smart/:device/test', requireAuth, requireAdmin, async (req, res) => {
     try {
         const device = req.params.device;
         const testType = req.body.type || 'short';

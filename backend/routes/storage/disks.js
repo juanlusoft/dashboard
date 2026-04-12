@@ -19,7 +19,7 @@ const { STORAGE_MOUNT_BASE, POOL_MOUNT, SNAPRAID_CONF, formatSize } = require('.
 
 
 
-router.post('/disks/add-to-pool', requireAdmin, async (req, res) => {
+router.post('/disks/add-to-pool', requireAuth, requireAdmin, async (req, res) => {
     try {
         const { diskId, format, role = 'data', force = false, filesystem = 'ext4' } = req.body;
         
@@ -325,7 +325,7 @@ router.post('/disks/add-to-pool', requireAdmin, async (req, res) => {
  * POST /disks/remove-from-pool
  * Body: { diskId: 'sdb' }
  */
-router.post('/disks/remove-from-pool', requireAdmin, async (req, res) => {
+router.post('/disks/remove-from-pool', requireAuth, requireAdmin, async (req, res) => {
     try {
         const { diskId } = req.body;
         
@@ -420,7 +420,7 @@ router.post('/disks/remove-from-pool', requireAdmin, async (req, res) => {
  * POST /disks/mount-standalone
  * Body: { diskId: 'sdb', format: true/false, name: 'backups' }
  */
-router.post('/disks/mount-standalone', requireAdmin, async (req, res) => {
+router.post('/disks/mount-standalone', requireAuth, requireAdmin, async (req, res) => {
     try {
         const { diskId, format, name, filesystem = 'ext4' } = req.body;
         

@@ -616,7 +616,7 @@ router.get("/disks/iostats", requireAuth, async (req, res) => {
 // ============================================================================
 // CACHE MOVER MANUAL TRIGGER
 // ============================================================================
-router.post("/cache/mover/trigger", requireAdmin, async (req, res) => {
+router.post("/cache/mover/trigger", requireAuth, requireAdmin, async (req, res) => {
     try {
         // Execute the cache mover script directly
         execFileSync('sudo', ['/usr/local/bin/homepinas-cache-mover.sh'], {

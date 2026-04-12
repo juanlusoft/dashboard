@@ -40,7 +40,7 @@ let scrubStatus = {
 
 // Get storage pool status (real-time)
 
-router.post('/snapraid/sync', requireAdmin, async (req, res) => {
+router.post('/snapraid/sync', requireAuth, requireAdmin, async (req, res) => {
     // SECURITY: Check for stale running state (timeout after 6 hours)
     const MAX_SYNC_TIME = 6 * 60 * 60 * 1000; // 6 hours
     if (snapraidSyncStatus.running) {
@@ -152,7 +152,7 @@ router.get('/snapraid/sync/progress', requireAuth, (req, res) => {
 });
 
 // Run SnapRAID scrub (async, non-blocking)
-router.post('/snapraid/scrub', requireAdmin, async (req, res) => {
+router.post('/snapraid/scrub', requireAuth, requireAdmin, async (req, res) => {
     // SECURITY: Check for stale running state (timeout after 6 hours)
     const MAX_SCRUB_TIME = 6 * 60 * 60 * 1000; // 6 hours
     if (scrubStatus.running) {

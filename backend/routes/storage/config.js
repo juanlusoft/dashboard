@@ -22,7 +22,7 @@ const { STORAGE_MOUNT_BASE, POOL_MOUNT, SNAPRAID_CONF, formatSize } = require('.
 
 // Get storage pool status (real-time)
 
-router.post('/config', requireAdmin, (req, res) => {
+router.post('/config', requireAuth, requireAdmin, (req, res) => {
     try {
         const { config } = req.body;
         const data = getData();

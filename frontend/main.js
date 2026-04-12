@@ -1134,8 +1134,8 @@ async function applyDiskActions() {
                 }
             }
         } catch (e) {
-            // Check if it's a session/CSRF error - redirect to login
-            if (e.message === 'CSRF_EXPIRED' || e.message.includes('CSRF') || e.message.includes('session')) {
+            // Check if it's a session/CSRF error - redirect to login (case-insensitive)
+            if (e.message === 'CSRF_EXPIRED' || e.message.includes('CSRF') || e.message.toLowerCase().includes('session')) {
                 closeDiskActionModal();
                 return; // authFetch already handles the redirect
             }
