@@ -69,6 +69,15 @@ else
 fi
 
 # =============================================================================
+# CREAR DIRECTORIO DE MODELOS Y ASIGNAR PERMISOS
+# =============================================================================
+echo "[PROGRESS] 25% - Creando directorio de modelos en $OLLAMA_DATA_DIR..."
+
+mkdir -p "$OLLAMA_DATA_DIR"
+chown ollama:ollama "$OLLAMA_DATA_DIR"
+chmod 755 "$OLLAMA_DATA_DIR"
+
+# =============================================================================
 # CONFIGURAR SYSTEMD OVERRIDE PARA OLLAMA
 # =============================================================================
 echo "[PROGRESS] 30% - Configurando servicio systemd..."
