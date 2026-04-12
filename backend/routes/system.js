@@ -192,8 +192,7 @@ function readIna238() {
                     } catch (e) {}
 
                     // Wait 500 ms for the driver to enumerate, then re-scan hwmon
-                    const waitUntil = Date.now() + 500;
-                    while (Date.now() < waitUntil) { /* spin */ }
+                    await new Promise(resolve => setTimeout(resolve, 500));
                     inaPath = findIna238Hwmon();
                 }
             } catch (e) {

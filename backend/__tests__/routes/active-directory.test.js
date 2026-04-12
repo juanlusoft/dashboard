@@ -20,23 +20,6 @@ jest.mock('fs', () => ({
 
 // Mock child_process
 jest.mock('child_process', () => ({
-    exec: jest.fn((cmd, opts, cb) => {
-        const callback = typeof opts === 'function' ? opts : cb;
-        
-        if (cmd.includes('which samba-tool')) {
-            callback(null, { stdout: '/usr/bin/samba-tool', stderr: '' });
-        } else if (cmd.includes('is-active samba-ad-dc')) {
-            callback(null, { stdout: 'active', stderr: '' });
-        } else if (cmd.includes('samba-tool user list')) {
-            callback(null, { stdout: 'Administrator\ntestuser\n', stderr: '' });
-        } else if (cmd.includes('samba-tool group list')) {
-            callback(null, { stdout: 'Domain Admins\nDomain Users\n', stderr: '' });
-        } else if (cmd.includes('samba-tool computer list')) {
-            callback(null, { stdout: 'PC-001$\n', stderr: '' });
-        } else {
-            callback(null, { stdout: '', stderr: '' });
-        }
-    }),
     execFile: jest.fn((file, args, opts, cb) => {
         const callback = typeof opts === 'function' ? opts : cb;
         const cmd = file + ' ' + (args || []).join(' ');
@@ -54,6 +37,12 @@ jest.mock('child_process', () => ({
                 callback(null, 'PC-001$\n', '');
             } else if (args.includes('user') && args.includes('show')) {
                 callback(null, 'cn: Test User\nmail: test@test.com\n', '');
+            } else if (args.includes('enable')) {
+                callback(null, '', '');
+            } else if (args.includes('disable')) {
+                callback(null, '', '');
+            } else if (args.includes('listmembers')) {
+                callback(null, 'user1\nuser2\n', '');
             } else {
                 callback(null, '', '');
             }
@@ -76,7 +65,8 @@ jest.mock('child_process', () => ({
     spawn: jest.fn(() => ({
         stdout: { on: jest.fn() },
         stderr: { on: jest.fn() },
-        on: jest.fn((event, cb) => event === 'close' && cb(0)),
+        stdin: { write: jest.fn(), end: jest.fn() },
+        on: jest.fn((event, cb) => { if (event === 'close') cb(0); return this; }),
         kill: jest.fn()
     }))
 }));
@@ -239,6 +229,50 @@ describe('POST /api/ad/users/:username/password', () => {
             .post('/api/ad/users/testuser/password')
             .send({});
         expect(res.status).toBe(400);
+    });
+});
+
+// ============================================================================
+// POST /users/:username/enable
+// ============================================================================
+
+describe('POST /api/ad/users/:username/enable', () => {
+    test('enables a user', async () => {
+        const res = await request(app).post('/api/ad/users/testuser/enable');
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(true);
+    });
+    test('rejects invalid username', async () => {
+        const res = await request(app).post('/api/ad/users/../../etc/enable');
+        expect(res.status).toBe(400);
+    });
+});
+
+// ============================================================================
+// POST /users/:username/disable
+// ============================================================================
+
+describe('POST /api/ad/users/:username/disable', () => {
+    test('disables a user', async () => {
+        const res = await request(app).post('/api/ad/users/testuser/disable');
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(true);
+    });
+    test('rejects disabling Administrator', async () => {
+        const res = await request(app).post('/api/ad/users/administrator/disable');
+        expect(res.status).toBe(400);
+    });
+});
+
+// ============================================================================
+// GET /groups/:name/members
+// ============================================================================
+
+describe('GET /api/ad/groups/:name/members', () => {
+    test('returns member list', async () => {
+        const res = await request(app).get('/api/ad/groups/TestGroup/members');
+        expect(res.status).toBe(200);
+        expect(Array.isArray(res.body)).toBe(true);
     });
 });
 

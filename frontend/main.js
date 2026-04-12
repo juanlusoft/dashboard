@@ -12926,6 +12926,13 @@ function renderADTab(tab, data) {
                                     <td>
                                         <div class="ad-action-buttons">
                                             <button class="ad-action-btn ad-reset-pwd" data-user="${escapeHtml(u.username)}" title="Cambiar contraseña">🔑</button>
+                                            <button class="ad-action-btn ${u.enabled !== false ? 'ad-disable-user' : 'ad-enable-user'}"
+                                                    data-user="${escapeHtml(u.username)}"
+                                                    data-enabled="${u.enabled !== false}"
+                                                    title="${u.enabled !== false ? 'Deshabilitar usuario' : 'Habilitar usuario'}"
+                                                    ${u.username.toLowerCase() === 'administrator' ? 'disabled' : ''}>
+                                                ${u.enabled !== false ? '🔒' : '🔓'}
+                                            </button>
                                             <button class="ad-action-btn delete ad-delete-user ${u.username.toLowerCase() === 'administrator' ? 'disabled' : ''}" data-user="${escapeHtml(u.username)}" title="Eliminar usuario" ${u.username.toLowerCase() === 'administrator' ? 'disabled' : ''}>🗑️</button>
                                         </div>
                                     </td>
@@ -12943,7 +12950,30 @@ function renderADTab(tab, data) {
             container.querySelectorAll('.ad-reset-pwd').forEach(btn => {
                 btn.addEventListener('click', () => showADPasswordModal(btn.dataset.user));
             });
-            
+
+            // Enable/disable user buttons
+            container.querySelectorAll('.ad-enable-user, .ad-disable-user').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const username = btn.dataset.user;
+                    const isEnabled = btn.dataset.enabled === 'true';
+                    const action = isEnabled ? 'disable' : 'enable';
+                    const label = isEnabled ? 'deshabilitar' : 'habilitar';
+                    if (!confirm(`¿${label.charAt(0).toUpperCase() + label.slice(1)} usuario ${username}?`)) return;
+                    try {
+                        const res = await authFetch(`${API_BASE}/ad/users/${username}/${action}`, { method: 'POST' });
+                        const data = await res.json();
+                        if (data.success) {
+                            showNotification(`Usuario ${username} ${isEnabled ? 'deshabilitado' : 'habilitado'}`, 'success');
+                            await renderADContent();
+                        } else {
+                            showNotification(data.error || 'Error', 'error');
+                        }
+                    } catch (err) {
+                        showNotification('Error: ' + err.message, 'error');
+                    }
+                });
+            });
+
             // Delete user buttons
             container.querySelectorAll('.ad-delete-user').forEach(btn => {
                 btn.addEventListener('click', async () => {
@@ -13024,7 +13054,11 @@ function renderADTab(tab, data) {
                                         <span class="ad-item-icon group">👥</span>
                                         <strong>${escapeHtml(g.name)}</strong>
                                     </td>
-                                    <td class="ad-secondary-text">${g.members || 0} miembros</td>
+                                    <td>
+                                        <button class="ad-action-btn ad-view-members" data-group="${escapeHtml(g.name)}" title="Ver miembros">
+                                            👥 Ver
+                                        </button>
+                                    </td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -13033,6 +13067,26 @@ function renderADTab(tab, data) {
             `;
 
             document.getElementById('ad-add-group-btn')?.addEventListener('click', () => showADGroupModal());
+
+            // View members buttons
+            container.querySelectorAll('.ad-view-members').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const groupName = btn.dataset.group;
+                    try {
+                        btn.disabled = true;
+                        btn.innerHTML = '⏳';
+                        const res = await authFetch(`${API_BASE}/ad/groups/${encodeURIComponent(groupName)}/members`);
+                        const members = await res.json();
+                        if (!Array.isArray(members)) throw new Error(members.error || 'Error');
+                        alert(`Miembros de ${groupName}:\n${members.length > 0 ? members.join('\n') : '(ninguno)'}`);
+                    } catch (err) {
+                        showNotification('Error: ' + err.message, 'error');
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = '👥 Ver';
+                    }
+                });
+            });
             break;
             
         case 'ad-join':

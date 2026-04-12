@@ -248,7 +248,7 @@ router.get('/users', async (req, res) => {
                         const value = valueParts.join(':').trim();
                         if (key.trim() === 'cn') user.displayName = value;
                         if (key.trim() === 'mail') user.email = value;
-                        if (key.trim() === 'userAccountControl') user.enabled = !value.includes('ACCOUNTDISABLE');
+                        if (key.trim() === 'userAccountControl') user.enabled = !(parseInt(value) & 2);
                     }
                 }
 
@@ -354,6 +354,33 @@ router.post('/users/:username/password', async (req, res) => {
     }
 });
 
+router.post('/users/:username/enable', async (req, res) => {
+    try {
+        const { username } = req.params;
+        if (!USERNAME_PATTERN.test(username)) return res.status(400).json({ error: 'Invalid username' });
+        const status = await getADStatus();
+        if (!status.provisioned || !status.running) return res.status(400).json({ error: 'AD DC not running' });
+        await execFileAsync('sudo', ['samba-tool', 'user', 'enable', username]);
+        res.json({ success: true, message: `User ${username} enabled` });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.post('/users/:username/disable', async (req, res) => {
+    try {
+        const { username } = req.params;
+        if (!USERNAME_PATTERN.test(username)) return res.status(400).json({ error: 'Invalid username' });
+        if (username.toLowerCase() === 'administrator') return res.status(400).json({ error: 'Cannot disable Administrator account' });
+        const status = await getADStatus();
+        if (!status.provisioned || !status.running) return res.status(400).json({ error: 'AD DC not running' });
+        await execFileAsync('sudo', ['samba-tool', 'user', 'disable', username]);
+        res.json({ success: true, message: `User ${username} disabled` });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 router.get('/computers', async (req, res) => {
     try {
         const status = await getADStatus();
@@ -452,6 +479,20 @@ router.post('/groups', async (req, res) => {
         await execFileAsync('sudo', args);
 
         res.json({ success: true, message: `Group ${name} created` });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.get('/groups/:name/members', async (req, res) => {
+    try {
+        const { name } = req.params;
+        if (!GROUP_NAME_PATTERN.test(name)) return res.status(400).json({ error: 'Invalid group name' });
+        const status = await getADStatus();
+        if (!status.provisioned || !status.running) return res.status(400).json({ error: 'AD DC not running' });
+        const { stdout } = await execFileAsync('sudo', ['samba-tool', 'group', 'listmembers', name]);
+        const members = stdout.trim().split('\n').filter(m => m);
+        res.json(members);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

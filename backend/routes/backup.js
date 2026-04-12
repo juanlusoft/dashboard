@@ -319,12 +319,7 @@ router.post('/jobs/:id/run', (req, res) => {
       const args = ['czf', archivePath, '-C', job.source, '.'];
       // Add exclude patterns for tar
       if (job.excludes && job.excludes.length > 0) {
-        job.excludes.forEach(pattern => {
-          args.unshift(`--exclude=${pattern}`);
-        });
-        // Rearrange: excludes first, then czf etc.
-        // Actually tar expects: tar --exclude=pattern czf archive -C source .
-        // Let's rebuild properly
+        // tar expects: tar --exclude=pattern czf archive -C source .
         const tarArgs = [];
         job.excludes.forEach(pattern => {
           tarArgs.push(`--exclude=${pattern}`);

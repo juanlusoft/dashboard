@@ -18,9 +18,6 @@ const { STORAGE_MOUNT_BASE, POOL_MOUNT, SNAPRAID_CONF, formatSize, formatBytes }
 
 const { notifyBadblocksComplete } = require('../../utils/health-monitor');
 
-const { validateSession } = require('../../utils/session');
-
-
 // SnapRAID sync progress tracking
 let snapraidSyncStatus = {
     running: false,

@@ -19,19 +19,6 @@ const { STORAGE_MOUNT_BASE, POOL_MOUNT, SNAPRAID_CONF, formatSize } = require('.
 
 
 
-// SnapRAID sync progress tracking
-let snapraidSyncStatus = {
-    running: false,
-    progress: 0,
-    status: '',
-    startTime: null,
-    error: null
-};
-
-// Format size: GB → TB when appropriate
-
-// Get storage pool status (real-time)
-
 router.post('/disks/add-to-pool', requireAdmin, async (req, res) => {
     try {
         const { diskId, format, role = 'data', force = false, filesystem = 'ext4' } = req.body;

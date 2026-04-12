@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.23
+# HomePiNAS v2.13.25
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.23-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.25-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -66,6 +66,25 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - Restricted sudoers configuration
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
+
+## 🆕 What's New in v2.13.25
+
+### Active Directory — Auditoría y correcciones (7 fixes)
+- **🔴 Bug** — `userAccountControl` siempre mostraba "Activo": corregido con parsing de bit flag `!(parseInt(value) & 2)`
+- **✨ Nuevo** — Habilitar/deshabilitar usuarios AD desde el dashboard (botón 🔒/🔓 por usuario)
+- **✨ Nuevo** — Ver miembros de grupos AD con botón "👥 Ver" (endpoint `GET /groups/:name/members`)
+- **🔧 Tests** — Mock de `exec` muerto eliminado; mock de `spawn` corregido (stdin faltaba)
+- **🔧 Tests** — Tests añadidos para enable, disable y listmembers
+
+## 🆕 What's New in v2.13.24
+
+### Fixes de calidad de código (6 bugs)
+- **system.js** — Busy-wait síncrono de INA238 reemplazado por `await setTimeout` (libera event loop)
+- **scheduler.js** — Temp file movido de `/mnt/storage/.tmp` a `os.tmpdir()` (seguro antes de montar storage)
+- **backup.js** — Eliminado código muerto `args.unshift()` que era sobreescrito inmediatamente
+- **users.js** — Corregido orden de argumentos en `logSecurityEvent` (user/ip invertidos)
+- **badblocks.js** — Eliminado import `validateSession` no utilizado
+- **disks.js** — Eliminado `snapraidSyncStatus` declarado pero nunca usado
 
 ## 🆕 What's New in v2.13.23
 

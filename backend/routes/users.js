@@ -209,7 +209,7 @@ router.put('/me/password', async (req, res) => {
       log.warn('Samba password update failed for', req.user.username);
     }
 
-    logSecurityEvent('PASSWORD_CHANGED', { user: req.user.username }, req.ip);
+    logSecurityEvent('PASSWORD_CHANGED', req.user.username, { ip: req.ip });
     res.json({ message: 'Password changed successfully' });
   } catch (err) {
     log.error('Password change error:', err.message);

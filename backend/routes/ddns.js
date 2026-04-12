@@ -9,6 +9,7 @@ const log = require('../utils/logger');
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/rbac');
 const { ddnsLimiter } = require('../middleware/rateLimit');
 const { logSecurityEvent } = require('../utils/security');
 const { getData, saveData } = require('../utils/data');
@@ -282,7 +283,7 @@ router.get('/services', (req, res) => {
  * POST /services - Add a new DDNS service
  * Body varies by provider (see validateServiceFields for required fields).
  */
-router.post('/services', (req, res) => {
+router.post('/services', requireAdmin, (req, res) => {
   try {
     const validationError = validateServiceFields(req.body);
     if (validationError) {
@@ -352,7 +353,7 @@ router.post('/services', (req, res) => {
 /**
  * PUT /services/:id - Update a DDNS service configuration
  */
-router.put('/services/:id', (req, res) => {
+router.put('/services/:id', requireAdmin, (req, res) => {
   try {
     const data = getData();
     if (!data.network) data.network = {};
@@ -419,7 +420,7 @@ router.put('/services/:id', (req, res) => {
 /**
  * DELETE /services/:id - Remove a DDNS service
  */
-router.delete('/services/:id', (req, res) => {
+router.delete('/services/:id', requireAdmin, (req, res) => {
   try {
     const data = getData();
     if (!data.network) data.network = {};
