@@ -92,16 +92,20 @@
 
 ---
 
-### ⬜ 6. Gestor de Archivos (Files)
+### ✅ 6. Gestor de Archivos (Files)
 **Backend:** `backend/routes/files.js`  
 **Frontend:** `frontend/main.js` → `renderFilesView()`
 
-**Pendiente auditar:**
-- Navegación de directorios
-- Upload/download/drag&drop
-- Preview de archivos
-- Copiar/pegar/mover/eliminar
-- Permisos de acceso por rol
+**Auditada en:** v2.13.28
+
+**Bugs corregidos:**
+- 🔴 `main.js` — Copy enviaba params erróneos (`srcPath`/`destPath` → `source`/`destination`) — copia nunca funcionaba
+- 🔴 `main.js` — XSS en resultados de búsqueda: `file.path` sin `escapeHtml()`
+- 🔴 `files.js` — Upload path traversal: `f.originalname` → `path.basename(f.originalname)`
+- 🟠 `files.js` — Move sin check de destino existente → sobrescritura silenciosa
+- 🟠 `files.js` — Copy/Move sin check `source === destination`
+
+**Estado:** Sin bugs conocidos pendientes.
 
 ---
 
@@ -265,7 +269,7 @@
 
 | Total secciones | Auditadas | Pendientes | % Completado |
 |---|---|---|---|
-| 20 | 3 | 17 | **15%** |
+| 20 | 4 | 16 | **20%** |
 
 ---
 
@@ -273,6 +277,7 @@
 
 | Versión | Cambios |
 |---|---|
+| v2.13.28 | Auditoría Archivos: 5 fixes (copy params, XSS búsqueda, path traversal upload, move overwrite) |
 | v2.13.27 | Auditoría Almacenamiento: 9 fixes (validateSession crash, fstab XFS, NFS RBAC, auth, duplicados) |
 | v2.13.26 | Auditoría Resumen: 3 fixes (readIna238 async, globalStats, power null) |
 | v2.13.25 | Auditoría Active Directory: 7 fixes + 3 nuevos endpoints |

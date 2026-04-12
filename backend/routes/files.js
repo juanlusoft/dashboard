@@ -471,16 +471,17 @@ router.post('/upload', requirePermission('write'), (req, res) => {
     // Move each file from temp to target
     const movedFiles = [];
     for (const f of req.files) {
-      const destPath = path.join(targetDir, f.originalname);
+      const safeName = path.basename(f.originalname);
+      const destPath = path.join(targetDir, safeName);
       try {
         fs.renameSync(f.path, destPath);
-        movedFiles.push({ name: f.originalname, size: f.size, path: path.relative(STORAGE_BASE, destPath) });
+        movedFiles.push({ name: safeName, size: f.size, path: path.relative(STORAGE_BASE, destPath) });
       } catch (moveErr) {
         // Try copy+delete if rename fails (cross-device)
         try {
           fs.copyFileSync(f.path, destPath);
           fs.unlinkSync(f.path);
-          movedFiles.push({ name: f.originalname, size: f.size, path: path.relative(STORAGE_BASE, destPath) });
+          movedFiles.push({ name: safeName, size: f.size, path: path.relative(STORAGE_BASE, destPath) });
         } catch (copyErr) {
           log.error('Move file error:', copyErr.message);
         }
@@ -625,8 +626,16 @@ router.post('/move', requirePermission('write'), (req, res) => {
       return res.status(400).json({ error: 'Invalid destination: must be within storage directory' });
     }
 
+    if (sourcePath === destPath) {
+      return res.status(400).json({ error: 'Source and destination must be different' });
+    }
+
     if (!fs.existsSync(sourcePath)) {
       return res.status(404).json({ error: 'Source not found' });
+    }
+
+    if (fs.existsSync(destPath)) {
+      return res.status(409).json({ error: 'Destination already exists' });
     }
 
     fs.renameSync(sourcePath, destPath);
@@ -661,6 +670,14 @@ router.post('/copy', requirePermission('write'), (req, res) => {
 
     if (!fs.existsSync(sourcePath)) {
       return res.status(404).json({ error: 'Source not found' });
+    }
+
+    if (sourcePath === destPath) {
+      return res.status(400).json({ error: 'Source and destination must be different' });
+    }
+
+    if (fs.existsSync(destPath)) {
+      return res.status(409).json({ error: 'Destination already exists' });
     }
 
     fs.cpSync(sourcePath, destPath, { recursive: true });

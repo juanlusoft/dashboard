@@ -8040,7 +8040,7 @@ async function fmPaste() {
         const newPath = currentFilePath + '/' + f.name;
         try {
             if (fmClipboard.action === 'copy') {
-                await authFetch(`${API_BASE}/files/copy`, { method: 'POST', body: JSON.stringify({ srcPath: f.path, destPath: newPath }) });
+                await authFetch(`${API_BASE}/files/copy`, { method: 'POST', body: JSON.stringify({ source: f.path, destination: newPath }) });
             } else {
                 await authFetch(`${API_BASE}/files/rename`, { method: 'POST', body: JSON.stringify({ oldPath: f.path, newPath: newPath }) });
             }
@@ -8155,7 +8155,7 @@ async function searchFiles(query) {
             row.innerHTML = `
                 <span></span>
                 <span class="fm-file-icon">${file.type === 'directory' ? getFolderSVG() : getFileIconSVG(file.name || file.path.split('/').pop())}</span>
-                <span class="fm-file-name" style="grid-column: span 2;">${file.path || file.name}</span>
+                <span class="fm-file-name" style="grid-column: span 2;">${escapeHtml(file.path || file.name || '')}</span>
                 <span class="fm-file-meta">${file.type === 'directory' ? '—' : formatFileSize(file.size)}</span>
                 <span></span><span></span>
             `;

@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.27
+# HomePiNAS v2.13.28
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.27-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.28-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -66,6 +66,15 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - Restricted sudoers configuration
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
+
+## 🆕 What's New in v2.13.28
+
+### Auditoría Gestor de Archivos — 5 fixes (críticos → altos)
+- **🔴 fix(main.js)** — Copy enviaba `srcPath`/`destPath`; backend espera `source`/`destination` — operaciones silenciosas sin efecto
+- **🔴 fix(main.js)** — XSS: `file.path || file.name` sin escapar en resultados de búsqueda
+- **🔴 fix(files.js)** — Upload usa `f.originalname` directamente → path traversal (`../../../etc/passwd`)
+- **🟠 fix(files.js)** — Move sin comprobación de destino existente → sobrescritura silenciosa de datos
+- **🟠 fix(files.js)** — Copy/Move sin comprobación `source === destination` → error de filesystem confuso
 
 ## 🆕 What's New in v2.13.27
 
