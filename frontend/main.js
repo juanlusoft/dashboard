@@ -2803,6 +2803,14 @@ async function renderDashboard(quickRefresh) {
         if (ramUsedEl) ramUsedEl.textContent = `${stats.ramUsed || 0} GB`;
         const ramFreeEl = document.getElementById('dash-ram-free');
         if (ramFreeEl) ramFreeEl.textContent = `${stats.ramFree || 0} GB`;
+        const ramTotalEl = document.getElementById('dash-ram-total');
+        if (ramTotalEl) ramTotalEl.textContent = `${stats.ramTotal || 0} GB`;
+        const swapRow = document.getElementById('dash-swap-row');
+        const swapVal = document.getElementById('dash-swap-val');
+        if (swapRow && stats.swapTotal && parseFloat(stats.swapTotal) > 0) {
+            swapRow.style.display = '';
+            if (swapVal) swapVal.textContent = `${stats.swapUsed || 0}/${stats.swapTotal || 0} GB`;
+        }
         const uptimeEl = document.getElementById('dash-uptime');
         if (uptimeEl) uptimeEl.textContent = `${t('dashboard.uptime', 'Tiempo Activo')}: ${uptimeStr}`;
         const publicIpEl = document.getElementById('dash-public-ip');
@@ -2952,8 +2960,8 @@ async function renderDashboard(quickRefresh) {
                     <div class="memory-details-compact">
                         <div class="mem-row"><span>${t('dashboard.used', 'Usado')}</span><span id="dash-ram-used">${stats.ramUsed || 0} GB</span></div>
                         <div class="mem-row"><span>${t('dashboard.free', 'Libre')}</span><span id="dash-ram-free">${stats.ramFree || 0} GB</span></div>
-                        <div class="mem-row"><span>${t('dashboard.total', 'Total')}</span><span>${stats.ramTotal || 0} GB</span></div>
-                        ${stats.swapTotal && parseFloat(stats.swapTotal) > 0 ? `<div class="mem-row swap"><span>${t('dashboard.swap', 'Swap')}</span><span>${stats.swapUsed || 0}/${stats.swapTotal || 0} GB</span></div>` : ''}
+                        <div class="mem-row"><span>${t('dashboard.total', 'Total')}</span><span id="dash-ram-total">${stats.ramTotal || 0} GB</span></div>
+                        <div class="mem-row swap" id="dash-swap-row" style="${stats.swapTotal && parseFloat(stats.swapTotal) > 0 ? '' : 'display:none'}"><span>${t('dashboard.swap', 'Swap')}</span><span id="dash-swap-val">${stats.swapUsed || 0}/${stats.swapTotal || 0} GB</span></div>
                     </div>
                 </div>
             </div>

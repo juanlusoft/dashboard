@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.18
+# HomePiNAS v2.13.19
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.18-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.19-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -66,6 +66,11 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - Restricted sudoers configuration
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
+
+## 🆕 What's New in v2.13.19
+
+### Fix tarjeta Memoria — Total y Swap mostraban 0
+- **🔧 main.js** — `ramTotal` y `swap` añadidos al quickRefresh con IDs; misma causa que el bug de CPU
 
 ## 🆕 What's New in v2.13.18
 
