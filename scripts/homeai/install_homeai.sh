@@ -78,21 +78,54 @@ else
 fi
 
 # =============================================================================
-# ASEGURAR QUE EL USUARIO OLLAMA EXISTE
+# ASEGURAR QUE EL USUARIO Y GRUPO OLLAMA EXISTEN
 # =============================================================================
 echo "[PROGRESS] 20% - Verificando usuario del servicio ollama..."
 
+if ! getent group ollama &>/dev/null; then
+    groupadd --system ollama || true
+fi
+
 if ! id ollama &>/dev/null; then
-    # El grupo puede existir ya (de instalación previa parcial)
-    if getent group ollama &>/dev/null; then
-        useradd -r -g ollama -s /bin/false -d /usr/share/ollama ollama || true
-    else
-        useradd -r -s /bin/false -d /usr/share/ollama ollama || true
-    fi
+    useradd --system -g ollama -s /bin/false -d /usr/share/ollama ollama
 fi
 
 # Añadir usuario actual al grupo ollama si no está ya
 usermod -aG ollama root 2>/dev/null || true
+
+# =============================================================================
+# ASEGURAR QUE EL ARCHIVO DE SERVICIO SYSTEMD EXISTE
+# =============================================================================
+echo "[PROGRESS] 22% - Verificando archivo de servicio systemd de ollama..."
+
+OLLAMA_SERVICE_PATH=""
+for f in /etc/systemd/system/ollama.service /lib/systemd/system/ollama.service /usr/lib/systemd/system/ollama.service; do
+    if [[ -f "$f" ]]; then
+        OLLAMA_SERVICE_PATH="$f"
+        break
+    fi
+done
+
+if [[ -z "$OLLAMA_SERVICE_PATH" ]]; then
+    echo "[INFO] Archivo .service no encontrado, creándolo manualmente..."
+    cat > /etc/systemd/system/ollama.service << 'SERVICE_EOF'
+[Unit]
+Description=Ollama Service
+After=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/ollama serve
+User=ollama
+Group=ollama
+Restart=always
+RestartSec=3
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+[Install]
+WantedBy=default.target
+SERVICE_EOF
+    echo "[INFO] Archivo de servicio creado en /etc/systemd/system/ollama.service"
+fi
 
 # =============================================================================
 # CREAR DIRECTORIO DE MODELOS Y ASIGNAR PERMISOS
