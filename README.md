@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.30
+# HomePiNAS v2.13.31
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.30-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.31-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -66,6 +66,27 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - Restricted sudoers configuration
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
+
+## 🆕 What's New in v2.13.31
+
+### Auditoría Active Backup, Logs, Notificaciones, UPS, HomeStore, Stacks — ~30 fixes
+
+- **🔴 fix(active-backup.js)** — 7 endpoints de recovery/pending sin `requireAdmin` → escalada de privilegios
+- **🔴 fix(notifications.js)** — CRLF injection en asunto del email (header injection / email spoofing)
+- **🔴 fix(notifications.js)** — Mensaje sin sanitizar en email texto plano → CRLF injection
+- **🔴 fix(notifications.js)** — POST /config/email, /config/telegram, /config/error-reporting sin `requireAdmin`
+- **🔴 fix(homestore.js)** — Path traversal en `ensureDirectory()`: rutas con `../` podían crear directorios fuera de APPS_BASE
+- **🟠 fix(homestore.js)** — Rutas install/uninstall/start/stop/restart/update solo `requireAuth` → `requireAdmin`
+- **🟠 fix(stacks.js)** — Rutas create/update/up/down/restart/delete/pull solo `requireAuth` → `requireAdmin`
+- **🟠 fix(notifications.js)** — Mensaje Telegram sin sanitizar con parse_mode Markdown → injection
+- **🟠 fix(notifications.js)** — Validación de formato email en campos from/to
+- **🟠 fix(notifications.js)** — POST /test/email y /test/telegram → `requireAdmin`
+- **🟠 fix(logs.js)** — GET /auth, /app, /file, /files sin `requireAdmin` → cualquier usuario leía logs sensibles
+- **🟡 fix(active-backup.js)** — Dead code: `if (true)` wrapper eliminado
+- **🟡 fix(main.js)** — `abFetch()` (función inexistente) → `authFetch()` con `API_BASE` correcto en Active Backup
+- **🟡 fix(main.js)** — XSS en HomeStore: escapeHtml en app.name, app.description, app.icon, app.archNote, cat.name
+- **🟡 fix(main.js)** — app.docs URL validada para solo permitir http/https antes de renderizar href
+- **🟡 fix(main.js)** — app.icon: validación estricta de URL (https?://) antes de usar en img src
 
 ## 🆕 What's New in v2.13.30
 

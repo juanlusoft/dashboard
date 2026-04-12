@@ -1,6 +1,6 @@
 # HomePiNAS v2 — Plan de Auditoría por Secciones
 
-> Última actualización: v2.13.30  
+> Última actualización: v2.13.31  
 > Objetivo: revisar cada sección del dashboard, identificar y corregir todos los bugs antes de considerar el proyecto estable.
 
 ---
@@ -160,15 +160,17 @@
 
 ---
 
-### ⬜ 10. Active Backup
+### ✅ 10. Active Backup
+**Auditada en:** v2.13.31  
 **Backend:** `backend/routes/active-backup.js`  
 **Frontend:** `frontend/main.js` → `renderActiveBackupView()`
 
-**Pendiente auditar:**
-- Agente de backup para Windows/Mac
-- Backup de imagen y de archivos
-- Versionado y restauración
-- Herramienta USB recovery
+**Bugs corregidos:**
+- 🔴 `active-backup.js` — 7 endpoints (/recovery/status, /recovery/build, /recovery/download, /recovery/scripts, /pending, /pending/:id/approve, /pending/:id/reject) sin `requireAdmin` → escalada de privilegios
+- 🟡 `active-backup.js` — Dead code: `if (true) { }` wrapper eliminado
+- 🟡 `main.js` — `abFetch()` (función inexistente) → `authFetch()` con `${API_BASE}/active-backup/...`
+
+**Estado:** Sin bugs conocidos pendientes.
 
 ---
 
@@ -208,45 +210,58 @@
 
 ---
 
-### ⬜ 14. Usuarios (Users)
+### ✅ 14. Usuarios (Users)
+**Auditada en:** v2.13.31 (re-verificación) + v2.13.23 (auditoría original)  
 **Backend:** `backend/routes/users.js`, `totp.js`, `auth.js`  
 **Frontend:** `frontend/main.js` → `renderUsersView()`
 
-**Bugs ya corregidos en sesiones anteriores (v2.13.23):** 14 fixes de auditoría completa  
-**Pendiente:** verificar que los fixes funcionan correctamente en la UI
+**Estado v2.13.31:** Re-auditado. RBAC, shell injection, XSS, path traversal, escalada de privilegios — todos correctos. Error message en /auth/setup ligeramente impreciso ("6-128" vs real "8-128 + alfanumérico") — cosmético, sin impacto de seguridad.
+
+**Bugs previos corregidos (v2.13.23):** 14 fixes críticos → bajos.
+
+**Estado:** Sin bugs conocidos pendientes.
 
 ---
 
-### ⬜ 15. Logs
+### ✅ 15. Logs
+**Auditada en:** v2.13.31  
 **Backend:** `backend/routes/logs.js`  
 **Frontend:** `frontend/main.js` → `renderLogsView()`
 
-**Pendiente auditar:**
-- Log del sistema, seguridad, aplicación
-- Filtrado y búsqueda
-- Exportación
+**Bugs corregidos:**
+- 🟠 `logs.js` — GET /auth, /app, /file, /files solo `requireAuth` → cualquier usuario leía logs de seguridad y archivos arbitrarios de /var/log
+
+**Estado:** Sin bugs conocidos pendientes.
 
 ---
 
-### ⬜ 16. Notificaciones
+### ✅ 16. Notificaciones
+**Auditada en:** v2.13.31  
 **Backend:** `backend/routes/notifications.js`  
 **Frontend:** `frontend/main.js` → `renderNotificationsSection()`
 
-**Pendiente auditar:**
-- Configuración SMTP
-- Test de envío
-- Alertas: UPS, temperatura, eventos de seguridad
+**Bugs corregidos:**
+- 🔴 `notifications.js` — CRLF injection en asunto del email (`sanitizeString` no eliminaba `\r\n`) → email header injection / spoofing
+- 🔴 `notifications.js` — Mensaje texto plano sin sanitizar → CRLF injection
+- 🔴 `notifications.js` — POST /config/email, /config/telegram, /config/error-reporting sin `requireAdmin`
+- 🟠 `notifications.js` — Mensaje Telegram sin sanitizar con `parse_mode: Markdown`
+- 🟠 `notifications.js` — Sin validación de formato email en campos `from`/`to`
+- 🟠 `notifications.js` — POST /test/email y /test/telegram sin `requireAdmin`
+
+**Estado:** Sin bugs conocidos pendientes.
 
 ---
 
-### ⬜ 17. UPS
+### ✅ 17. UPS
+**Auditada en:** v2.13.31 (re-verificación) + v2.13.30 (auth fix)  
 **Backend:** `backend/routes/ups.js`  
-**Frontend:** parte de `renderSystemView()` o sección propia
+**Frontend:** `frontend/main.js`
 
-**Pendiente auditar:**
-- Detección APC UPS
-- Estado: carga, autonomía, voltaje
-- Acciones: shutdown seguro
+**Estado v2.13.31:** Re-auditado. `execFile()` usado correctamente en todos los comandos. Auth OK (fixeado en v2.13.30). Valores numéricos en frontend son seguros ya que se parsean con `parseFloat`. Raw data expuesto en respuesta es cosmético (solo visible a admins autenticados).
+
+**Bugs previos (v2.13.30):** POST /config y /test sin autenticación.
+
+**Estado:** Sin bugs conocidos pendientes.
 
 ---
 
@@ -265,24 +280,31 @@
 
 ---
 
-### ⬜ 19. HomeStore
+### ✅ 19. HomeStore
+**Auditada en:** v2.13.31  
 **Backend:** `backend/routes/homestore.js`  
 **Frontend:** `frontend/main.js` → `renderHomeStoreView()`
 
-**Pendiente auditar:**
-- Catálogo de aplicaciones
-- Instalación/desinstalación
-- Estado de apps instaladas
+**Bugs corregidos:**
+- 🔴 `homestore.js` — Path traversal en `ensureDirectory()`: `dirPath` con `../` podía crear dirs fuera de APPS_BASE
+- 🟠 `homestore.js` — Rutas install/uninstall/start/stop/restart/update solo `requireAuth` → `requireAdmin`
+- 🟡 `main.js` — XSS: app.name, app.description, app.icon, app.archNote, cat.name sin `escapeHtml()`
+- 🟡 `main.js` — app.docs URL sin validar protocolo → `javascript:` podía ejecutarse como href
+- 🟡 `main.js` — app.icon URL sin validar protocolo → `javascript:` podía usarse como src
+
+**Estado:** Sin bugs conocidos pendientes.
 
 ---
 
-### ⬜ 20. Stacks
+### ✅ 20. Stacks
+**Auditada en:** v2.13.31  
 **Backend:** `backend/routes/stacks.js`  
 **Frontend:** `frontend/main.js` — vista de stacks
 
-**Pendiente auditar:**
-- Gestión de Docker Compose stacks
-- Diferencia con sección Docker principal
+**Bugs corregidos:**
+- 🟠 `stacks.js` — Rutas create/update/up/down/restart/delete/pull solo `requireAuth` → `requireAdmin`
+
+**Estado:** Sin bugs conocidos pendientes.
 
 ---
 
@@ -290,7 +312,7 @@
 
 | Total secciones | Auditadas | Pendientes | % Completado |
 |---|---|---|---|
-| 20 | 13 | 7 | **65%** |
+| 20 | 20 | 0 | **100%** |
 
 ---
 
@@ -298,6 +320,7 @@
 
 | Versión | Cambios |
 |---|---|
+| v2.13.31 | Auditoría ActiveBackup/Logs/Notificaciones/UPS/HomeStore/Stacks: ~30 fixes (CRLF, XSS, requireAdmin, path traversal) |
 | v2.13.30 | Auditoría Red/Terminal/Sistema/Backup/Scheduler/VPN/CloudSync/CloudBackup: ~25 fixes (auth, traversal, injection, RBAC) |
 | v2.13.29 | Auditoría Docker: 5 fixes (requireAdmin en 4 endpoints, socket 503) |
 | v2.13.28 | Auditoría Archivos: 5 fixes (copy params, XSS búsqueda, path traversal upload, move overwrite) |

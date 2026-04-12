@@ -10,6 +10,7 @@ const express = require('express');
 const router = express.Router();
 const nodemailer = require('nodemailer');
 const { requireAuth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/rbac');
 const { notificationLimiter } = require('../middleware/rateLimit');
 const { logSecurityEvent } = require('../utils/security');
 const { sanitizeString } = require('../utils/sanitize');
@@ -82,7 +83,7 @@ router.get('/config', async (req, res) => {
  * Save email SMTP configuration.
  * Expects: { host, port, secure, user, password, from, to }
  */
-router.post('/config/email', async (req, res) => {
+router.post('/config/email', requireAdmin, async (req, res) => {
   try {
     const { host, port, secure, user, password, from, to } = req.body;
 
@@ -109,6 +110,10 @@ router.post('/config/email', async (req, res) => {
     if (!to || typeof to !== 'string' || !to.trim()) {
       return res.status(400).json({ success: false, error: 'To address is required' });
     }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(from)) return res.status(400).json({ error: 'Dirección from inválida' });
+    if (!emailRegex.test(to)) return res.status(400).json({ error: 'Dirección to inválida' });
 
     // Sanitize inputs
     const emailConfig = {
@@ -144,7 +149,7 @@ router.post('/config/email', async (req, res) => {
  * Save Telegram bot configuration.
  * Expects: { botToken, chatId, enabled }
  */
-router.post('/config/telegram', async (req, res) => {
+router.post('/config/telegram', requireAdmin, async (req, res) => {
   try {
     const { botToken, chatId, enabled } = req.body;
 
@@ -184,7 +189,7 @@ router.post('/config/telegram', async (req, res) => {
  * POST /test/email
  * Send a test email using the stored SMTP configuration.
  */
-router.post('/test/email', notificationLimiter, async (req, res) => {
+router.post('/test/email', requireAdmin, notificationLimiter, async (req, res) => {
   try {
     const data = getData();
     const emailConfig = data.notifications?.email;
@@ -228,7 +233,7 @@ router.post('/test/email', notificationLimiter, async (req, res) => {
  * POST /test/telegram
  * Send a test message via Telegram bot API.
  */
-router.post('/test/telegram', notificationLimiter, async (req, res) => {
+router.post('/test/telegram', requireAdmin, notificationLimiter, async (req, res) => {
   try {
     const data = getData();
     const telegramConfig = data.notifications?.telegram;
@@ -304,8 +309,8 @@ router.post('/send', notificationLimiter, async (req, res) => {
           await transporter.sendMail({
             from: emailConfig.from,
             to: emailConfig.to,
-            subject: `HomePiNAS: ${sanitizeString(title)}`,
-            text: message,
+            subject: `HomePiNAS: ${sanitizeString(title).replace(/[\r\n]/g, '')}`,
+            text: sanitizeString(message).replace(/[\r\n]/g, ' '),
             html: `<h2>${sanitizeString(title)}</h2><p>${sanitizeString(message)}</p>`
           });
           results.email = 'sent';
@@ -330,7 +335,7 @@ router.post('/send', notificationLimiter, async (req, res) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               chat_id: telegramConfig.chatId,
-              text: `📢 *${title}*\n\n${message}`,
+              text: `📢 *${(title || '').replace(/[\r\n]/g, '')}*\n\n${(message || '').replace(/[\r\n]/g, '')}`,
               parse_mode: 'Markdown'
             })
           });
@@ -404,7 +409,7 @@ router.get('/history', async (req, res) => {
  * Save error reporting configuration.
  * Expects: { enabled, frequency, channels, logSources, cooldownMinutes }
  */
-router.post('/config/error-reporting', async (req, res) => {
+router.post('/config/error-reporting', requireAdmin, async (req, res) => {
   try {
     const { enabled, frequency, channels, logSources, cooldownMinutes } = req.body;
 

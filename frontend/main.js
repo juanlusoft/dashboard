@@ -12197,7 +12197,7 @@ async function openABImageBrowse(device) {
             browseBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 try {
-                    const resp = await abFetch(`/devices/${device.id}/browse?path=${encodeURIComponent(item.name)}`);
+                    const resp = await authFetch(`${API_BASE}/active-backup/devices/${device.id}/browse?path=${encodeURIComponent(item.name)}`);
                     if (resp.files) {
                         let html = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
                         resp.files.forEach(f => {
@@ -12224,7 +12224,7 @@ async function openABImageBrowse(device) {
                 const ok = await showConfirmModal('Eliminar backup', `\u00bfEliminar "${escapeHtml(item.name)}" (${formatABSize(item.size)})? No se puede deshacer.`);
                 if (!ok) return;
                 try {
-                    await abFetch(`/devices/${device.id}/images/${encodeURIComponent(item.name)}`, { method: 'DELETE' });
+                    await authFetch(`${API_BASE}/active-backup/devices/${device.id}/images/${encodeURIComponent(item.name)}`, { method: 'DELETE' });
                     showImageDetail(device);
                 } catch(err) {
                     showInfoModal('Error', 'No se pudo eliminar: ' + err.message);
@@ -14459,7 +14459,7 @@ function renderHomeStoreAppCard(app, categories) {
     if (!isCompatible) {
         compatWarning = `
             <div class="homestore-compat-warning">
-                ⚠️ No compatible con ${systemArch.arch.toUpperCase()}${archNote ? ` — ${archNote}` : ''}
+                ⚠️ No compatible con ${systemArch.arch.toUpperCase()}${archNote ? ` — ${escapeHtml(archNote)}` : ''}
             </div>
         `;
     }
@@ -14498,18 +14498,14 @@ function renderHomeStoreAppCard(app, categories) {
                 <button class="homestore-install-btn">
                     Instalar
                 </button>
-                <a href="${app.docs}" target="_blank" class="homestore-docs-link">
-                    📖 Docs
-                </a>
+                ${app.docs && /^https?:\/\//.test(app.docs) ? `<a href="${escapeHtml(app.docs)}" target="_blank" rel="noopener" class="homestore-docs-link">📖 Docs</a>` : ''}
             `;
         } else {
             actionButtons = `
                 <button disabled class="homestore-unavailable-btn">
                     No disponible
                 </button>
-                <a href="${app.docs}" target="_blank" class="homestore-docs-link">
-                    📖 Docs
-                </a>
+                ${app.docs && /^https?:\/\//.test(app.docs) ? `<a href="${escapeHtml(app.docs)}" target="_blank" rel="noopener" class="homestore-docs-link">📖 Docs</a>` : ''}
             `;
         }
     }
@@ -14553,17 +14549,17 @@ function renderHomeStoreAppCard(app, categories) {
         <div id="homestore-app-${app.id}" class="homestore-card ${!isCompatible ? 'homestore-card--incompatible' : ''}">
             <div class="homestore-card-header">
                 <div class="homestore-card-icon-row">
-                    ${app.icon && app.icon.startsWith('http') ? `<img src="${app.icon}" class="homestore-card-icon" onerror="this.outerHTML='📦'">` : `<span class="homestore-card-icon-emoji">${app.icon || '📦'}</span>`}
+                    ${app.icon && /^https?:\/\//.test(app.icon) ? `<img src="${escapeHtml(app.icon)}" class="homestore-card-icon" onerror="this.outerHTML='📦'">` : `<span class="homestore-card-icon-emoji">${escapeHtml(app.icon || '📦')}</span>`}
                     <div>
-                        <h3 class="homestore-card-title">${app.name}</h3>
-                        <span class="homestore-card-category">${cat.icon} ${cat.name}</span>
+                        <h3 class="homestore-card-title">${escapeHtml(app.name || '')}</h3>
+                        <span class="homestore-card-category">${cat.icon} ${escapeHtml(cat.name || '')}</span>
                     </div>
                 </div>
                 ${statusBadge}
             </div>
             ${compatWarning}
             <p class="homestore-card-desc">
-                ${app.description}
+                ${escapeHtml(app.description || '')}
             </p>
             ${configInfoHtml}
             <div class="homestore-arch-badges">

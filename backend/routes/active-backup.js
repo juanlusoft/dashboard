@@ -12,7 +12,7 @@ const path = require('path');
 const os = require('os');
 const { execFile, spawn } = require('child_process');
 const { promisify } = require('util');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireAdmin } = require('../middleware/rbac');
 const { logSecurityEvent } = require('../utils/security');
 const { getData, saveData } = require('../utils/data');
 
@@ -148,12 +148,11 @@ router.get('/agent/poll', agentLimiter, (req, res) => {
     response.config.backupDir = (device.name || device.id).replace(/[^a-zA-Z0-9_.-]/g, '_');
     response.config.nasAddress = getLocalIPs()[0] || req.hostname;
     // Only send credentials if agent hasn't received them yet
-    if (true) { // Always send credentials — agent may have reset config
-      response.config.sambaUser = device.sambaUser || '';
-      response.config.sambaPass = device.sambaPass || '';
-      device._credentialsSent = true;
-      saveData(data);
-    }
+    // Always send credentials — agent may have reset config
+    response.config.sambaUser = device.sambaUser || '';
+    response.config.sambaPass = device.sambaPass || '';
+    device._credentialsSent = true;
+    saveData(data);
   }
 
   // Check if there's a pending trigger (manual backup from dashboard)
@@ -1191,7 +1190,7 @@ setInterval(() => {
 /**
  * GET /recovery/status - Check if recovery ISO exists
  */
-router.get('/recovery/status', (req, res) => {
+router.get('/recovery/status', requireAdmin, (req, res) => {
   const isoDir = path.join(__dirname, '..', '..', 'recovery-usb');
   const isoPath = path.join(isoDir, 'homepinas-recovery.iso');
   const scriptsExist = fs.existsSync(path.join(isoDir, 'build-recovery-iso.sh'));
@@ -1216,7 +1215,7 @@ router.get('/recovery/status', (req, res) => {
 /**
  * POST /recovery/build - Build recovery ISO (long operation)
  */
-router.post('/recovery/build', async (req, res) => {
+router.post('/recovery/build', requireAdmin, async (req, res) => {
   const isoDir = path.join(__dirname, '..', '..', 'recovery-usb');
   const buildScript = path.join(isoDir, 'build-recovery-iso.sh');
 
@@ -1250,7 +1249,7 @@ router.post('/recovery/build', async (req, res) => {
 /**
  * GET /recovery/download - Download recovery ISO
  */
-router.get('/recovery/download', (req, res) => {
+router.get('/recovery/download', requireAdmin, (req, res) => {
   const isoPath = path.join(__dirname, '..', '..', 'recovery-usb', 'homepinas-recovery.iso');
 
   if (!fs.existsSync(isoPath)) {
@@ -1263,7 +1262,7 @@ router.get('/recovery/download', (req, res) => {
 /**
  * GET /recovery/scripts - Download recovery scripts as tar.gz (for manual USB creation)
  */
-router.get('/recovery/scripts', (req, res) => {
+router.get('/recovery/scripts', requireAdmin, (req, res) => {
   const scriptsDir = path.join(__dirname, '..', '..', 'recovery-usb');
 
   if (!fs.existsSync(scriptsDir)) {
@@ -1288,7 +1287,7 @@ router.get('/recovery/scripts', (req, res) => {
 /**
  * GET /pending - List pending agents waiting for approval
  */
-router.get('/pending', (req, res) => {
+router.get('/pending', requireAdmin, (req, res) => {
   const data = getData();
   const pending = (data.activeBackup && data.activeBackup.pendingAgents) || [];
   res.json({ success: true, pending });
@@ -1298,7 +1297,7 @@ router.get('/pending', (req, res) => {
  * POST /pending/:id/approve - Approve a pending agent
  * Body: { backupType, schedule, retention, paths }
  */
-router.post('/pending/:id/approve', async (req, res) => {
+router.post('/pending/:id/approve', requireAdmin, async (req, res) => {
   try {
     const { backupType, schedule, retention, paths } = req.body;
     const data = getData();
@@ -1387,7 +1386,7 @@ router.post('/pending/:id/approve', async (req, res) => {
 /**
  * POST /pending/:id/reject - Reject a pending agent
  */
-router.post('/pending/:id/reject', (req, res) => {
+router.post('/pending/:id/reject', requireAdmin, (req, res) => {
   const data = getData();
   if (!data.activeBackup || !data.activeBackup.pendingAgents) {
     return res.status(404).json({ error: 'No pending agents' });

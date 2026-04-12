@@ -5,6 +5,7 @@ const { execFile, spawn } = require('child_process');
 const fs = require('fs').promises;
 const path = require('path');
 const { requireAuth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/rbac');
 
 // Load catalog
 const CATALOG_PATH = path.join(__dirname, '../data/homestore-catalog.json');
@@ -68,9 +69,17 @@ async function saveAppConfig(appId, config) {
 // Helper: Validate and create directory if needed
 async function ensureDirectory(dirPath) {
     try {
-        // Skip special paths like docker.sock
-        if (dirPath.includes('.sock') || dirPath.includes('/dev/')) {
+        if (!dirPath || dirPath.includes('.sock') || dirPath.includes('/dev/')) {
             return true;
+        }
+        // For absolute paths, verify they're within APPS_BASE
+        if (dirPath.startsWith('/')) {
+            const normalized = path.normalize(dirPath);
+            const base = path.normalize(APPS_BASE);
+            if (!normalized.startsWith(base + path.sep) && normalized !== base) {
+                log.warn(`Blocked directory creation outside APPS_BASE: ${dirPath}`);
+                return false;
+            }
         }
         await fs.mkdir(dirPath, { recursive: true });
         return true;
@@ -307,7 +316,7 @@ router.get('/app/:id/config', requireAuth, async (req, res) => {
 });
 
 // POST /homestore/install/:id - Install an app
-router.post('/install/:id', requireAuth, async (req, res) => {
+router.post('/install/:id', requireAuth, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         if (!validateAppId(id)) {
@@ -468,7 +477,7 @@ router.post('/install/:id', requireAuth, async (req, res) => {
 });
 
 // POST /homestore/uninstall/:id - Uninstall an app
-router.post('/uninstall/:id', requireAuth, async (req, res) => {
+router.post('/uninstall/:id', requireAuth, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         if (!validateAppId(id)) {
@@ -521,7 +530,7 @@ router.post('/uninstall/:id', requireAuth, async (req, res) => {
 });
 
 // POST /homestore/start/:id - Start an app
-router.post('/start/:id', requireAuth, async (req, res) => {
+router.post('/start/:id', requireAuth, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         if (!validateAppId(id)) {
@@ -542,7 +551,7 @@ router.post('/start/:id', requireAuth, async (req, res) => {
 });
 
 // POST /homestore/stop/:id - Stop an app
-router.post('/stop/:id', requireAuth, async (req, res) => {
+router.post('/stop/:id', requireAuth, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         if (!validateAppId(id)) {
@@ -563,7 +572,7 @@ router.post('/stop/:id', requireAuth, async (req, res) => {
 });
 
 // POST /homestore/restart/:id - Restart an app
-router.post('/restart/:id', requireAuth, async (req, res) => {
+router.post('/restart/:id', requireAuth, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         if (!validateAppId(id)) {
@@ -606,7 +615,7 @@ router.get('/logs/:id', requireAuth, async (req, res) => {
 });
 
 // POST /homestore/update/:id - Update an app (pull new image and recreate)
-router.post('/update/:id', requireAuth, async (req, res) => {
+router.post('/update/:id', requireAuth, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         if (!validateAppId(id)) {

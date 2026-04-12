@@ -10,6 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync, spawn } = require('child_process');
 const { requireAuth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/rbac');
 
 const STACKS_DIR = '/opt/homepinas/stacks';
 
@@ -222,7 +223,7 @@ router.get('/templates/:id', requireAuth, (req, res) => {
 });
 
 // Create new stack
-router.post('/create', requireAuth, async (req, res) => {
+router.post('/create', requireAuth, requireAdmin, async (req, res) => {
     try {
         const { name, compose, description, icon, template } = req.body;
         
@@ -296,7 +297,7 @@ router.get('/:id', requireAuth, (req, res) => {
 });
 
 // Update stack compose file
-router.put('/:id', requireAuth, (req, res) => {
+router.put('/:id', requireAuth, requireAdmin, (req, res) => {
     try {
         if (!/^[a-zA-Z0-9_-]+$/.test(req.params.id)) {
             return res.status(400).json({ error: 'Invalid stack ID' });
@@ -332,7 +333,7 @@ router.put('/:id', requireAuth, (req, res) => {
 });
 
 // Deploy/Start stack
-router.post('/:id/up', requireAuth, async (req, res) => {
+router.post('/:id/up', requireAuth, requireAdmin, async (req, res) => {
     try {
         if (!/^[a-zA-Z0-9_-]+$/.test(req.params.id)) {
             return res.status(400).json({ error: 'Invalid stack ID' });
@@ -359,7 +360,7 @@ router.post('/:id/up', requireAuth, async (req, res) => {
 });
 
 // Stop stack
-router.post('/:id/down', requireAuth, async (req, res) => {
+router.post('/:id/down', requireAuth, requireAdmin, async (req, res) => {
     try {
         if (!/^[a-zA-Z0-9_-]+$/.test(req.params.id)) {
             return res.status(400).json({ error: 'Invalid stack ID' });
@@ -385,7 +386,7 @@ router.post('/:id/down', requireAuth, async (req, res) => {
 });
 
 // Restart stack
-router.post('/:id/restart', requireAuth, async (req, res) => {
+router.post('/:id/restart', requireAuth, requireAdmin, async (req, res) => {
     try {
         if (!/^[a-zA-Z0-9_-]+$/.test(req.params.id)) {
             return res.status(400).json({ error: 'Invalid stack ID' });
@@ -441,7 +442,7 @@ router.get('/:id/logs', requireAuth, (req, res) => {
 });
 
 // Delete stack
-router.delete('/:id', requireAuth, async (req, res) => {
+router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
     try {
         if (!/^[a-zA-Z0-9_-]+$/.test(req.params.id)) {
             return res.status(400).json({ error: 'Invalid stack ID' });
@@ -477,7 +478,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
 });
 
 // Pull latest images for stack
-router.post('/:id/pull', requireAuth, async (req, res) => {
+router.post('/:id/pull', requireAuth, requireAdmin, async (req, res) => {
     try {
         if (!/^[a-zA-Z0-9_-]+$/.test(req.params.id)) {
             return res.status(400).json({ error: 'Invalid stack ID' });

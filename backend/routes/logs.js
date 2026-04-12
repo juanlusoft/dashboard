@@ -12,7 +12,7 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs');
 const path = require('path');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireAdmin } = require('../middleware/rbac');
 const { logSecurityEvent } = require('../utils/security');
 // sanitize.js functions available if needed
 
@@ -139,7 +139,7 @@ router.get('/system', async (req, res) => {
  * Read HomePiNAS application logs from journalctl.
  * Query params: lines (default 100, max 1000), filter (grep pattern)
  */
-router.get('/app', async (req, res) => {
+router.get('/app', requireAdmin, async (req, res) => {
   try {
     const linesResult = validateLines(req.query.lines);
     if (!linesResult.valid) {
@@ -172,7 +172,7 @@ router.get('/app', async (req, res) => {
  * Read auth/security logs (SSH service) via journalctl.
  * Query params: lines (default 100, max 1000), filter (grep pattern)
  */
-router.get('/auth', async (req, res) => {
+router.get('/auth', requireAdmin, async (req, res) => {
   try {
     const linesResult = validateLines(req.query.lines);
     if (!linesResult.valid) {
@@ -277,7 +277,7 @@ router.get('/samba', async (req, res) => {
  * List available log files in /var/log/.
  * Returns file names and sizes only (no content).
  */
-router.get('/files', async (req, res) => {
+router.get('/files', requireAdmin, async (req, res) => {
   try {
     const logDir = '/var/log';
     const entries = await readdirAsync(logDir, { withFileTypes: true });
@@ -321,7 +321,7 @@ router.get('/files', async (req, res) => {
  * Query params: path (required, relative to /var/log/), lines (default 100, max 1000)
  * Validates that the resolved path stays within /var/log/ to prevent directory traversal.
  */
-router.get('/file', async (req, res) => {
+router.get('/file', requireAdmin, async (req, res) => {
   try {
     const filePath = req.query.path;
 
