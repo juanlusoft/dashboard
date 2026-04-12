@@ -42,7 +42,19 @@ check_pkg() {
 }
 
 check_pkg "i2c-tools"  "$I2CGET"
-check_pkg "stress-ng"  "$(command -v stress-ng)"
+
+# stress-ng: intentar instalar pero no es crítico (fallback en bash puro)
+if command -v stress-ng > /dev/null 2>&1; then
+    echo -e "  ${GREEN}✓ stress-ng${NC}"
+else
+    echo -e "  ${YELLOW}  stress-ng no encontrado, intentando instalar...${NC}"
+    apt-get install -y stress-ng > /dev/null 2>&1
+    if command -v stress-ng > /dev/null 2>&1; then
+        echo -e "  ${GREEN}  → instalado correctamente${NC}"
+    else
+        echo -e "  ${YELLOW}  → no disponible, se usará fallback bash para el stress test${NC}"
+    fi
+fi
 
 # Check i2c-dev kernel module
 if lsmod | grep -q i2c_dev; then
@@ -158,14 +170,20 @@ echo ""
 
 # --- PASO 4: Stress test ---
 echo -e "${YELLOW}[4/4] Stress test 60s — monitorizando RPM cada 5s...${NC}"
-if ! command -v stress-ng > /dev/null 2>&1; then
-    echo "  stress-ng no encontrado, instalando..."
-    apt-get install -y stress-ng > /dev/null 2>&1
-fi
 NCPU=$(nproc)
-stress-ng --cpu $NCPU --timeout 60s > /dev/null 2>&1 &
-STRESS_PID=$!
-echo "  stress-ng lanzado (${NCPU} cores, 60s)"
+STRESS_PID=""
+if command -v stress-ng > /dev/null 2>&1; then
+    stress-ng --cpu $NCPU --timeout 65s > /dev/null 2>&1 &
+    STRESS_PID=$!
+    echo "  stress-ng lanzado (${NCPU} cores, 65s)"
+else
+    # Fallback: bash puro — lanza un bucle infinito por cada CPU
+    echo "  fallback bash lanzado (${NCPU} workers)"
+    for i in $(seq 1 $NCPU); do
+        while true; do :; done &
+        STRESS_PID="$STRESS_PID $!"
+    done
+fi
 echo ""
 printf "  %-6s %-8s %-20s %-20s\n" "t(s)" "CPU°C" "Fan 1" "Fan 2"
 printf "  %-6s %-8s %-20s %-20s\n" "------" "--------" "--------------------" "--------------------"
@@ -176,6 +194,8 @@ for i in $(seq 5 5 65); do
     F2=$(read_fan 0x42 0x43 0x40)
     printf "  %-6s %-8s %-20s %-20s\n" "${i}s" "${TEMP}°C" "$F1" "$F2"
 done
+# Matar todos los workers de stress
+kill $STRESS_PID 2>/dev/null
 wait $STRESS_PID 2>/dev/null
 
 echo ""
