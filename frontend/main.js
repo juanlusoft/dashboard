@@ -2,6 +2,8 @@
 import { initI18n, t, applyTranslations, getCurrentLang } from './i18n.js';
 // Import shared utilities
 import { escapeHtml, formatBytes, debounce, formatUptime } from './modules/utils.js';
+import { renderHomeAIView } from './homeai.js';
+import './homeai_fab.js';
 
 // State Management
 const state = {
@@ -26,7 +28,14 @@ const state = {
     dockers: [],
     shortcuts: { defaults: [], custom: [] },
     terminalSession: null,
-    pollingIntervals: { stats: null, publicIP: null, storage: null }
+    pollingIntervals: { stats: null, publicIP: null, storage: null },
+    homeai: {
+        installed: false,
+        running: false,
+        modelLoaded: false,
+        nvmePath: '/mnt/nvme0',
+        chatHistory: []
+    }
 };
 
 const API_BASE = window.location.origin + '/api';
@@ -328,7 +337,8 @@ const viewsMap = {
     'logs': 'Visor de Logs',
     'users': 'Gestión de Usuarios',
     'system': 'Administración del Sistema',
-    'vpn': 'Servidor VPN'
+    'vpn': 'Servidor VPN',
+    'homeai': '🤖 HomeAI'
 };
 
 // =============================================================================
@@ -2692,6 +2702,9 @@ async function renderContent(view) {
             await renderUPSSection(dashboardContent);
             await renderNotificationsSection(dashboardContent);
         }, 100);
+    }
+    else if (view === 'homeai') {
+        await renderHomeAIView();
     }
 }
 
@@ -16893,3 +16906,7 @@ async function showFolderPermissions(folderPath) {
         showNotification(`❌ Error al cargar permisos: ${err.message}`, 'error');
     }
 }
+
+// Exports para módulos externos (homeai, homeai_fab)
+export { authFetch, API_BASE, showNotification, navigateTo };
+

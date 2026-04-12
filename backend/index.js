@@ -53,6 +53,7 @@ const homestoreRoutes = require('./routes/homestore');
 const stacksRoutes = require('./routes/stacks');
 const activeDirectoryRoutes = require('./routes/active-directory');
 const vpnRoutes = require('./routes/vpn');
+const homeaiRouter = require('./routes/homeai');
 
 // Import terminal WebSocket handler
 let setupTerminalWebSocket;
@@ -343,6 +344,9 @@ app.use('/api/ad', activeDirectoryRoutes);
 
 // VPN Server (WireGuard)
 app.use('/api/vpn', vpnRoutes);
+
+// HomeAI
+app.use('/api/homeai', homeaiRouter);
 
 // =============================================================================
 // GLOBAL ERROR HANDLER
