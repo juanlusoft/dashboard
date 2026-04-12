@@ -1,8 +1,6 @@
 import { authFetch, API_BASE, navigateTo } from './main.js';
 import { escapeHtml } from './modules/utils.js';
 
-}
-
 // =============================================================================
 // MÓDULO HOMEAI — FAB (Floating Action Button)
 // =============================================================================
