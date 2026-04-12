@@ -78,6 +78,23 @@ else
 fi
 
 # =============================================================================
+# ASEGURAR QUE EL USUARIO OLLAMA EXISTE
+# =============================================================================
+echo "[PROGRESS] 20% - Verificando usuario del servicio ollama..."
+
+if ! id ollama &>/dev/null; then
+    # El grupo puede existir ya (de instalación previa parcial)
+    if getent group ollama &>/dev/null; then
+        useradd -r -g ollama -s /bin/false -d /usr/share/ollama ollama || true
+    else
+        useradd -r -s /bin/false -d /usr/share/ollama ollama || true
+    fi
+fi
+
+# Añadir usuario actual al grupo ollama si no está ya
+usermod -aG ollama root 2>/dev/null || true
+
+# =============================================================================
 # CREAR DIRECTORIO DE MODELOS Y ASIGNAR PERMISOS
 # =============================================================================
 echo "[PROGRESS] 25% - Creando directorio de modelos en $OLLAMA_DATA_DIR..."
