@@ -2,7 +2,7 @@
 ################################################################################
 # install_homeai.sh - Instalador de HomeAI para HomePiNAS
 #
-# Descripción: Script de instalación de Ollama + modelo qwen2.5-coder:1.5b
+# Descripción: Script de instalación de Ollama + modelo gemma2:2b
 #              con configuración optimizada para Raspberry Pi CM5 (ARM64/aarch64)
 #
 # Uso: ./install_homeai.sh [NVME_PATH]
@@ -19,7 +19,7 @@ set -euo pipefail
 # =============================================================================
 NVME_PATH="${1:-/mnt/nvme0}"
 OLLAMA_DATA_DIR="$NVME_PATH/homenasos_ai"
-OLLAMA_MODEL="qwen2.5-coder:1.5b"
+OLLAMA_MODEL="gemma2:2b"
 HOMEAI_NAME="HomeAI"
 MODELFILE_TMP="/tmp/HomeAI_Modelfile"
 
@@ -188,7 +188,7 @@ fi
 # =============================================================================
 # DESCARGAR EL MODELO
 # =============================================================================
-echo "[PROGRESS] 50% - Iniciando descarga del modelo qwen2.5-coder:1.5b (puede tardar varios minutos)..."
+echo "[PROGRESS] 50% - Iniciando descarga del modelo gemma2:2b (puede tardar varios minutos)..."
 
 ollama pull "$OLLAMA_MODEL"
 
@@ -199,7 +199,7 @@ echo "[PROGRESS] 85% - Compilando agente HomeAI..."
 
 cat > "$MODELFILE_TMP" << 'MODELFILE_EOF'
 # Modelo base (ligero y rápido, ideal para ARM64)
-FROM qwen2.5-coder:1.5b
+FROM gemma2:2b
 # Temperatura muy baja para respuestas técnicas
 PARAMETER temperature 0.1
 SYSTEM """
