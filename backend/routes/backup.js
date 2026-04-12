@@ -86,7 +86,7 @@ router.get('/jobs', (req, res) => {
  * POST /jobs - Create a new backup job
  * Body: { name, source, destination, type, schedule, excludes, retention }
  */
-router.post('/jobs', requireAdmin, (req, res) => {
+router.post('/jobs', requireAuth, requireAdmin, (req, res) => {
   try {
     const { name, source, destination, type, schedule, excludes, retention } = req.body;
 
@@ -157,7 +157,7 @@ router.post('/jobs', requireAdmin, (req, res) => {
 /**
  * PUT /jobs/:id - Update an existing backup job
  */
-router.put('/jobs/:id', requireAdmin, (req, res) => {
+router.put('/jobs/:id', requireAuth, requireAdmin, (req, res) => {
   try {
     const data = getData();
     if (!data.backups) data.backups = [];
@@ -236,7 +236,7 @@ router.put('/jobs/:id', requireAdmin, (req, res) => {
 /**
  * DELETE /jobs/:id - Delete a backup job
  */
-router.delete('/jobs/:id', requireAdmin, (req, res) => {
+router.delete('/jobs/:id', requireAuth, requireAdmin, (req, res) => {
   try {
     const data = getData();
     if (!data.backups) data.backups = [];
@@ -272,7 +272,7 @@ router.delete('/jobs/:id', requireAdmin, (req, res) => {
  * POST /jobs/:id/run - Execute a backup job immediately
  * Spawns rsync or tar as a child process and tracks it in memory.
  */
-router.post('/jobs/:id/run', requireAdmin, (req, res) => {
+router.post('/jobs/:id/run', requireAuth, requireAdmin, (req, res) => {
   try {
     const data = getData();
     if (!data.backups) data.backups = [];
@@ -483,7 +483,7 @@ router.get('/jobs/:id/history', (req, res) => {
  * POST /jobs/:id/restore - Restore from a tar backup archive
  * Body: { archive: 'backup-2025-01-01T00-00-00-000Z.tar.gz' }
  */
-router.post('/jobs/:id/restore', requireAdmin, (req, res) => {
+router.post('/jobs/:id/restore', requireAuth, requireAdmin, (req, res) => {
   try {
     const data = getData();
     if (!data.backups) data.backups = [];

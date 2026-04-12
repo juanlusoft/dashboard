@@ -62,7 +62,7 @@ router.get('/sessions', requireAdmin, (req, res) => {
 });
 
 // Create new terminal session info (actual PTY handled via WebSocket)
-router.post('/session', requireAdmin, (req, res) => {
+router.post('/session', requireAuth, requireAdmin, (req, res) => {
     const { command = 'bash' } = req.body;
     
     // Validate command
@@ -89,7 +89,7 @@ router.post('/session', requireAdmin, (req, res) => {
 });
 
 // Kill terminal session
-router.delete('/session/:id', requireAdmin, (req, res) => {
+router.delete('/session/:id', requireAuth, requireAdmin, (req, res) => {
     const { id } = req.params;
     
     if (!id || typeof id !== 'string' || !id.startsWith('term-')) {

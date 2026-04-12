@@ -105,7 +105,7 @@ router.get('/interfaces', requireAuth, async (req, res) => {
 });
 
 // Configure network interface
-router.post('/configure', requireAdmin, (req, res) => {
+router.post('/configure', requireAuth, requireAdmin, (req, res) => {
     try {
         const { id, config } = req.body;
 

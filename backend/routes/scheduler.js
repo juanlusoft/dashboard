@@ -156,7 +156,7 @@ router.get('/tasks', (req, res) => {
  * POST /tasks - Create a new scheduled task
  * Body: { name, command, schedule, enabled, user }
  */
-router.post('/tasks', requireAdmin, async (req, res) => {
+router.post('/tasks', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { name, command, schedule, enabled, user } = req.body;
 
@@ -227,7 +227,7 @@ router.post('/tasks', requireAdmin, async (req, res) => {
 /**
  * PUT /tasks/:id - Update an existing scheduled task
  */
-router.put('/tasks/:id', requireAdmin, async (req, res) => {
+router.put('/tasks/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const data = getData();
     if (!data.scheduledTasks) data.scheduledTasks = [];
@@ -307,7 +307,7 @@ router.put('/tasks/:id', requireAdmin, async (req, res) => {
 /**
  * DELETE /tasks/:id - Delete a scheduled task
  */
-router.delete('/tasks/:id', requireAdmin, async (req, res) => {
+router.delete('/tasks/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const data = getData();
     if (!data.scheduledTasks) data.scheduledTasks = [];
@@ -336,7 +336,7 @@ router.delete('/tasks/:id', requireAdmin, async (req, res) => {
  * POST /tasks/:id/run - Execute a task immediately
  * Runs the command and returns its output.
  */
-router.post('/tasks/:id/run', requireAdmin, (req, res) => {
+router.post('/tasks/:id/run', requireAuth, requireAdmin, (req, res) => {
   try {
     const data = getData();
     if (!data.scheduledTasks) data.scheduledTasks = [];
@@ -406,7 +406,7 @@ router.post('/tasks/:id/run', requireAdmin, (req, res) => {
  * POST /tasks/:id/toggle - Enable or disable a task
  * Toggles the enabled state and rewrites the crontab.
  */
-router.post('/tasks/:id/toggle', requireAdmin, async (req, res) => {
+router.post('/tasks/:id/toggle', requireAuth, requireAdmin, async (req, res) => {
   try {
     const data = getData();
     if (!data.scheduledTasks) data.scheduledTasks = [];

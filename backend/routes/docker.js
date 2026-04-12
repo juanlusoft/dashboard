@@ -214,7 +214,7 @@ router.get('/containers', requireAuth, async (req, res) => {
 });
 
 // Container action (start, stop, restart)
-router.post('/action', requireAdmin, async (req, res) => {
+router.post('/action', requireAuth, requireAdmin, async (req, res) => {
     const { id, action } = req.body;
 
     // SECURITY: Validate container ID format (hex string, 12-64 chars)
@@ -331,7 +331,7 @@ router.get('/update-status', requireAuth, async (req, res) => {
 });
 
 // Update a specific container
-router.post('/update', requireAdmin, async (req, res) => {
+router.post('/update', requireAuth, requireAdmin, async (req, res) => {
     const { containerId } = req.body;
 
     // SECURITY: Validate container ID format
@@ -432,7 +432,7 @@ router.post('/update', requireAdmin, async (req, res) => {
 });
 
 // Import docker-compose.yml
-router.post('/compose/import', requireAdmin, async (req, res) => {
+router.post('/compose/import', requireAuth, requireAdmin, async (req, res) => {
     const { name, content } = req.body;
 
     if (!name || !content) {
@@ -504,7 +504,7 @@ router.get('/compose/list', requireAuth, async (req, res) => {
 });
 
 // Run docker-compose up
-router.post('/compose/up', requireAdmin, async (req, res) => {
+router.post('/compose/up', requireAuth, requireAdmin, async (req, res) => {
     const { name } = req.body;
 
     if (!name) {
@@ -555,7 +555,7 @@ router.post('/compose/up', requireAdmin, async (req, res) => {
 });
 
 // Stop docker-compose
-router.post('/compose/down', requireAdmin, async (req, res) => {
+router.post('/compose/down', requireAuth, requireAdmin, async (req, res) => {
     const { name } = req.body;
 
     if (!name) {
@@ -603,7 +603,7 @@ router.post('/compose/down', requireAdmin, async (req, res) => {
 });
 
 // Delete compose file
-router.delete('/compose/:name', requireAdmin, async (req, res) => {
+router.delete('/compose/:name', requireAuth, requireAdmin, async (req, res) => {
     // SECURITY: Use dedicated sanitization function
     const safeName = sanitizeComposeName(req.params.name);
     if (!safeName) {
@@ -676,7 +676,7 @@ router.get('/compose/:name', requireAuth, async (req, res) => {
 });
 
 // Update compose file content
-router.put('/compose/:name', requireAdmin, async (req, res) => {
+router.put('/compose/:name', requireAuth, requireAdmin, async (req, res) => {
     const { content } = req.body;
     
     if (!content) {
@@ -744,7 +744,7 @@ router.get('/notes/:containerId', requireAuth, async (req, res) => {
 });
 
 // Save notes for a container (stored by name for persistence across updates)
-router.post('/notes/:containerId', requireAdmin, async (req, res) => {
+router.post('/notes/:containerId', requireAuth, requireAdmin, async (req, res) => {
     const { containerId } = req.params;
     const { notes } = req.body;
     

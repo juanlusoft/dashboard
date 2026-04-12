@@ -83,7 +83,7 @@ router.get('/config', async (req, res) => {
  * Save email SMTP configuration.
  * Expects: { host, port, secure, user, password, from, to }
  */
-router.post('/config/email', requireAdmin, async (req, res) => {
+router.post('/config/email', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { host, port, secure, user, password, from, to } = req.body;
 
@@ -149,7 +149,7 @@ router.post('/config/email', requireAdmin, async (req, res) => {
  * Save Telegram bot configuration.
  * Expects: { botToken, chatId, enabled }
  */
-router.post('/config/telegram', requireAdmin, async (req, res) => {
+router.post('/config/telegram', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { botToken, chatId, enabled } = req.body;
 
@@ -189,7 +189,7 @@ router.post('/config/telegram', requireAdmin, async (req, res) => {
  * POST /test/email
  * Send a test email using the stored SMTP configuration.
  */
-router.post('/test/email', requireAdmin, notificationLimiter, async (req, res) => {
+router.post('/test/email', requireAuth, requireAdmin, notificationLimiter, async (req, res) => {
   try {
     const data = getData();
     const emailConfig = data.notifications?.email;
@@ -233,7 +233,7 @@ router.post('/test/email', requireAdmin, notificationLimiter, async (req, res) =
  * POST /test/telegram
  * Send a test message via Telegram bot API.
  */
-router.post('/test/telegram', requireAdmin, notificationLimiter, async (req, res) => {
+router.post('/test/telegram', requireAuth, requireAdmin, notificationLimiter, async (req, res) => {
   try {
     const data = getData();
     const telegramConfig = data.notifications?.telegram;
@@ -409,7 +409,7 @@ router.get('/history', async (req, res) => {
  * Save error reporting configuration.
  * Expects: { enabled, frequency, channels, logSources, cooldownMinutes }
  */
-router.post('/config/error-reporting', requireAdmin, async (req, res) => {
+router.post('/config/error-reporting', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { enabled, frequency, channels, logSources, cooldownMinutes } = req.body;
 

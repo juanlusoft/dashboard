@@ -339,7 +339,7 @@ router.delete('/disable', async (req, res) => {
  * Admin-only: disable 2FA for another user.
  * Does not require password confirmation (admin privilege sufficient).
  */
-router.delete('/admin/:username', requireAdmin, async (req, res) => {
+router.delete('/admin/:username', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { username } = req.params;
 

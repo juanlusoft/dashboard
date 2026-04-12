@@ -259,7 +259,7 @@ router.get('/shares', requireAdmin, (req, res) => {
  * Create a new Samba share
  * Body: { name, path, comment, readOnly, guestOk, validUsers }
  */
-router.post('/shares', requireAdmin, async (req, res) => {
+router.post('/shares', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { name, path: sharePath, comment, readOnly, guestOk, validUsers } = req.body;
 
@@ -330,7 +330,7 @@ router.post('/shares', requireAdmin, async (req, res) => {
  * Update an existing Samba share configuration
  * Body: { path, comment, readOnly, guestOk, validUsers }
  */
-router.put('/shares/:name', requireAdmin, async (req, res) => {
+router.put('/shares/:name', requireAuth, requireAdmin, async (req, res) => {
   try {
     const shareName = req.params.name;
     const { path: sharePath, comment, readOnly, guestOk, validUsers } = req.body;
@@ -402,7 +402,7 @@ router.put('/shares/:name', requireAdmin, async (req, res) => {
  * DELETE /shares/:name
  * Remove a Samba share from configuration
  */
-router.delete('/shares/:name', requireAdmin, async (req, res) => {
+router.delete('/shares/:name', requireAuth, requireAdmin, async (req, res) => {
   try {
     const shareName = req.params.name;
 
@@ -512,7 +512,7 @@ router.get('/status', requireAdmin, async (req, res) => {
  * POST /restart
  * Restart Samba services (smbd and nmbd)
  */
-router.post('/restart', requireAdmin, async (req, res) => {
+router.post('/restart', requireAuth, requireAdmin, async (req, res) => {
   try {
     await restartSamba();
 

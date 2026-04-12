@@ -370,7 +370,7 @@ router.get('/stats', requireAuth, async (req, res) => {
 });
 
 // Fan control endpoint
-router.post('/fan', requireAdmin, (req, res) => {
+router.post('/fan', requireAuth, requireAdmin, (req, res) => {
     const { fanId, speed } = req.body;
 
     // Validate speed
@@ -590,7 +590,7 @@ router.get('/fan/mode', requireAuth, (req, res) => {
 });
 
 // Set fan mode preset
-router.post('/fan/mode', requireAdmin, (req, res) => {
+router.post('/fan/mode', requireAuth, requireAdmin, (req, res) => {
     const { mode } = req.body;
 
     // SECURITY: Validate mode using sanitize function

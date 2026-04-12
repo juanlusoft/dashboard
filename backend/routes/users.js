@@ -240,7 +240,7 @@ router.get('/', requireAdmin, (req, res) => {
  * Create a new user (admin only)
  * Body: { username, password, role }
  */
-router.post('/', requireAdmin, async (req, res) => {
+router.post('/', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { username, password, role, email, displayName } = req.body;
 
@@ -319,7 +319,7 @@ router.post('/', requireAdmin, async (req, res) => {
  * Update a user (admin only)
  * Body: { role, password } (both optional)
  */
-router.put('/:username', requireAdmin, async (req, res) => {
+router.put('/:username', requireAuth, requireAdmin, async (req, res) => {
   try {
     const targetUsername = req.params.username;
     const { role, password, email, displayName } = req.body;
@@ -413,7 +413,7 @@ router.put('/:username', requireAdmin, async (req, res) => {
  * DELETE /:username
  * Delete a user (admin only). Cannot delete self.
  */
-router.delete('/:username', requireAdmin, async (req, res) => {
+router.delete('/:username', requireAuth, requireAdmin, async (req, res) => {
   try {
     const targetUsername = req.params.username;
 
@@ -461,7 +461,7 @@ router.delete('/:username', requireAdmin, async (req, res) => {
  * - homePath: user's default directory in File Station (e.g. /mnt/storage/homes/username)
  * - allowedPaths: array of paths the user can access (empty = full access for admin/user roles)
  */
-router.put('/:username/paths', requireAdmin, async (req, res) => {
+router.put('/:username/paths', requireAuth, requireAdmin, async (req, res) => {
   try {
     const targetUsername = req.params.username;
     const { homePath, allowedPaths } = req.body;

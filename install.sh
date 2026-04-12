@@ -6,7 +6,7 @@
 
 # Version - CHANGE THIS FOR EACH RELEASE
 # Version is read from package.json after clone/pull - this is a fallback display only
-APP_VERSION="2.13.35"
+APP_VERSION="2.13.36"
 
 # Parse command line arguments
 CLEAN_INSTALL=false

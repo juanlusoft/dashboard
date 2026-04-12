@@ -184,7 +184,7 @@ router.get('/shares', requireAdmin, (req, res) => {
  * Create a new NFS share
  * Body: { path, network, readOnly }
  */
-router.post('/shares', requireAdmin, async (req, res) => {
+router.post('/shares', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { path: sharePath, network, readOnly } = req.body;
 
@@ -249,7 +249,7 @@ router.post('/shares', requireAdmin, async (req, res) => {
  * Remove an NFS share from configuration by path
  * Body: { path }
  */
-router.delete('/shares', requireAdmin, async (req, res) => {
+router.delete('/shares', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { path: sharePath } = req.body;
 
@@ -342,7 +342,7 @@ router.get('/status', requireAdmin, async (req, res) => {
  * POST /reload
  * Reload NFS exports (exportfs -ra)
  */
-router.post('/reload', requireAdmin, async (req, res) => {
+router.post('/reload', requireAuth, requireAdmin, async (req, res) => {
   try {
     await reloadNFS();
 

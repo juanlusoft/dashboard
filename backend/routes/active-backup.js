@@ -1216,7 +1216,7 @@ router.get('/recovery/status', requireAdmin, (req, res) => {
 /**
  * POST /recovery/build - Build recovery ISO (long operation)
  */
-router.post('/recovery/build', requireAdmin, async (req, res) => {
+router.post('/recovery/build', requireAuth, requireAdmin, async (req, res) => {
   const isoDir = path.join(__dirname, '..', '..', 'recovery-usb');
   const buildScript = path.join(isoDir, 'build-recovery-iso.sh');
 
@@ -1298,7 +1298,7 @@ router.get('/pending', requireAdmin, (req, res) => {
  * POST /pending/:id/approve - Approve a pending agent
  * Body: { backupType, schedule, retention, paths }
  */
-router.post('/pending/:id/approve', requireAdmin, async (req, res) => {
+router.post('/pending/:id/approve', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { backupType, schedule, retention, paths } = req.body;
     const data = getData();
@@ -1387,7 +1387,7 @@ router.post('/pending/:id/approve', requireAdmin, async (req, res) => {
 /**
  * POST /pending/:id/reject - Reject a pending agent
  */
-router.post('/pending/:id/reject', requireAdmin, (req, res) => {
+router.post('/pending/:id/reject', requireAuth, requireAdmin, (req, res) => {
   const data = getData();
   if (!data.activeBackup || !data.activeBackup.pendingAgents) {
     return res.status(404).json({ error: 'No pending agents' });
