@@ -10,6 +10,7 @@ const express = require('express');
 const router = express.Router();
 const { execFile, execFileSync } = require('child_process');
 const { requireAuth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/rbac');
 const { logSecurityEvent } = require('../utils/security');
 const { getData, saveData } = require('../utils/data');
 
@@ -184,7 +185,7 @@ router.get('/config', (req, res) => {
  * POST /config - Save UPS notification configuration
  * Body: { lowBatteryThreshold, criticalThreshold, notifyOnPower, shutdownOnCritical }
  */
-router.post('/config', (req, res) => {
+router.post('/config', requireAuth, requireAdmin, (req, res) => {
   try {
     const { lowBatteryThreshold, criticalThreshold, notifyOnPower, shutdownOnCritical } = req.body;
 
@@ -248,7 +249,7 @@ router.get('/history', (req, res) => {
  * POST /test - Run UPS self-test
  * Tries apctest (apcupsd) first, falls back to upscmd (NUT).
  */
-router.post('/test', async (req, res) => {
+router.post('/test', requireAuth, requireAdmin, async (req, res) => {
   try {
     // Detect which driver is available by trying to get status first
     const apcData = await getApcaccessStatus();

@@ -14,6 +14,7 @@ const si = require('systeminformation');
 const { execFileSync } = require('child_process');
 
 const { requireAuth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/rbac');
 const { logSecurityEvent } = require('../utils/security');
 const { getData, saveData } = require('../utils/data');
 const { validateFanId, validateFanMode } = require('../utils/sanitize');
@@ -369,7 +370,7 @@ router.get('/stats', requireAuth, async (req, res) => {
 });
 
 // Fan control endpoint
-router.post('/fan', requireAuth, (req, res) => {
+router.post('/fan', requireAdmin, (req, res) => {
     const { fanId, speed } = req.body;
 
     // Validate speed
@@ -589,7 +590,7 @@ router.get('/fan/mode', requireAuth, (req, res) => {
 });
 
 // Set fan mode preset
-router.post('/fan/mode', requireAuth, (req, res) => {
+router.post('/fan/mode', requireAdmin, (req, res) => {
     const { mode } = req.body;
 
     // SECURITY: Validate mode using sanitize function

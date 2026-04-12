@@ -893,8 +893,9 @@ router.put('/config', async (req, res) => {
 
         // Validar DNS
         if (dns !== undefined) {
-            if (typeof dns !== 'string' || dns.length > 200) {
-                return res.status(400).json({ success: false, error: 'DNS inválido' });
+            const DNS_PATTERN = /^(\d{1,3}\.){3}\d{1,3}(,\s*(\d{1,3}\.){3}\d{1,3})*$/;
+            if (!dns || typeof dns !== 'string' || (!DNS_PATTERN.test(dns.trim()) && dns.trim() !== '')) {
+                return res.status(400).json({ success: false, error: 'DNS inválido — usa IPs separadas por coma (ej: 1.1.1.1, 8.8.8.8)' });
             }
             vpnConfig.dns = dns.trim();
         }

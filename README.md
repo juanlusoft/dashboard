@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.29
+# HomePiNAS v2.13.30
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.29-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.30-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -66,6 +66,25 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - Restricted sudoers configuration
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
+
+## 🆕 What's New in v2.13.30
+
+### Auditoría Red, Terminal, Sistema, Backup, Scheduler, VPN, Cloud Sync, Cloud Backup — ~25 fixes
+
+- **🔴 fix(terminal.js)** — Todas las rutas HTTP solo requerían auth → ahora `requireAdmin`
+- **🔴 fix(terminal-ws.js)** — WebSocket PTY sin check de rol admin → cualquier usuario autenticado podía abrir terminal
+- **🔴 fix(ups.js)** — `POST /config` y `POST /test` sin autenticación → endpoints expuestos
+- **🔴 fix(update.js)** — `POST /apply` y `POST /apply-os` solo requerían auth → escalada de privilegios en OTA
+- **🔴 fix(backup.js)** — Rutas de escritura solo requerían auth → cualquier usuario podía crear/restaurar/eliminar backups
+- **🔴 fix(scheduler.js)** — Rutas de escritura solo requerían auth → cualquier usuario podía crear/modificar/eliminar tareas cron
+- **🟠 fix(system.js)** — `POST /fan` y `POST /fan/mode` solo requerían auth → control de hardware sin restricción
+- **🟠 fix(network.js)** — Nombre de interfaz no escapado antes de construir regex → crash con chars especiales
+- **🟠 fix(samba.js)** — Función `requireAdmin` local en lugar de importar de `rbac.js` → inconsistencia RBAC
+- **🟠 fix(ddns.js)** — `POST /services/:id/update` sin `requireAdmin` → fuerza actualización DDNS sin privilegios
+- **🟠 fix(cloud-sync.js)** — Path traversal: `.startsWith(STORAGE_BASE)` sin normalizar → `path.normalize + path.sep`
+- **🟠 fix(cloud-backup.js)** — `sync.name` sin sanitizar `\r\n` antes de insertar en crontab → crontab injection
+- **🟡 fix(vpn.js)** — DNS sin validación de formato IP → valor arbitrario en config WireGuard
+- **🟡 fix(main.js)** — Samba frontend usaba `status.active` pero backend devuelve `status.running`
 
 ## 🆕 What's New in v2.13.29
 

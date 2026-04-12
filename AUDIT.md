@@ -1,6 +1,6 @@
 # HomePiNAS v2 — Plan de Auditoría por Secciones
 
-> Última actualización: v2.13.26  
+> Última actualización: v2.13.30  
 > Objetivo: revisar cada sección del dashboard, identificar y corregir todos los bugs antes de considerar el proyecto estable.
 
 ---
@@ -85,15 +85,18 @@
 
 ---
 
-### ⬜ 5. Red (Network)
+### ✅ 5. Red (Network)
+**Auditada en:** v2.13.30  
 **Backend:** `backend/routes/network.js`, `ddns.js`, `samba.js`, `nfs.js`  
 **Frontend:** `frontend/main.js` → `renderNetworkManager()`, `renderSambaSection()`
 
-**Pendiente auditar:**
-- Monitor de interfaces (tráfico, IPs)
-- DDNS: múltiples proveedores, actualización
-- Samba: comparticiones, permisos por usuario
-- NFS: exports
+**Bugs corregidos:**
+- 🟠 `network.js` — Nombre de interfaz sin escapar antes de construir regex → crash con chars especiales
+- 🟠 `samba.js` — Función `requireAdmin` local en vez de importar de `rbac.js` → inconsistencia RBAC
+- 🟠 `ddns.js` — `POST /services/:id/update` (forzar actualización) sin `requireAdmin`
+- 🟡 `main.js` — Samba frontend usaba `status.active` pero backend devuelve `status.running`
+
+**Estado:** Sin bugs conocidos pendientes.
 
 ---
 
@@ -114,38 +117,46 @@
 
 ---
 
-### ⬜ 7. Terminal
+### ✅ 7. Terminal
+**Auditada en:** v2.13.30  
 **Backend:** `backend/routes/terminal.js` (WebSocket + node-pty)  
 **Frontend:** `frontend/main.js` → `renderTerminalView()`
 
-**Pendiente auditar:**
-- Sesión PTY: creación, redimensionado, cierre
-- Seguridad: acceso restringido por rol
-- Manejo de desconexiones
+**Bugs corregidos:**
+- 🔴 `terminal.js` — Todas las rutas HTTP solo requerían `requireAuth` → escalada de privilegios, cualquier usuario podía ver/crear/cerrar sesiones
+- 🔴 `terminal-ws.js` — WebSocket PTY sin check de rol admin → cualquier usuario autenticado podía abrir terminal
+
+**Estado:** Sin bugs conocidos pendientes.
 
 ---
 
-### ⬜ 8. Sistema (System)
-**Backend:** `backend/routes/system.js` (parcialmente auditado en Resumen)  
+### ✅ 8. Sistema (System)
+**Auditada en:** v2.13.30  
+**Backend:** `backend/routes/system.js`, `backend/routes/update.js`  
 **Frontend:** `frontend/main.js` → `renderSystemView()`
 
-**Pendiente auditar:**
-- Info detallada del sistema (más allá del resumen)
-- Gestión de actualizaciones OTA
-- Configuración de ventiladores (modos PWM)
-- Logs del sistema desde esta vista
+**Bugs corregidos:**
+- 🟠 `system.js` — `POST /fan` y `POST /fan/mode` solo `requireAuth` → control de hardware sin restricción
+- 🔴 `update.js` — `POST /apply` y `POST /apply-os` solo `requireAuth` → cualquier usuario podía disparar OTA
+- 🔴 `update.js` — `updateInProgress` lock añadido para evitar múltiples actualizaciones simultáneas
+
+**Estado:** Sin bugs conocidos pendientes.
 
 ---
 
-### ⬜ 9. Backup
+### ✅ 9. Backup
+**Auditada en:** v2.13.30  
 **Backend:** `backend/routes/backup.js`  
 **Frontend:** `frontend/main.js` → `renderBackupView()`
 
-**Bugs conocidos ya corregidos:** dead `args.unshift()` (v2.13.24)  
-**Pendiente auditar:**
-- Creación de backup: destino, compresión, retención
-- Listado y restauración de backups
-- Scheduler de backups
+**Bugs corregidos:**
+- 🔴 `backup.js` — Rutas de creación/restauración/eliminación solo `requireAuth` → cualquier usuario podía gestionar backups
+- 🟠 `backup.js` — Extracción tar sin `--no-absolute-filenames --no-overwrite-dir` → path traversal en restore
+- 🟠 `backup.js` — Fallo durante creación no limpiaba el archivo parcial antes de ejecutar retención
+
+**Bugs previos:** dead `args.unshift()` (v2.13.24)
+
+**Estado:** Sin bugs conocidos pendientes.
 
 ---
 
@@ -161,37 +172,39 @@
 
 ---
 
-### ⬜ 11. VPN (WireGuard)
+### ✅ 11. VPN (WireGuard)
+**Auditada en:** v2.13.30  
 **Backend:** `backend/routes/vpn.js`  
 **Frontend:** `frontend/main.js` → `renderVPNView()`
 
-**Pendiente auditar:**
-- Instalación con barra de progreso asíncrona
-- Creación/revocación de clientes + QR codes
-- Estado de peers en tiempo real
-- Hot-reload sin desconectar peers
+**Bugs corregidos:**
+- 🟡 `vpn.js` — DNS sin validación de formato IP → valor arbitrario podía inyectarse en config WireGuard
+
+**Estado:** Sin bugs conocidos pendientes.
 
 ---
 
-### ⬜ 12. Cloud Sync (Syncthing)
+### ✅ 12. Cloud Sync (Syncthing)
+**Auditada en:** v2.13.30  
 **Backend:** `backend/routes/cloud-sync.js`  
 **Frontend:** `frontend/main.js` → `renderCloudSyncView()`
 
-**Pendiente auditar:**
-- Detección automática de Syncthing
-- Gestión de carpetas de sync
-- Estado de conexión y peers
+**Bugs corregidos:**
+- 🟠 `cloud-sync.js` — Path traversal: `.startsWith(STORAGE_BASE)` sin normalizar → `path.normalize + path.sep` para prevenir `/../` bypass
+
+**Estado:** Sin bugs conocidos pendientes.
 
 ---
 
-### ⬜ 13. Cloud Backup
+### ✅ 13. Cloud Backup
+**Auditada en:** v2.13.30  
 **Backend:** `backend/routes/cloud-backup.js`  
 **Frontend:** `frontend/main.js` → `renderCloudBackupView()`
 
-**Pendiente auditar:**
-- Proveedores soportados
-- Programación de backups
-- Estado y logs
+**Bugs corregidos:**
+- 🟠 `cloud-backup.js` — `sync.name` sin sanitizar `\r\n` antes de insertar en crontab → crontab injection
+
+**Estado:** Sin bugs conocidos pendientes.
 
 ---
 
@@ -237,15 +250,18 @@
 
 ---
 
-### ⬜ 18. Scheduler (Tareas)
+### ✅ 18. Scheduler (Tareas)
+**Auditada en:** v2.13.30  
 **Backend:** `backend/routes/scheduler.js`  
 **Frontend:** parte del sistema
 
-**Bugs ya corregidos:** temp file path (v2.13.24)  
-**Pendiente auditar:**
-- CRUD de tareas cron
-- Ejecución y logs de tareas
-- Validación de expresiones cron
+**Bugs corregidos:**
+- 🔴 `scheduler.js` — Rutas CRUD (crear/editar/eliminar/ejecutar/toggle) solo `requireAuth` → cualquier usuario podía gestionar tareas
+- 🟡 `scheduler.js` — Temp file para crontab sin modo `0o600` → archivo legible por otros usuarios del sistema
+
+**Bugs previos:** temp file path (v2.13.24)
+
+**Estado:** Sin bugs conocidos pendientes.
 
 ---
 
@@ -274,7 +290,7 @@
 
 | Total secciones | Auditadas | Pendientes | % Completado |
 |---|---|---|---|
-| 20 | 5 | 15 | **25%** |
+| 20 | 13 | 7 | **65%** |
 
 ---
 
@@ -282,6 +298,7 @@
 
 | Versión | Cambios |
 |---|---|
+| v2.13.30 | Auditoría Red/Terminal/Sistema/Backup/Scheduler/VPN/CloudSync/CloudBackup: ~25 fixes (auth, traversal, injection, RBAC) |
 | v2.13.29 | Auditoría Docker: 5 fixes (requireAdmin en 4 endpoints, socket 503) |
 | v2.13.28 | Auditoría Archivos: 5 fixes (copy params, XSS búsqueda, path traversal upload, move overwrite) |
 | v2.13.27 | Auditoría Almacenamiento: 9 fixes (validateSession crash, fstab XFS, NFS RBAC, auth, duplicados) |

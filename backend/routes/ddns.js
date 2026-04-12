@@ -451,7 +451,7 @@ router.delete('/services/:id', requireAdmin, (req, res) => {
 /**
  * POST /services/:id/update - Force an IP update for a specific service
  */
-router.post('/services/:id/update', ddnsLimiter, async (req, res) => {
+router.post('/services/:id/update', requireAdmin, ddnsLimiter, async (req, res) => {
   try {
     const data = getData();
     if (!data.network) data.network = {};

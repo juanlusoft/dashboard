@@ -79,6 +79,18 @@ function setupTerminalWebSocket(server) {
             return;
         }
 
+        // Check admin role
+        const data = require('./data').getData ? require('./data').getData() : null;
+        const users = data ? (data.users || []) : [];
+        const legacyUser = data ? data.user : null;
+        const isAdmin = (legacyUser && legacyUser.username === session.username) ||
+            users.some(u => u.username === session.username && u.role === 'admin');
+        if (!isAdmin) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Se requiere rol de administrador' }));
+            ws.close(1008, 'Admin required');
+            return;
+        }
+
         // Validate command
         if (!validateCommand(command)) {
             ws.send(JSON.stringify({ type: 'error', message: 'Command not allowed' }));

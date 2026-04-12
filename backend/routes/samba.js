@@ -15,6 +15,7 @@ const { promisify } = require('util');
 const execFileAsync = promisify(execFile);
 
 const { requireAuth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/rbac');
 const { logSecurityEvent, safeExec, sudoExec } = require('../utils/security');
 const { sanitizePathWithinBase } = require('../utils/sanitize');
 const { getData } = require('../utils/data');
@@ -221,21 +222,7 @@ function validateShareName(name) {
 // All routes require authentication
 router.use(requireAuth);
 
-// Admin check middleware - looks up role from data (sessions only store username)
-function requireAdmin(req, res, next) {
-  const data = getData();
-  if (data.user && data.user.username === req.user.username) {
-    req.user.role = 'admin';
-    return next();
-  }
-  const users = data.users || [];
-  const user = users.find(u => u.username === req.user.username);
-  if (user) req.user.role = user.role || 'user';
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin required' });
-  }
-  next();
-}
+
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
 

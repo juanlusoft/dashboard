@@ -9357,7 +9357,7 @@ async function renderSambaSection(container) {
             const status = await statusRes.json();
             const statusBadge = document.createElement('div');
             statusBadge.style.cssText = `display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; margin-bottom: 15px; ${
-                status.active ? 'background: rgba(16,185,129,0.15); color: #10b981;' : 'background: rgba(239,68,68,0.15); color: #ef4444;'
+                status.running ? 'background: rgba(16,185,129,0.15); color: #10b981;' : 'background: rgba(239,68,68,0.15); color: #ef4444;'
             }`;
             statusBadge.textContent = status.running ? `✅ Activo • ${status.connectedCount || 0} conexiones` : '❌ Inactivo';
             section.appendChild(statusBadge);

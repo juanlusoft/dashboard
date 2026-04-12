@@ -16,6 +16,7 @@ const path = require('path');
 const fs = require('fs');
 
 const { requireAuth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/rbac');
 const { logSecurityEvent } = require('../utils/security');
 
 // Terminal sessions storage
@@ -47,7 +48,7 @@ function validateCommand(cmd) {
 }
 
 // Get terminal sessions list
-router.get('/sessions', requireAuth, (req, res) => {
+router.get('/sessions', requireAdmin, (req, res) => {
     const sessions = [];
     for (const [id, session] of terminalSessions) {
         sessions.push({
@@ -61,7 +62,7 @@ router.get('/sessions', requireAuth, (req, res) => {
 });
 
 // Create new terminal session info (actual PTY handled via WebSocket)
-router.post('/session', requireAuth, (req, res) => {
+router.post('/session', requireAdmin, (req, res) => {
     const { command = 'bash' } = req.body;
     
     // Validate command
@@ -88,7 +89,7 @@ router.post('/session', requireAuth, (req, res) => {
 });
 
 // Kill terminal session
-router.delete('/session/:id', requireAuth, (req, res) => {
+router.delete('/session/:id', requireAdmin, (req, res) => {
     const { id } = req.params;
     
     if (!id || typeof id !== 'string' || !id.startsWith('term-')) {
@@ -114,7 +115,7 @@ router.delete('/session/:id', requireAuth, (req, res) => {
 });
 
 // Get available commands for shortcuts
-router.get('/commands', requireAuth, (req, res) => {
+router.get('/commands', requireAdmin, (req, res) => {
     res.json({
         allowed: ALLOWED_COMMANDS,
         presets: [

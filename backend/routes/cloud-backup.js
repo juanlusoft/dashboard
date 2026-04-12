@@ -608,7 +608,8 @@ function writeCloudBackupCrontab() {
                 const logFile = `/var/log/homepinas/cloud-backup-${sync.id}.log`;
                 const rcloneMode = sync.mode === 'sync' ? 'sync' : 'copy';
 
-                content += `# HomePiNAS Cloud Backup: ${sync.name} (ID: ${sync.id})\n`;
+                const safeName = (sync.name || '').replace(/[\r\n]/g, ' ');
+                content += `# HomePiNAS Cloud Backup: ${safeName} (ID: ${sync.id})\n`;
                 content += `${cronExpr} /usr/bin/rclone ${rcloneMode} "${sync.source}" "${sync.dest}" >> ${logFile} 2>&1\n`;
             });
 

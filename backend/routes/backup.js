@@ -12,6 +12,7 @@ const path = require('path');
 const fs = require('fs');
 const { execFile, execFileSync, spawn } = require('child_process');
 const { requireAuth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/rbac');
 const { logSecurityEvent } = require('../utils/security');
 const { getData, saveData } = require('../utils/data');
 
@@ -85,7 +86,7 @@ router.get('/jobs', (req, res) => {
  * POST /jobs - Create a new backup job
  * Body: { name, source, destination, type, schedule, excludes, retention }
  */
-router.post('/jobs', (req, res) => {
+router.post('/jobs', requireAdmin, (req, res) => {
   try {
     const { name, source, destination, type, schedule, excludes, retention } = req.body;
 
@@ -156,7 +157,7 @@ router.post('/jobs', (req, res) => {
 /**
  * PUT /jobs/:id - Update an existing backup job
  */
-router.put('/jobs/:id', (req, res) => {
+router.put('/jobs/:id', requireAdmin, (req, res) => {
   try {
     const data = getData();
     if (!data.backups) data.backups = [];
@@ -235,7 +236,7 @@ router.put('/jobs/:id', (req, res) => {
 /**
  * DELETE /jobs/:id - Delete a backup job
  */
-router.delete('/jobs/:id', (req, res) => {
+router.delete('/jobs/:id', requireAdmin, (req, res) => {
   try {
     const data = getData();
     if (!data.backups) data.backups = [];
@@ -271,7 +272,7 @@ router.delete('/jobs/:id', (req, res) => {
  * POST /jobs/:id/run - Execute a backup job immediately
  * Spawns rsync or tar as a child process and tracks it in memory.
  */
-router.post('/jobs/:id/run', (req, res) => {
+router.post('/jobs/:id/run', requireAdmin, (req, res) => {
   try {
     const data = getData();
     if (!data.backups) data.backups = [];
@@ -379,9 +380,14 @@ router.post('/jobs/:id/run', (req, res) => {
         currentJob.lastRun = finishedAt;
         currentJob.lastResult = result;
 
-        // Apply retention policy for tar backups
-        if (currentJob.type === 'tar' && currentJob.retention && currentJob.retention.keepLast > 0) {
-          applyRetention(currentJob);
+        // Clean up failed partial archive and only apply retention on success
+        if (currentJob.type === 'tar') {
+          if (code !== 0) {
+            try { fs.unlinkSync(archivePath); } catch {}
+          }
+          if (code === 0 && currentJob.retention && currentJob.retention.keepLast > 0) {
+            applyRetention(currentJob);
+          }
         }
 
         saveData(currentData);
@@ -477,7 +483,7 @@ router.get('/jobs/:id/history', (req, res) => {
  * POST /jobs/:id/restore - Restore from a tar backup archive
  * Body: { archive: 'backup-2025-01-01T00-00-00-000Z.tar.gz' }
  */
-router.post('/jobs/:id/restore', (req, res) => {
+router.post('/jobs/:id/restore', requireAdmin, (req, res) => {
   try {
     const data = getData();
     if (!data.backups) data.backups = [];
@@ -515,7 +521,7 @@ router.post('/jobs/:id/restore', (req, res) => {
     }
 
     // Extract archive to source path
-    const proc = spawn('tar', ['xzf', archivePath, '-C', job.source]);
+    const proc = spawn('tar', ['xzf', archivePath, '-C', job.source, '--no-absolute-filenames', '--no-overwrite-dir']);
 
     const restoreState = { output: '' };
 

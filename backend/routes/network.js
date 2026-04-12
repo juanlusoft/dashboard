@@ -220,7 +220,8 @@ router.post('/configure', requireAdmin, (req, res) => {
                     let content = fs.readFileSync(dhcpcdConf, 'utf8');
                     
                     // Remove existing static config for this interface
-                    const regex = new RegExp(`\\n?interface ${id}[\\s\\S]*?(?=\\ninterface |$)`, 'g');
+                    const escapedId = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const regex = new RegExp(`\\n?interface ${escapedId}[\\s\\S]*?(?=\\ninterface |$)`, 'g');
                     content = content.replace(regex, '');
                     
                     if (!isDhcp) {

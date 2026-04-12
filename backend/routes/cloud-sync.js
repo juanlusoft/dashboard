@@ -375,7 +375,9 @@ router.post('/folders', requireAuth, async (req, res) => {
         
         // Ensure path is under storage
         const fullPath = folderPath.startsWith('/') ? folderPath : path.join(STORAGE_BASE, folderPath);
-        if (!fullPath.startsWith(STORAGE_BASE)) {
+        const normalizedFull = path.normalize(fullPath);
+        const normalizedBase = path.normalize(STORAGE_BASE);
+        if (!normalizedFull.startsWith(normalizedBase + path.sep) && normalizedFull !== normalizedBase) {
             return res.status(400).json({ error: 'Path must be under /mnt/storage' });
         }
         

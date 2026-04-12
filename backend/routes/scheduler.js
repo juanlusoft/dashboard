@@ -13,6 +13,7 @@ const os = require('os');
 const path = require('path');
 const { execFile } = require('child_process');
 const { requireAuth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/rbac');
 const { logSecurityEvent } = require('../utils/security');
 const { getData, saveData } = require('../utils/data');
 
@@ -113,7 +114,7 @@ function writeCrontab() {
 
     // Write to temp file
     const tmpFile = path.join(os.tmpdir(), `homepinas-crontab-${Date.now()}`);
-    fs.writeFile(tmpFile, content, (writeErr) => {
+    fs.writeFile(tmpFile, content, { encoding: 'utf8', mode: 0o600 }, (writeErr) => {
       if (writeErr) {
         return reject(new Error(`Failed to write temp crontab: ${writeErr.message}`));
       }
@@ -155,7 +156,7 @@ router.get('/tasks', (req, res) => {
  * POST /tasks - Create a new scheduled task
  * Body: { name, command, schedule, enabled, user }
  */
-router.post('/tasks', async (req, res) => {
+router.post('/tasks', requireAdmin, async (req, res) => {
   try {
     const { name, command, schedule, enabled, user } = req.body;
 
@@ -226,7 +227,7 @@ router.post('/tasks', async (req, res) => {
 /**
  * PUT /tasks/:id - Update an existing scheduled task
  */
-router.put('/tasks/:id', async (req, res) => {
+router.put('/tasks/:id', requireAdmin, async (req, res) => {
   try {
     const data = getData();
     if (!data.scheduledTasks) data.scheduledTasks = [];
@@ -306,7 +307,7 @@ router.put('/tasks/:id', async (req, res) => {
 /**
  * DELETE /tasks/:id - Delete a scheduled task
  */
-router.delete('/tasks/:id', async (req, res) => {
+router.delete('/tasks/:id', requireAdmin, async (req, res) => {
   try {
     const data = getData();
     if (!data.scheduledTasks) data.scheduledTasks = [];
@@ -335,7 +336,7 @@ router.delete('/tasks/:id', async (req, res) => {
  * POST /tasks/:id/run - Execute a task immediately
  * Runs the command and returns its output.
  */
-router.post('/tasks/:id/run', (req, res) => {
+router.post('/tasks/:id/run', requireAdmin, (req, res) => {
   try {
     const data = getData();
     if (!data.scheduledTasks) data.scheduledTasks = [];
@@ -405,7 +406,7 @@ router.post('/tasks/:id/run', (req, res) => {
  * POST /tasks/:id/toggle - Enable or disable a task
  * Toggles the enabled state and rewrites the crontab.
  */
-router.post('/tasks/:id/toggle', async (req, res) => {
+router.post('/tasks/:id/toggle', requireAdmin, async (req, res) => {
   try {
     const data = getData();
     if (!data.scheduledTasks) data.scheduledTasks = [];

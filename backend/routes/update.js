@@ -13,12 +13,15 @@ const path = require('path');
 const fs = require('fs');
 
 const { requireAuth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/rbac');
 const { criticalLimiter } = require('../middleware/rateLimit');
 const { logSecurityEvent } = require('../utils/security');
 
 const INSTALL_DIR = '/opt/homepinas';
 const REPO_URL = 'https://github.com/juanlusoft/dashboard.git';
 const EXPECTED_REMOTE = 'github.com/juanlusoft/dashboard'; // SECURITY: Expected repo pattern
+
+let updateInProgress = false;
 
 // Check for updates
 router.get('/check', requireAuth, async (req, res) => {
@@ -122,7 +125,12 @@ router.get('/check', requireAuth, async (req, res) => {
 });
 
 // Perform update
-router.post('/apply', requireAuth, criticalLimiter, async (req, res) => {
+router.post('/apply', requireAuth, requireAdmin, criticalLimiter, async (req, res) => {
+    if (updateInProgress) {
+        return res.status(409).json({ error: 'Ya hay una actualización en progreso' });
+    }
+    updateInProgress = true;
+
     logSecurityEvent('UPDATE_STARTED', { user: req.user.username }, req.ip);
 
     // SECURITY: Verify we're updating from the expected repository
@@ -199,10 +207,12 @@ router.post('/apply', requireAuth, criticalLimiter, async (req, res) => {
             });
 
             logSecurityEvent('UPDATE_COMPLETED', {}, '');
+            updateInProgress = false;
 
         } catch (e) {
             log.error('[UPDATE] Update failed:', e.message);
             logSecurityEvent('UPDATE_FAILED', { error: e.message }, '');
+            updateInProgress = false;
         }
     }, 500);
 });
@@ -303,7 +313,12 @@ router.get('/check-os', requireAuth, async (req, res) => {
 });
 
 // Apply OS updates (apt upgrade)
-router.post('/apply-os', requireAuth, criticalLimiter, async (req, res) => {
+router.post('/apply-os', requireAuth, requireAdmin, criticalLimiter, async (req, res) => {
+    if (updateInProgress) {
+        return res.status(409).json({ error: 'Ya hay una actualización en progreso' });
+    }
+    updateInProgress = true;
+
     logSecurityEvent('OS_UPDATE_STARTED', { user: req.user.username }, req.ip);
 
     // Send response immediately
@@ -322,9 +337,11 @@ router.post('/apply-os', requireAuth, criticalLimiter, async (req, res) => {
             });
             log.info('[OS-UPDATE] Upgrade completed successfully');
             logSecurityEvent('OS_UPDATE_COMPLETED', {}, '');
+            updateInProgress = false;
         } catch (e) {
             log.error('[OS-UPDATE] Upgrade failed:', e.message);
             logSecurityEvent('OS_UPDATE_FAILED', { error: e.message }, '');
+            updateInProgress = false;
         }
     }, 500);
 });
