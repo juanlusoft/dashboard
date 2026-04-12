@@ -4159,7 +4159,14 @@ async function renderDockerManager() {
             authFetch(`${API_BASE}/docker/containers`),
             authFetch(`${API_BASE}/docker/update-status`)
         ]);
-        if (containersRes.ok) state.dockers = await containersRes.json();
+        if (!containersRes.ok) {
+            // Show Docker unavailable message instead of empty list
+            dashboardContent.innerHTML = `<div class="card" style="text-align:center;padding:40px">
+        <p style="color:var(--text-secondary)">⚠️ Docker no disponible o no está corriendo</p>
+    </div>`;
+            return;
+        }
+        state.dockers = await containersRes.json();
         if (updateRes.ok) updateStatus = await updateRes.json();
     } catch (e) {
         console.error('Docker unreachable:', e);

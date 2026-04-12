@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.28
+# HomePiNAS v2.13.29
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.28-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.29-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -66,6 +66,15 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - Restricted sudoers configuration
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
+
+## 🆕 What's New in v2.13.29
+
+### Auditoría Docker — 5 fixes
+- **🔴 fix(docker.js)** — `POST /update` solo requería auth, no admin → escalada de privilegios
+- **🔴 fix(docker.js)** — `PUT /compose/:name` solo requería auth → cualquier usuario podía editar compose
+- **🟠 fix(docker.js)** — `POST /compose/import` y `POST /notes/:containerId` → `requireAdmin`
+- **🟠 fix(docker.js)** — Error de socket Docker enmascarado como array vacío → ahora devuelve 503
+- **🟠 fix(main.js)** — Frontend distingue "Docker no disponible" de "lista vacía"
 
 ## 🆕 What's New in v2.13.28
 

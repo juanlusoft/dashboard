@@ -68,15 +68,20 @@
 
 ---
 
-### ⬜ 4. Docker
+### ✅ 4. Docker
 **Backend:** `backend/routes/docker.js`  
 **Frontend:** `frontend/main.js` → `renderDockerManager()`
 
-**Pendiente auditar:**
-- Lista de contenedores: estado, puertos, imagen
-- Acciones: start/stop/restart/logs
-- Compose: despliegue y parada de stacks
-- Permisos RBAC (ya verificado en auditoría anterior que es requireAdmin)
+**Auditada en:** v2.13.29
+
+**Bugs corregidos:**
+- 🔴 `docker.js` — `POST /update` solo `requireAuth` → escalada de privilegios
+- 🔴 `docker.js` — `PUT /compose/:name` solo `requireAuth` → edición de compose sin restricción
+- 🟠 `docker.js` — `POST /compose/import` y `POST /notes` → `requireAdmin`
+- 🟠 `docker.js` — Error de socket enmascarado como `[]` → ahora 503
+- 🟠 `main.js` — Frontend distingue Docker no disponible de lista vacía
+
+**Estado:** Sin bugs conocidos pendientes.
 
 ---
 
@@ -269,7 +274,7 @@
 
 | Total secciones | Auditadas | Pendientes | % Completado |
 |---|---|---|---|
-| 20 | 4 | 16 | **20%** |
+| 20 | 5 | 15 | **25%** |
 
 ---
 
@@ -277,6 +282,7 @@
 
 | Versión | Cambios |
 |---|---|
+| v2.13.29 | Auditoría Docker: 5 fixes (requireAdmin en 4 endpoints, socket 503) |
 | v2.13.28 | Auditoría Archivos: 5 fixes (copy params, XSS búsqueda, path traversal upload, move overwrite) |
 | v2.13.27 | Auditoría Almacenamiento: 9 fixes (validateSession crash, fstab XFS, NFS RBAC, auth, duplicados) |
 | v2.13.26 | Auditoría Resumen: 3 fixes (readIna238 async, globalStats, power null) |

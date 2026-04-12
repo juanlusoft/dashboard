@@ -208,8 +208,8 @@ router.get('/containers', requireAuth, async (req, res) => {
 
         res.json(result);
     } catch (e) {
-        log.warn('Docker check failed:', e.message);
-        res.json([]);
+        log.warn('Docker unavailable:', e.message);
+        res.status(503).json({ error: 'Docker daemon unavailable', message: e.message });
     }
 });
 
@@ -331,7 +331,7 @@ router.get('/update-status', requireAuth, async (req, res) => {
 });
 
 // Update a specific container
-router.post('/update', requireAuth, async (req, res) => {
+router.post('/update', requireAdmin, async (req, res) => {
     const { containerId } = req.body;
 
     // SECURITY: Validate container ID format
@@ -432,7 +432,7 @@ router.post('/update', requireAuth, async (req, res) => {
 });
 
 // Import docker-compose.yml
-router.post('/compose/import', requireAuth, async (req, res) => {
+router.post('/compose/import', requireAdmin, async (req, res) => {
     const { name, content } = req.body;
 
     if (!name || !content) {
@@ -676,7 +676,7 @@ router.get('/compose/:name', requireAuth, async (req, res) => {
 });
 
 // Update compose file content
-router.put('/compose/:name', requireAuth, async (req, res) => {
+router.put('/compose/:name', requireAdmin, async (req, res) => {
     const { content } = req.body;
     
     if (!content) {
@@ -744,7 +744,7 @@ router.get('/notes/:containerId', requireAuth, async (req, res) => {
 });
 
 // Save notes for a container (stored by name for persistence across updates)
-router.post('/notes/:containerId', requireAuth, async (req, res) => {
+router.post('/notes/:containerId', requireAdmin, async (req, res) => {
     const { containerId } = req.params;
     const { notes } = req.body;
     
