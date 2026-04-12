@@ -49,16 +49,22 @@
 
 ---
 
-### ⬜ 3. Almacenamiento (Storage)
+### ✅ 3. Almacenamiento (Storage)
+**Auditada en:** v2.13.27  
 **Backend:** `backend/routes/storage/` (disks, pool, snapraid, badblocks, smart, cache, config, wizard, nfs)  
 **Frontend:** `frontend/main.js` → `renderStorageDashboard()`
 
-**Pendiente auditar:**
-- Pool mergerfs: creación, montaje, estado
-- SnapRAID: sync, scrub, historial, estado de paridad
-- Discos: detección, temperatura SMART, uso
-- Badblocks: tests de superficie, progreso
-- Cache y configuración avanzada
+**Bugs corregidos:**
+- 🔴 `config.js` — `validateSession()` undefined crasheaba en runtime → `requireAdmin`
+- 🔴 `disks.js` — fstab escribía `ext4` aunque el disco fuera XFS (2 rutas)
+- 🟠 `nfs.js` — `requireAdmin` local no usaba RBAC estándar → `rbac.js`
+- 🟠 `badblocks.js` — `cache/mover/trigger` sin `requireAdmin`
+- 🟠 `smart.js` — `smart/:device/test` sin `requireAdmin`
+- 🟠 `badblocks.js` — endpoint `/cache/status` duplicado (170 líneas eliminadas)
+- 🟡 Múltiples — `snapraidSyncStatus` muerto eliminado de 6 archivos
+- 🟡 `main.js` — `Promise.all` sin `.catch()` en 2 de 3 fetches
+
+**Estado:** Sin bugs conocidos pendientes.
 
 ---
 
@@ -259,7 +265,7 @@
 
 | Total secciones | Auditadas | Pendientes | % Completado |
 |---|---|---|---|
-| 20 | 2 | 18 | **10%** |
+| 20 | 3 | 17 | **15%** |
 
 ---
 
@@ -267,6 +273,7 @@
 
 | Versión | Cambios |
 |---|---|
+| v2.13.27 | Auditoría Almacenamiento: 9 fixes (validateSession crash, fstab XFS, NFS RBAC, auth, duplicados) |
 | v2.13.26 | Auditoría Resumen: 3 fixes (readIna238 async, globalStats, power null) |
 | v2.13.25 | Auditoría Active Directory: 7 fixes + 3 nuevos endpoints |
 | v2.13.24 | Fixes de calidad: 6 bugs (busy-wait, tmpdir, dead code, logSecurityEvent, imports) |
