@@ -2933,7 +2933,7 @@ async function renderDashboard(quickRefresh) {
             </div>
         </div>
 
-        <div class="dashboard-grid-5">
+        <div class="${stats.power ? 'dashboard-grid-5' : 'dashboard-grid-4'}" id="dash-main-grid">
             <div class="glass-card card-compact">
                 <h3>🖥️ ${t('dashboard.cpu', 'CPU')}</h3>
                 <div id="dash-cpu-model" class="cpu-model-compact">${escapeHtml(cpuModel)}</div>

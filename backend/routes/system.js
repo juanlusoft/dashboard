@@ -136,7 +136,7 @@ function readIna238() {
             const namePath = path.join(hwmonBase, hwmon, 'name');
             try {
                 const name = fs.readFileSync(namePath, 'utf8').trim();
-                if (name === 'ina238') {
+                if (name === 'ina238' || name.startsWith('ina238')) {
                     inaPath = path.join(hwmonBase, hwmon);
                     break;
                 }

@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.20
+# HomePiNAS v2.13.21
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.20-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.21-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -66,6 +66,12 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - Restricted sudoers configuration
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
+
+## 🆕 What's New in v2.13.21
+
+### Fix tarjeta Consumo — no aparecía en algunos NAS
+- **🔧 system.js** — Detección INA238 ampliada: acepta nombres como `ina238-i2c-10-48` además de `ina238`
+- **🔧 main.js** — Grid se ajusta a 4 columnas automáticamente si el chip no está disponible (sin hueco vacío)
 
 ## 🆕 What's New in v2.13.20
 
