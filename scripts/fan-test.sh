@@ -21,11 +21,65 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-# Check i2c-tools
-if [ ! -x "$I2CGET" ]; then
-    echo -e "${YELLOW}i2c-tools no encontrado, instalando...${NC}"
-    apt-get install -y i2c-tools > /dev/null 2>&1
+# --- PRE-REQUISITOS ---
+echo -e "${YELLOW}[0/4] Comprobando dependencias...${NC}"
+MISSING=0
+
+check_pkg() {
+    local pkg=$1; local bin=$2
+    if [ -x "$bin" ] || command -v "$bin" > /dev/null 2>&1; then
+        echo -e "  ${GREEN}✓ ${pkg}${NC}"
+    else
+        echo -e "  ${RED}✗ ${pkg} — instalando...${NC}"
+        apt-get install -y "$pkg" > /dev/null 2>&1
+        if [ -x "$bin" ] || command -v "$bin" > /dev/null 2>&1; then
+            echo -e "  ${GREEN}  → instalado correctamente${NC}"
+        else
+            echo -e "  ${RED}  → ERROR: no se pudo instalar ${pkg}${NC}"
+            MISSING=$((MISSING + 1))
+        fi
+    fi
+}
+
+check_pkg "i2c-tools"  "$I2CGET"
+check_pkg "stress-ng"  "$(command -v stress-ng)"
+
+# Check i2c-dev kernel module
+if lsmod | grep -q i2c_dev; then
+    echo -e "  ${GREEN}✓ módulo i2c-dev cargado${NC}"
+else
+    echo -e "  ${YELLOW}  módulo i2c-dev no cargado, cargando...${NC}"
+    modprobe i2c-dev 2>/dev/null
+    if lsmod | grep -q i2c_dev; then
+        echo -e "  ${GREEN}✓ módulo i2c-dev cargado${NC}"
+    else
+        echo -e "  ${RED}✗ no se pudo cargar i2c-dev${NC}"
+        MISSING=$((MISSING + 1))
+    fi
 fi
+
+# Check /dev/i2c-10
+if [ -e "/dev/i2c-${EMC_BUS}" ]; then
+    echo -e "  ${GREEN}✓ /dev/i2c-${EMC_BUS} disponible${NC}"
+else
+    echo -e "  ${RED}✗ /dev/i2c-${EMC_BUS} no encontrado${NC}"
+    echo "    Buses I2C disponibles: $(i2cdetect -l 2>/dev/null | awk '{print $1}' | tr '\n' ' ')"
+    MISSING=$((MISSING + 1))
+fi
+
+# Check sudo sin contraseña para i2cget/i2cset
+if sudo -n "$I2CGET" -y $EMC_BUS $EMC_ADDR 0xfd > /dev/null 2>&1; then
+    echo -e "  ${GREEN}✓ sudo i2cget/i2cset sin contraseña${NC}"
+else
+    echo -e "  ${YELLOW}! sudo requiere contraseña — puede pedir contraseña durante el test${NC}"
+fi
+
+if [ "$MISSING" -gt 0 ]; then
+    echo ""
+    echo -e "${RED}Faltan ${MISSING} dependencia(s) críticas. Abortando.${NC}"
+    exit 1
+fi
+echo ""
 
 # Load i2c-dev
 modprobe i2c-dev 2>/dev/null
