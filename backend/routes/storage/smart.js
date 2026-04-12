@@ -11,20 +11,12 @@ const path = require('path');
 const { execFileSync, spawn } = require('child_process');
 
 const { requireAuth } = require('../../middleware/auth');
+const { requireAdmin } = require('../../middleware/rbac');
 const { logSecurityEvent } = require('../../utils/security');
 const { getData, saveData } = require('../../utils/data');
 const { sanitizeDiskId, validateDiskConfig, sanitizePathWithinBase } = require('../../utils/sanitize');
 const { STORAGE_MOUNT_BASE, POOL_MOUNT, SNAPRAID_CONF, formatSize } = require('./shared');
 
-
-// SnapRAID sync progress tracking
-let snapraidSyncStatus = {
-    running: false,
-    progress: 0,
-    status: '',
-    startTime: null,
-    error: null
-};
 
 // Format size: GB → TB when appropriate
 
@@ -156,7 +148,7 @@ router.get('/smart/:device', requireAuth, async (req, res) => {
 });
 
 // POST /storage/smart/:device/test - Run SMART self-test
-router.post('/smart/:device/test', requireAuth, async (req, res) => {
+router.post('/smart/:device/test', requireAdmin, async (req, res) => {
     try {
         const device = req.params.device;
         const testType = req.body.type || 'short';

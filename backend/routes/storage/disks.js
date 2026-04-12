@@ -273,7 +273,8 @@ router.post('/disks/add-to-pool', requireAdmin, async (req, res) => {
         }
 
         // Step 6: Add to fstab
-        const fstabEntry = `UUID=${uuid} ${mountPoint} ext4 defaults,nofail 0 2`;
+        const fsType = filesystem === 'xfs' ? 'xfs' : 'ext4';
+        const fstabEntry = `UUID=${uuid} ${mountPoint} ${fsType} defaults,nofail 0 2`;
         try {
             // Check if entry already exists
             const fstab = fs.readFileSync('/etc/fstab', 'utf8');
@@ -481,7 +482,8 @@ router.post('/disks/mount-standalone', requireAdmin, async (req, res) => {
         }
 
         // Add to fstab
-        const fstabEntry = `UUID=${uuid} ${mountPoint} ext4 defaults,nofail 0 2`;
+        const fsType = filesystem === 'xfs' ? 'xfs' : 'ext4';
+        const fstabEntry = `UUID=${uuid} ${mountPoint} ${fsType} defaults,nofail 0 2`;
         try {
             const fstab = fs.readFileSync('/etc/fstab', 'utf8');
             if (!fstab.includes(uuid)) {

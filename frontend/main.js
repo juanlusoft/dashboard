@@ -3524,8 +3524,8 @@ async function renderStorageDashboard() {
     try {
         // Fetch disks and pool status
         const [disksRes, poolRes, cacheRes] = await Promise.all([
-            authFetch(`${API_BASE}/system/disks`),
-            authFetch(`${API_BASE}/storage/pool/status`),
+            authFetch(`${API_BASE}/system/disks`).catch(() => null),
+            authFetch(`${API_BASE}/storage/pool/status`).catch(() => null),
             authFetch(`${API_BASE}/storage/cache/status`).catch(() => null)
         ]);
         

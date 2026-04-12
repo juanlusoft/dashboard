@@ -11,39 +11,21 @@ const path = require('path');
 const { execFileSync, spawn } = require('child_process');
 
 const { requireAuth } = require('../../middleware/auth');
+const { requireAdmin } = require('../../middleware/rbac');
 const { logSecurityEvent } = require('../../utils/security');
 const { getData, saveData } = require('../../utils/data');
 const { sanitizeDiskId, validateDiskConfig, sanitizePathWithinBase } = require('../../utils/sanitize');
 const { STORAGE_MOUNT_BASE, POOL_MOUNT, SNAPRAID_CONF, formatSize } = require('./shared');
 
 
-// SnapRAID sync progress tracking
-let snapraidSyncStatus = {
-    running: false,
-    progress: 0,
-    status: '',
-    startTime: null,
-    error: null
-};
-
 // Format size: GB → TB when appropriate
 
 // Get storage pool status (real-time)
 
-router.post('/config', (req, res) => {
+router.post('/config', requireAdmin, (req, res) => {
     try {
         const { config } = req.body;
         const data = getData();
-
-        // SECURITY: Require auth if storage already configured
-        if (data.storageConfig && data.storageConfig.length > 0) {
-            const sessionId = req.headers['x-session-id'];
-            const session = validateSession(sessionId);
-            if (!session) {
-                logSecurityEvent('UNAUTHORIZED_STORAGE_CHANGE', {}, req.ip);
-                return res.status(401).json({ error: 'Authentication required' });
-            }
-        }
 
         if (!Array.isArray(config)) {
             return res.status(400).json({ error: 'Invalid configuration format' });
