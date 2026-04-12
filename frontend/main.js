@@ -11,7 +11,12 @@ const state = {
     sessionId: null,
     csrfToken: null,
     publicIP: 'Escaneando...',
-    globalStats: { cpuLoad: 0, cpuTemp: 0, ramUsed: 0, ramTotal: 0, uptime: 0 },
+    globalStats: {
+        cpuLoad: 0, cpuTemp: 0, cpuModel: '', cpuCores: 0, cpuPhysicalCores: 0, cpuSpeed: 0,
+        ramUsed: 0, ramFree: 0, ramTotal: 0, ramUsedPercent: 0, swapUsed: 0, swapTotal: 0,
+        coreLoads: [], coreTemps: [], fans: null, power: null,
+        uptime: 0, hostname: '', distro: '', platform: '', kernel: ''
+    },
     storageConfig: [],
     disks: [],
     network: {
@@ -2830,15 +2835,19 @@ async function renderDashboard(quickRefresh) {
             if (pwrCard) pwrCard.style.display = '';
             const wattsEl = document.getElementById('dash-power-watts');
             if (wattsEl) {
-                wattsEl.textContent = stats.power.watts;
-                wattsEl.style.color = stats.power.watts > 50 ? '#ef4444' : stats.power.watts > 30 ? '#f59e0b' : '#10b981';
+                const w = stats.power.watts;
+                wattsEl.textContent = w !== null && w !== undefined ? w : '--';
+                wattsEl.style.color = (w > 50) ? '#ef4444' : (w > 30) ? '#f59e0b' : '#10b981';
             }
             const voltsEl = document.getElementById('dash-power-volts');
-            if (voltsEl) voltsEl.textContent = stats.power.volts + ' V';
+            if (voltsEl) voltsEl.textContent = stats.power.volts !== null && stats.power.volts !== undefined ? stats.power.volts + ' V' : '--';
             const ampsEl = document.getElementById('dash-power-amps');
-            if (ampsEl) ampsEl.textContent = stats.power.amps + ' A';
+            if (ampsEl) ampsEl.textContent = stats.power.amps !== null && stats.power.amps !== undefined ? stats.power.amps + ' A' : '--';
             const chiptempEl = document.getElementById('dash-power-chiptemp');
-            if (chiptempEl) chiptempEl.textContent = stats.power.chipTemp + '°C';
+            if (chiptempEl) chiptempEl.textContent = stats.power.chipTemp !== null && stats.power.chipTemp !== undefined ? stats.power.chipTemp + '°C' : '--';
+        } else {
+            const pwrCard = document.getElementById('dash-power-card');
+            if (pwrCard) pwrCard.style.display = 'none';
         }
         return;
     }

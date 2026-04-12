@@ -126,7 +126,7 @@ HYST_TEMP=2
 };
 
 // INA238 Power Monitor
-function readIna238() {
+async function readIna238() {
     const INA238_ADDRS = ['0x40', '0x41', '0x44', '0x45', '0x48', '0x49', '0x4c', '0x4d'];
 
     // Helper: scan hwmon for ina238, returns path or null

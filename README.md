@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.25
+# HomePiNAS v2.13.26
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.25-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.26-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -66,6 +66,13 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - Restricted sudoers configuration
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
+
+## 🆕 What's New in v2.13.26
+
+### Auditoría sección Resumen — 3 fixes
+- **🔴 fix(system.js)** — `readIna238()` declarada sin `async`: crasheaba Node.js al activar INA238
+- **🔴 fix(frontend)** — `globalStats` inicializado con todos los campos; el dashboard ya no muestra "0" antes del primer fetch
+- **🟠 fix(frontend)** — Tarjeta de consumo: oculta correctamente si el sensor desaparece; campos nulos muestran `--` en lugar de `"null"`
 
 ## 🆕 What's New in v2.13.25
 
