@@ -12,7 +12,8 @@ const path = require('path');
 const os = require('os');
 const { execFile, spawn } = require('child_process');
 const { promisify } = require('util');
-const { requireAuth, requireAdmin } = require('../middleware/rbac');
+const { requireAuth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/rbac');
 const { logSecurityEvent } = require('../utils/security');
 const { getData, saveData } = require('../utils/data');
 

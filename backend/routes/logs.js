@@ -12,7 +12,8 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs');
 const path = require('path');
-const { requireAuth, requireAdmin } = require('../middleware/rbac');
+const { requireAuth } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/rbac');
 const { logSecurityEvent } = require('../utils/security');
 // sanitize.js functions available if needed
 
