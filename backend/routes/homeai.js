@@ -151,36 +151,40 @@ function isOllamaRunning() {
  * Verifica si un modelo de HomeAI está cargado en Ollama
  * Llama a /api/tags y busca modelos que comiencen con "HomeAI"
  */
-async function isHomeAIModelLoaded() {
+// Queries Ollama /api/show for the HomeAI model — returns { loaded, modelName }
+async function getHomeAIModelInfo() {
     return new Promise((resolve) => {
-        const req = http.get(`${OLLAMA_BASE_URL}/api/tags`, (res) => {
+        const postData = JSON.stringify({ name: 'HomeAI' });
+        const options = {
+            hostname: '127.0.0.1',
+            port: 11434,
+            path: '/api/show',
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
+        };
+        const req = http.request(options, (res) => {
             let body = '';
-
-            res.on('data', chunk => {
-                body += chunk;
-            });
-
+            res.on('data', chunk => { body += chunk; });
             res.on('end', () => {
                 try {
                     const data = JSON.parse(body);
-                    const models = data.models || [];
-                    const hasHomeAI = models.some(m => m.name && m.name.startsWith('HomeAI'));
-                    resolve(hasHomeAI);
-                } catch {
-                    resolve(false);
-                }
+                    if (data.error) { resolve({ loaded: false, modelName: null }); return; }
+                    const fromLine = (data.modelfile || '').split('\n').find(l => l.trim().startsWith('FROM '));
+                    const modelName = fromLine ? fromLine.replace('FROM', '').trim() : null;
+                    resolve({ loaded: true, modelName });
+                } catch { resolve({ loaded: false, modelName: null }); }
             });
         });
-
-        req.setTimeout(OLLAMA_TIMEOUT, () => {
-            req.destroy();
-            resolve(false);
-        });
-
-        req.on('error', () => {
-            resolve(false);
-        });
+        req.on('error', () => resolve({ loaded: false, modelName: null }));
+        req.setTimeout(OLLAMA_TIMEOUT, () => { req.destroy(); resolve({ loaded: false, modelName: null }); });
+        req.write(postData);
+        req.end();
     });
+}
+
+async function isHomeAIModelLoaded() {
+    const { loaded } = await getHomeAIModelInfo();
+    return loaded;
 }
 
 /**
@@ -212,14 +216,15 @@ router.get('/status', async (req, res) => {
     try {
         const installed = await isOllamaInstalled();
         const running = installed ? await isOllamaRunning() : false;
-        const modelLoaded = running ? await isHomeAIModelLoaded() : false;
+        const modelInfo = running ? await getHomeAIModelInfo() : { loaded: false, modelName: null };
         const data = getData();
 
         res.json({
             success: true,
             installed,
             running,
-            modelLoaded,
+            modelLoaded: modelInfo.loaded,
+            modelName: modelInfo.modelName,
             nvmePath: getNvmePath(),
             installState: installState.running ? installState : null,
             uninstallState: uninstallState.running ? uninstallState : null

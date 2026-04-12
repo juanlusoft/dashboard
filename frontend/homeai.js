@@ -46,7 +46,7 @@ async function renderHomeAIView() {
     if (!status.installed) {
         renderHomeAINotInstalled(status.nvmePath);
     } else if (status.installed && status.running && status.modelLoaded) {
-        renderHomeAIActive();
+        renderHomeAIActive(status);
     } else {
         // Instalado pero servicio detenido o modelo no cargado
         renderHomeAIInactive(status);
@@ -72,7 +72,7 @@ function renderHomeAINotInstalled(defaultNvmePath) {
                 <ul>
                     <li>✅ <strong>Disco M.2 NVMe obligatorio</strong> — mínimo 8 GB libres (protege la eMMC del sistema)</li>
                     <li>✅ <strong>Conexión a internet</strong> — para descargar el modelo base</li>
-                    <li>✅ <strong>~2.5 GB de descarga</strong> — modelo <code>qwen2.5-coder:3b</code> optimizado para ARM64</li>
+                    <li>✅ <strong>~1.5 GB de descarga</strong> — modelo <code>gemma2:2b</code> optimizado para ARM64</li>
                     <li>✅ <strong>Sin Docker</strong> — se instala nativamente vía <code>systemd</code>, sin ensuciar el panel de contenedores</li>
                 </ul>
                 <div class="homeai-info-box">
@@ -289,7 +289,7 @@ function startHomeAIUninstallPolling() {
 }
 
 // ─── ESTADO: ACTIVO (chat) ───────────────────────────────────────────────────
-function renderHomeAIActive() {
+function renderHomeAIActive(status = {}) {
     const content = document.getElementById('dashboard-content');
 
     // Reconstruir historial de chat previo
@@ -309,7 +309,7 @@ function renderHomeAIActive() {
 
         <div class="glass-card homeai-card homeai-card-active">
             <div class="homeai-header">
-                <div class="homeai-status-badge homeai-badge-active">🟢 Activo — qwen2.5-coder:3b</div>
+                <div class="homeai-status-badge homeai-badge-active">🟢 Activo — ${escapeHtml(status.modelName || 'HomeAI')}</div>
                 <div class="homeai-header-actions">
                     <button id="homeai-clear-btn" class="btn-secondary homeai-btn-sm" title="Borrar historial de chat">
                         🗑️ Limpiar chat
