@@ -356,7 +356,7 @@ router.get('/stats', requireAuth, async (req, res) => {
             swapUsed: (mem.swapused / 1024 / 1024 / 1024).toFixed(1),
             swapTotal: (mem.swaptotal / 1024 / 1024 / 1024).toFixed(1),
             fans,
-            power: readIna238(),
+            power: await readIna238(),
             uptime: si.time().uptime,
             hostname: osInfo.hostname,
             platform: osInfo.platform,

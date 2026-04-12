@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.32
+# HomePiNAS v2.13.33
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.32-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.33-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
