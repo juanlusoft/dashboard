@@ -1607,6 +1607,10 @@ input:checked+.slider:before {
 
 .card-compact {
     padding: 20px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    box-sizing: border-box;
 }
 
 .card-compact h3 {
