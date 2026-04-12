@@ -1,8 +1,8 @@
-# HomePiNAS v2.13.19
+# HomePiNAS v2.13.20
 
 Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 
-![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.19-brightgreen)
+![HomePiNAS Dashboard](https://img.shields.io/badge/version-2.13.20-brightgreen)
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet)
 ![Mobile Friendly](https://img.shields.io/badge/Mobile-Friendly-blue)
 
@@ -66,6 +66,11 @@ Premium NAS Dashboard for Raspberry Pi CM5 - Homelabs.club Edition
 - Restricted sudoers configuration
 - HTTPS with self-signed certificates
 - 2FA (TOTP) support
+
+## 🆕 What's New in v2.13.20
+
+### Fix dashboard — repaso completo de campos sin actualización en quickRefresh
+- **🔧 main.js** — `hostname`, `distro`, `cpuModel`, IP Local y contador DDNS ahora tienen ID y se actualizan en cada ciclo de stats
 
 ## 🆕 What's New in v2.13.19
 

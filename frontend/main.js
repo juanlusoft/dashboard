@@ -2811,10 +2811,20 @@ async function renderDashboard(quickRefresh) {
             swapRow.style.display = '';
             if (swapVal) swapVal.textContent = `${stats.swapUsed || 0}/${stats.swapTotal || 0} GB`;
         }
+        const hostnameEl = document.getElementById('dash-hostname');
+        if (hostnameEl && stats.hostname) hostnameEl.textContent = stats.hostname;
+        const distroEl = document.getElementById('dash-distro');
+        if (distroEl && stats.distro) distroEl.textContent = stats.distro;
         const uptimeEl = document.getElementById('dash-uptime');
         if (uptimeEl) uptimeEl.textContent = `${t('dashboard.uptime', 'Tiempo Activo')}: ${uptimeStr}`;
+        const cpuModelEl = document.getElementById('dash-cpu-model');
+        if (cpuModelEl) cpuModelEl.textContent = cpuModel;
         const publicIpEl = document.getElementById('dash-public-ip');
         if (publicIpEl) publicIpEl.textContent = publicIP;
+        const lanIpEl = document.getElementById('dash-lan-ip');
+        if (lanIpEl) lanIpEl.textContent = lanIP;
+        const ddnsCountEl = document.getElementById('dash-ddns-count');
+        if (ddnsCountEl) ddnsCountEl.textContent = `${ddnsCount} ${t('dashboard.services', 'Servicio(s)')}`;
         if (stats.power) {
             const pwrCard = document.getElementById('dash-power-card');
             if (pwrCard) pwrCard.style.display = '';
@@ -2914,9 +2924,9 @@ async function renderDashboard(quickRefresh) {
             <div class="overview-header">
                 <h3>${t('dashboard.systemOverview', 'Resumen del Sistema')}</h3>
                 <div class="system-info-badge">
-                    <span>${escapeHtml(stats.hostname || 'HomePiNAS')}</span>
+                    <span id="dash-hostname">${escapeHtml(stats.hostname || 'HomePiNAS')}</span>
                     <span class="separator">|</span>
-                    <span>${escapeHtml(stats.distro || 'Linux')}</span>
+                    <span id="dash-distro">${escapeHtml(stats.distro || 'Linux')}</span>
                     <span class="separator">|</span>
                     <span id="dash-uptime">${t('dashboard.uptime', 'Tiempo Activo')}: ${uptimeStr}</span>
                 </div>
@@ -2926,7 +2936,7 @@ async function renderDashboard(quickRefresh) {
         <div class="dashboard-grid-5">
             <div class="glass-card card-compact">
                 <h3>🖥️ ${t('dashboard.cpu', 'CPU')}</h3>
-                <div class="cpu-model-compact">${escapeHtml(cpuModel)}</div>
+                <div id="dash-cpu-model" class="cpu-model-compact">${escapeHtml(cpuModel)}</div>
                 <div class="cpu-specs-row">
                     <span id="dash-cpu-physical-cores">${stats.cpuPhysicalCores || 0} ${t('dashboard.cores', 'Núcleos')}</span>
                     <span id="dash-cpu-cores">${stats.cpuCores || 0} ${t('dashboard.threads', 'Hilos')}</span>
@@ -2977,8 +2987,8 @@ async function renderDashboard(quickRefresh) {
                 <h3>🌐 ${t('dashboard.network', 'Red')}</h3>
                 <div class="network-compact">
                     <div class="net-row"><span>${t('dashboard.publicIP', 'IP Pública')}</span><span id="dash-public-ip" class="ip-value">${publicIP}</span></div>
-                    <div class="net-row"><span>${t('dashboard.lanIP', 'IP Local')}</span><span>${lanIP}</span></div>
-                    <div class="net-row"><span>${t('dashboard.ddns', 'DDNS')}</span><span>${ddnsCount} ${t('dashboard.services', 'Servicio(s)')}</span></div>
+                    <div class="net-row"><span>${t('dashboard.lanIP', 'IP Local')}</span><span id="dash-lan-ip">${lanIP}</span></div>
+                    <div class="net-row"><span>${t('dashboard.ddns', 'DDNS')}</span><span id="dash-ddns-count">${ddnsCount} ${t('dashboard.services', 'Servicio(s)')}</span></div>
                 </div>
             </div>
 
