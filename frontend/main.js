@@ -9263,11 +9263,34 @@ async function renderSambaSection(container) {
             const status = await statusRes.json();
             const statusBadge = document.createElement('div');
             const sambaHasConn = (status.connectedCount || 0) > 0;
-            statusBadge.style.cssText = `display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; margin-bottom: 15px; ${
+            statusBadge.style.cssText = `display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; margin-bottom: 12px; ${
                 sambaHasConn ? 'background: rgba(16,185,129,0.15); color: #10b981;' : 'background: rgba(239,68,68,0.15); color: #ef4444;'
             }`;
             statusBadge.textContent = status.running ? `✅ Activo • ${status.connectedCount || 0} conexiones` : '❌ Inactivo';
             section.appendChild(statusBadge);
+
+            // Connected clients list
+            if (status.connectedUsers && status.connectedUsers.length > 0) {
+                const clientsCard = document.createElement('div');
+                clientsCard.className = 'glass-card';
+                clientsCard.style.cssText = 'padding:12px 16px;margin-bottom:16px;';
+                const clientsTitle = document.createElement('div');
+                clientsTitle.style.cssText = 'font-size:0.75rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;';
+                clientsTitle.textContent = '👤 Clientes conectados';
+                clientsCard.appendChild(clientsTitle);
+                status.connectedUsers.forEach(u => {
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:0.85rem;';
+                    row.innerHTML = `
+                        <span style="color:#10b981;font-weight:600;">${escapeHtml(u.username || '—')}</span>
+                        <span style="color:var(--text-dim);">·</span>
+                        <span style="color:var(--text-secondary);">${escapeHtml(u.machine || u.ip || '—')}</span>
+                        ${u.protocol ? `<span style="margin-left:auto;font-size:0.75rem;color:var(--text-dim);background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px;">${escapeHtml(u.protocol)}</span>` : ''}
+                    `;
+                    clientsCard.appendChild(row);
+                });
+                section.appendChild(clientsCard);
+            }
         }
     } catch (e) {}
 
@@ -9820,6 +9843,27 @@ async function renderNFSSection(container) {
             }`;
             statusBadge.textContent = status.running ? `✅ Activo • ${status.connectedCount || 0} conexiones` : '🔴 Inactivo';
             section.appendChild(statusBadge);
+
+            // Connected clients list
+            if (status.connectedClients && status.connectedClients.length > 0) {
+                const clientsCard = document.createElement('div');
+                clientsCard.className = 'glass-card';
+                clientsCard.style.cssText = 'padding:12px 16px;margin-bottom:16px;';
+                const clientsTitle = document.createElement('div');
+                clientsTitle.style.cssText = 'font-size:0.75rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;';
+                clientsTitle.textContent = '🖥️ Clientes conectados';
+                clientsCard.appendChild(clientsTitle);
+                status.connectedClients.forEach(c => {
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:0.85rem;';
+                    row.innerHTML = `
+                        <span style="color:#10b981;font-weight:600;">${escapeHtml(c.ip || '—')}</span>
+                        <span style="margin-left:auto;font-size:0.75rem;color:var(--text-dim);background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px;">NFS</span>
+                    `;
+                    clientsCard.appendChild(row);
+                });
+                section.appendChild(clientsCard);
+            }
         }
     } catch (e) {}
 
