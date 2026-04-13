@@ -2888,7 +2888,7 @@ async function renderDashboard(quickRefresh) {
         <div id="cache-status-widget" class="glass-card storage-overview dash-storage-full" style="display: none;">
             <div class="storage-array-header">
                 <h3>⚡ ${t('dashboard.cache', 'Estado de la Caché')}</h3>
-                <button id="cache-mover-btn" class="btn-primary" style="padding: 6px 14px; font-size: 13px; border-radius: 6px;">
+                <button id="cache-mover-btn" class="btn-primary" style="padding: 6px 14px; font-size: 13px; border-radius: 6px; width: auto; align-self: center;">
                     🚀 ${t('dashboard.moveNow', 'Mover Ahora')}
                 </button>
             </div>
@@ -3017,34 +3017,87 @@ async function renderDashboard(quickRefresh) {
             if (dockerWidget && Array.isArray(containers) && containers.length > 0) {
                 dockerWidget.style.display = 'block';
                 const iconAliases = {
+                    // Plex
                     'plex-media-server': 'plex',
                     'plex': 'plex',
-                    'qbittorrent': 'qbittorrent',
-                    'rsync-server': 'rsync',
-                    'rsync': 'rsync',
-                    'seerr': 'jellyseerr',
-                    'jellyseerr': 'jellyseerr',
-                    'overseerr': 'overseerr',
+                    // *arr stack
                     'sonarr': 'sonarr',
                     'radarr': 'radarr',
                     'prowlarr': 'prowlarr',
                     'bazarr': 'bazarr',
                     'lidarr': 'lidarr',
                     'readarr': 'readarr',
+                    'overseerr': 'overseerr',
+                    'jellyseerr': 'jellyseerr',
+                    'seerr': 'jellyseerr',
+                    // Media
                     'jellyfin': 'jellyfin',
                     'emby': 'emby',
-                    'portainer': 'portainer',
+                    'tautulli': 'tautulli',
+                    'navidrome': 'navidrome',
+                    // Download
+                    'qbittorrent': 'qbittorrent',
+                    'transmission': 'transmission',
+                    'nicotine-plus': 'nicotine-plus',
+                    // Networking / proxy
                     'nginx': 'nginx',
+                    'nginx-proxy-manager': 'nginx-proxy-manager',
+                    'swag': 'nginx',
                     'traefik': 'traefik',
-                    'nextcloud': 'nextcloud',
-                    'heimdall': 'heimdall',
+                    'wireguard': 'wireguard',
+                    'tailscale': 'tailscale',
+                    'cloudflared': 'cloudflare',
+                    'cloudflare-tunnel': 'cloudflare',
+                    'adguard': 'adguard-home',
+                    'adguardhome': 'adguard-home',
                     'pihole': 'pi-hole',
+                    'uptime-kuma': 'uptime-kuma',
+                    // Cloud / storage
+                    'nextcloud': 'nextcloud',
+                    'immich': 'immich',
+                    'photoprism': 'photoprism',
+                    'filebrowser': 'filebrowser',
+                    'duplicati': 'duplicati',
+                    'icloudpd': 'icloud',
+                    // Home automation
                     'homeassistant': 'home-assistant',
                     'home-assistant': 'home-assistant',
+                    'frigate': 'frigate',
+                    // Infra / monitoring
+                    'portainer': 'portainer',
                     'grafana': 'grafana',
                     'influxdb': 'influxdb',
+                    'dozzle': 'dozzle',
+                    'beszel': 'beszel',
+                    'speedtest-tracker': 'speedtest-tracker',
+                    // Productivity / docs
                     'vaultwarden': 'vaultwarden',
                     'bitwarden': 'vaultwarden',
+                    'gitea': 'gitea',
+                    'nextcloud': 'nextcloud',
+                    'onlyoffice': 'onlyoffice',
+                    'stirling-pdf': 'stirling-pdf',
+                    'excalidraw': 'excalidraw',
+                    'flatnotes': 'flatnotes',
+                    'paperless': 'paperless',
+                    'heimdall': 'heimdall',
+                    // Books / media management
+                    'kavita': 'kavita',
+                    'komga': 'komga',
+                    'ubooquity': 'ubooquity',
+                    'booklore': 'booklore',
+                    'karakeep': 'karakeep',
+                    // Dev / misc
+                    'code-server': 'code-server',
+                    'caddy': 'caddy',
+                    'guacamole': 'guacamole',
+                    'rsync-server': 'rsync',
+                    'rsync': 'rsync',
+                    'traccar': 'traccar',
+                    'pulsarr': 'pulsarr',
+                    'fenrus': 'fenrus',
+                    'tvheadend': 'tvheadend',
+                    'photoprism': 'photoprism',
                 };
                 window._dashDockerContainers = containers;
                 const grid = document.createElement('div');
@@ -3486,7 +3539,7 @@ async function renderStorageDashboard() {
                     </div>
                     <div class="mount-bar-text">
                         <span>${usage}% ${t('storage.used', 'usado')}</span>
-                        <span>${escapeHtml(disk.size || 'N/A')}</span>
+                        <span>${escapeHtml(disk.free || disk.size || 'N/A')} ${t('storage.available', 'disponible')}</span>
                     </div>
                 </div>
                 <div class="mount-size">
@@ -4209,6 +4262,37 @@ async function renderDockerManager() {
                 });
                 
                 card.appendChild(mountsDiv);
+            }
+
+            // Env vars section
+            if (container.env && container.env.length > 0) {
+                const envDiv = document.createElement('div');
+                envDiv.style.cssText = 'margin-bottom: 12px; padding: 8px 10px; background: rgba(255,255,255,0.03); border-radius: 8px; border-left: 3px solid #f59e0b;';
+
+                const envLabel = document.createElement('div');
+                envLabel.style.cssText = 'font-size: 0.7rem; color: var(--text-dim); margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;';
+                envLabel.textContent = '⚙️ Variables de entorno';
+                envDiv.appendChild(envLabel);
+
+                container.env.forEach(({ key, value }) => {
+                    const row = document.createElement('div');
+                    row.style.cssText = 'font-size: 0.75rem; padding: 2px 0; display: flex; gap: 6px; align-items: baseline; word-break: break-all;';
+                    const keyEl = document.createElement('span');
+                    keyEl.style.cssText = 'color: #f59e0b; font-weight: 600; white-space: nowrap; flex-shrink: 0;';
+                    keyEl.textContent = key;
+                    const sep = document.createElement('span');
+                    sep.style.cssText = 'color: var(--text-dim); opacity: 0.5; flex-shrink: 0;';
+                    sep.textContent = '=';
+                    const valEl = document.createElement('span');
+                    valEl.style.cssText = 'color: var(--text-secondary, #aaa);';
+                    valEl.textContent = value;
+                    row.appendChild(keyEl);
+                    row.appendChild(sep);
+                    row.appendChild(valEl);
+                    envDiv.appendChild(row);
+                });
+
+                card.appendChild(envDiv);
             }
 
             // Controls row
@@ -4958,9 +5042,181 @@ async function renderNetworkManager() {
 
     ifaceSection.appendChild(interfacesGrid);
 
+    // Network bandwidth chart — below interfaces, full width
+    const chartCard = document.createElement('div');
+    chartCard.className = 'glass-card';
+    chartCard.style.cssText = 'padding:20px;margin-top:20px;';
+    chartCard.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h4 style="margin:0;">📡 Uso de Red en Tiempo Real</h4>
+            <div style="display:flex;gap:12px;align-items:center;font-size:12px;">
+                <select id="net-iface-selector" style="background:rgba(255,255,255,0.08);color:inherit;border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:2px 6px;font-size:11px;cursor:pointer;"></select>
+                <span><span style="display:inline-block;width:10px;height:10px;background:#10b981;border-radius:50%;margin-right:4px;"></span>↓ Descarga</span>
+                <span><span style="display:inline-block;width:10px;height:10px;background:#3b82f6;border-radius:50%;margin-right:4px;"></span>↑ Subida</span>
+            </div>
+        </div>
+        <canvas id="net-bandwidth-chart" style="width:100%;height:200px;display:block;"></canvas>
+        <div id="net-bandwidth-values" style="display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-size:13px;"></div>
+    `;
+    ifaceSection.appendChild(chartCard);
+
     // DDNS section is now rendered by renderDDNSSection() after this function
     container.appendChild(ifaceSection);
     dashboardContent.appendChild(container);
+
+    // Start bandwidth polling
+    startNetBandwidthChart();
+}
+
+// Network bandwidth real-time chart
+function startNetBandwidthChart() {
+    const canvas = document.getElementById('net-bandwidth-chart');
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    const maxPoints = 60;
+    // Per-interface history: { iface: { rx: [], tx: [] } }
+    const ifaceHistory = {};
+    let selectedIface = null;
+    let maxVal = 1024 * 512; // min scale: 512 KB/s
+    let pollInterval = null;
+
+    function formatSpeed(bps) {
+        if (bps >= 1024 * 1024 * 1024) return (bps / 1024 / 1024 / 1024).toFixed(2) + ' GB/s';
+        if (bps >= 1024 * 1024) return (bps / 1024 / 1024).toFixed(1) + ' MB/s';
+        if (bps >= 1024) return (bps / 1024).toFixed(0) + ' KB/s';
+        return bps.toFixed(0) + ' B/s';
+    }
+
+    function drawChart() {
+        const W = canvas.offsetWidth;
+        const H = canvas.offsetHeight;
+        if (!W || !H) return;
+        canvas.width = W;
+        canvas.height = H;
+
+        ctx.clearRect(0, 0, W, H);
+
+        // Grid lines
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 4; i++) {
+            const y = Math.round(H - (i / 4) * H) + 0.5;
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+            if (i > 0) {
+                ctx.fillStyle = 'rgba(255,255,255,0.3)';
+                ctx.font = '10px sans-serif';
+                ctx.fillText(formatSpeed(maxVal * i / 4), 4, y - 3);
+            }
+        }
+
+        // Draw newest point at RIGHT edge; older points go left
+        function drawLine(data, color) {
+            if (data.length < 2) return;
+            const step = W / (maxPoints - 1);
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.lineJoin = 'round';
+            data.forEach((v, i) => {
+                // newest = data[data.length-1] → x = W
+                const x = W - (data.length - 1 - i) * step;
+                const y = H - (Math.min(v, maxVal) / maxVal) * (H - 2);
+                i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+
+            // Fill under line
+            const lastX = W;
+            const firstX = W - (data.length - 1) * step;
+            ctx.lineTo(lastX, H);
+            ctx.lineTo(firstX, H);
+            ctx.closePath();
+            ctx.fillStyle = color.replace(')', ', 0.1)').replace('rgb', 'rgba');
+            ctx.fill();
+        }
+
+        const hist = selectedIface && ifaceHistory[selectedIface];
+        if (hist) {
+            drawLine(hist.rx, 'rgb(16, 185, 129)');
+            drawLine(hist.tx, 'rgb(59, 130, 246)');
+        }
+    }
+
+    async function poll() {
+        const canvas = document.getElementById('net-bandwidth-chart');
+        if (!canvas) { clearInterval(pollInterval); return; }
+        try {
+            const res = await authFetch(`${API_BASE}/network/stats`);
+            if (!res.ok) return;
+            const data = await res.json();
+
+            // Populate selector on first poll
+            const sel = document.getElementById('net-iface-selector');
+            if (sel && sel.options.length === 0 && data.length > 0) {
+                // Prefer eth1, then eth0, then first
+                const preferred = data.find(s => s.iface === 'eth1') ||
+                                  data.find(s => s.iface === 'eth0') ||
+                                  data[0];
+                data.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.iface;
+                    opt.textContent = s.iface;
+                    sel.appendChild(opt);
+                });
+                sel.value = preferred.iface;
+                selectedIface = preferred.iface;
+                sel.addEventListener('change', () => {
+                    selectedIface = sel.value;
+                    // Clear history on switch so scale resets cleanly
+                    if (ifaceHistory[selectedIface]) {
+                        ifaceHistory[selectedIface].rx = [];
+                        ifaceHistory[selectedIface].tx = [];
+                    }
+                    maxVal = 1024 * 512;
+                });
+            }
+
+            // Update per-interface history
+            data.forEach(s => {
+                if (!ifaceHistory[s.iface]) ifaceHistory[s.iface] = { rx: [], tx: [] };
+                ifaceHistory[s.iface].rx.push(s.rxSpeed);
+                ifaceHistory[s.iface].tx.push(s.txSpeed);
+                if (ifaceHistory[s.iface].rx.length > maxPoints) ifaceHistory[s.iface].rx.shift();
+                if (ifaceHistory[s.iface].tx.length > maxPoints) ifaceHistory[s.iface].tx.shift();
+            });
+
+            // Scale based on selected interface
+            const hist = selectedIface && ifaceHistory[selectedIface];
+            if (hist) {
+                const peak = Math.max(...hist.rx, ...hist.tx, 1024 * 256);
+                maxVal = peak * 1.2;
+            }
+
+            drawChart();
+
+            // Values row: show selected interface stats
+            const valDiv = document.getElementById('net-bandwidth-values');
+            if (valDiv && selectedIface && ifaceHistory[selectedIface]) {
+                const h = ifaceHistory[selectedIface];
+                const rx = h.rx[h.rx.length - 1] || 0;
+                const tx = h.tx[h.tx.length - 1] || 0;
+                valDiv.innerHTML = `<span style="color:var(--text-dim);">${selectedIface}:</span> <span style="color:#10b981;">↓ ${formatSpeed(rx)}</span> <span style="color:#3b82f6;">↑ ${formatSpeed(tx)}</span>`;
+            }
+        } catch {}
+    }
+
+    poll();
+    pollInterval = setInterval(poll, 1500);
+
+    // Stop polling when leaving network view
+    const observer = new MutationObserver(() => {
+        if (!document.getElementById('net-bandwidth-chart')) {
+            clearInterval(pollInterval);
+            observer.disconnect();
+        }
+    });
+    observer.observe(document.getElementById('dashboard-content') || document.body, { childList: true, subtree: true });
 }
 
 // Network functions
@@ -6694,6 +6950,7 @@ async function renderFilesView() {
             <span>Tamaño</span>
             <span class="fm-hide-mobile">Modificado</span>
             <span class="fm-hide-mobile">Permisos</span>
+            <span class="fm-hide-mobile">Disco</span>
             <span></span>
         `;
         tableHeader.querySelector('#fm-select-all').addEventListener('change', function() { fmToggleSelectAll(this.checked); });
@@ -7081,12 +7338,22 @@ function renderFilesList(container, files, filePath) {
         menuBtn.addEventListener('click', (e) => { e.stopPropagation(); showFileContextMenu(e, fullPath, file); });
         actionsDiv.appendChild(menuBtn);
 
+        const diskSpan = document.createElement('span');
+        diskSpan.className = 'fm-file-meta fm-hide-mobile';
+        if (file.disk) {
+            diskSpan.textContent = file.disk;
+            diskSpan.style.cssText = 'font-size:11px;color:var(--primary);font-weight:600;';
+        } else {
+            diskSpan.textContent = '—';
+        }
+
         row.appendChild(checkbox);
         row.appendChild(iconWrap);
         row.appendChild(nameSpan);
         row.appendChild(sizeSpan);
         row.appendChild(dateSpan);
         row.appendChild(permSpan);
+        row.appendChild(diskSpan);
         row.appendChild(actionsDiv);
 
         row.addEventListener('click', (e) => {
@@ -8995,11 +9262,35 @@ async function renderSambaSection(container) {
         if (statusRes.ok) {
             const status = await statusRes.json();
             const statusBadge = document.createElement('div');
-            statusBadge.style.cssText = `display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; margin-bottom: 15px; ${
-                status.active ? 'background: rgba(16,185,129,0.15); color: #10b981;' : 'background: rgba(239,68,68,0.15); color: #ef4444;'
+            const sambaHasConn = (status.connectedCount || 0) > 0;
+            statusBadge.style.cssText = `display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; margin-bottom: 12px; ${
+                sambaHasConn ? 'background: rgba(16,185,129,0.15); color: #10b981;' : 'background: rgba(239,68,68,0.15); color: #ef4444;'
             }`;
             statusBadge.textContent = status.running ? `✅ Activo • ${status.connectedCount || 0} conexiones` : '❌ Inactivo';
             section.appendChild(statusBadge);
+
+            // Connected clients list
+            if (status.connectedUsers && status.connectedUsers.length > 0) {
+                const clientsCard = document.createElement('div');
+                clientsCard.className = 'glass-card';
+                clientsCard.style.cssText = 'padding:12px 16px;margin-bottom:16px;';
+                const clientsTitle = document.createElement('div');
+                clientsTitle.style.cssText = 'font-size:0.75rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;';
+                clientsTitle.textContent = '👤 Clientes conectados';
+                clientsCard.appendChild(clientsTitle);
+                status.connectedUsers.forEach(u => {
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:0.85rem;';
+                    row.innerHTML = `
+                        <span style="color:#10b981;font-weight:600;">${escapeHtml(u.username || '—')}</span>
+                        <span style="color:var(--text-dim);">·</span>
+                        <span style="color:var(--text-secondary);">${escapeHtml(u.machine || u.ip || '—')}</span>
+                        ${u.protocol ? `<span style="margin-left:auto;font-size:0.75rem;color:var(--text-dim);background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px;">${escapeHtml(u.protocol)}</span>` : ''}
+                    `;
+                    clientsCard.appendChild(row);
+                });
+                section.appendChild(clientsCard);
+            }
         }
     } catch (e) {}
 
@@ -9546,11 +9837,33 @@ async function renderNFSSection(container) {
         if (statusRes.ok) {
             const status = await statusRes.json();
             const statusBadge = document.createElement('div');
+            const nfsHasConn = (status.connectedCount || 0) > 0;
             statusBadge.style.cssText = `display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; margin-bottom: 15px; ${
-                status.running ? 'background: rgba(16,185,129,0.15); color: #10b981;' : 'background: rgba(239,68,68,0.15); color: #ef4444;'
+                nfsHasConn ? 'background: rgba(16,185,129,0.15); color: #10b981;' : 'background: rgba(239,68,68,0.15); color: #ef4444;'
             }`;
             statusBadge.textContent = status.running ? `✅ Activo • ${status.connectedCount || 0} conexiones` : '🔴 Inactivo';
             section.appendChild(statusBadge);
+
+            // Connected clients list
+            if (status.connectedClients && status.connectedClients.length > 0) {
+                const clientsCard = document.createElement('div');
+                clientsCard.className = 'glass-card';
+                clientsCard.style.cssText = 'padding:12px 16px;margin-bottom:16px;';
+                const clientsTitle = document.createElement('div');
+                clientsTitle.style.cssText = 'font-size:0.75rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;';
+                clientsTitle.textContent = '🖥️ Clientes conectados';
+                clientsCard.appendChild(clientsTitle);
+                status.connectedClients.forEach(c => {
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:0.85rem;';
+                    row.innerHTML = `
+                        <span style="color:#10b981;font-weight:600;">${escapeHtml(c.ip || '—')}</span>
+                        <span style="margin-left:auto;font-size:0.75rem;color:var(--text-dim);background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px;">NFS</span>
+                    `;
+                    clientsCard.appendChild(row);
+                });
+                section.appendChild(clientsCard);
+            }
         }
     } catch (e) {}
 
