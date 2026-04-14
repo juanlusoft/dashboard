@@ -4367,6 +4367,37 @@ async function renderDockerManager() {
                 card.appendChild(mountsDiv);
             }
 
+            // Env vars section
+            if (container.env && container.env.length > 0) {
+                const envDiv = document.createElement('div');
+                envDiv.style.cssText = 'margin-bottom: 12px; padding: 8px 10px; background: rgba(255,255,255,0.03); border-radius: 8px; border-left: 3px solid #f59e0b;';
+
+                const envLabel = document.createElement('div');
+                envLabel.style.cssText = 'font-size: 0.7rem; color: var(--text-dim); margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;';
+                envLabel.textContent = '⚙️ Variables de entorno';
+                envDiv.appendChild(envLabel);
+
+                container.env.forEach(({ key, value }) => {
+                    const row = document.createElement('div');
+                    row.style.cssText = 'font-size: 0.75rem; padding: 2px 0; display: flex; gap: 6px; align-items: baseline; word-break: break-all;';
+                    const keyEl = document.createElement('span');
+                    keyEl.style.cssText = 'color: #f59e0b; font-weight: 600; white-space: nowrap; flex-shrink: 0;';
+                    keyEl.textContent = key;
+                    const sep = document.createElement('span');
+                    sep.style.cssText = 'color: var(--text-dim); opacity: 0.5; flex-shrink: 0;';
+                    sep.textContent = '=';
+                    const valEl = document.createElement('span');
+                    valEl.style.cssText = 'color: var(--text-secondary, #aaa);';
+                    valEl.textContent = value;
+                    row.appendChild(keyEl);
+                    row.appendChild(sep);
+                    row.appendChild(valEl);
+                    envDiv.appendChild(row);
+                });
+
+                card.appendChild(envDiv);
+            }
+
             // Controls row
             const controls = document.createElement('div');
             controls.style.cssText = 'display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;';

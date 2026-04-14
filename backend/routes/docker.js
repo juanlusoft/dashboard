@@ -165,29 +165,37 @@ router.get('/containers', requireAuth, async (req, res) => {
             // Find compose file if any
             const compose = findComposeForContainer(name);
 
-            // Get container stats if running
+            // System env vars to filter out (not useful for the user)
+            const ENV_SKIP = /^(PATH|HOME|TERM|PS1|SHELL|HOSTNAME|USER|VIRTUAL_ENV|S6_|XDG_|LSIO_|LANG|LANGUAGE|LC_|TZ$)/;
+
+            // Get container stats and env vars
             let cpu = '---';
             let ram = '---';
+            let env = [];
 
-            if (c.State === 'running') {
-                try {
-                    const container = docker.getContainer(c.Id);
-                    const stats = await container.stats({ stream: false });
-
-                    // Calculate CPU percentage
-                    const cpuDelta = stats.cpu_stats.cpu_usage.total_usage - stats.precpu_stats.cpu_usage.total_usage;
-                    const systemDelta = stats.cpu_stats.system_cpu_usage - stats.precpu_stats.system_cpu_usage;
-                    const cpuPercent = (cpuDelta / systemDelta) * stats.cpu_stats.online_cpus * 100;
-                    cpu = cpuPercent.toFixed(1) + '%';
-
-                    // Calculate memory usage (check for undefined to avoid NaN)
-                    if (stats.memory_stats?.usage) {
-                        const memUsage = stats.memory_stats.usage / 1024 / 1024;
-                        ram = memUsage.toFixed(0) + 'MB';
-                    }
-                } catch (e) {
-                    // Stats not available
-                }
+            try {
+                const containerObj = docker.getContainer(c.Id);
+                const [inspectData] = await Promise.all([
+                    containerObj.inspect(),
+                    c.State === 'running'
+                        ? containerObj.stats({ stream: false }).then(stats => {
+                            const cpuDelta = stats.cpu_stats.cpu_usage.total_usage - stats.precpu_stats.cpu_usage.total_usage;
+                            const systemDelta = stats.cpu_stats.system_cpu_usage - stats.precpu_stats.system_cpu_usage;
+                            cpu = ((cpuDelta / systemDelta) * stats.cpu_stats.online_cpus * 100).toFixed(1) + '%';
+                            if (stats.memory_stats?.usage) {
+                                ram = (stats.memory_stats.usage / 1024 / 1024).toFixed(0) + 'MB';
+                            }
+                        }).catch(() => {})
+                        : Promise.resolve()
+                ]);
+                env = (inspectData.Config?.Env || [])
+                    .filter(e => !ENV_SKIP.test(e.split('=')[0]))
+                    .map(e => {
+                        const eq = e.indexOf('=');
+                        return { key: e.slice(0, eq), value: e.slice(eq + 1) };
+                    });
+            } catch (e) {
+                // Stats/inspect not available
             }
 
             return {
@@ -200,6 +208,7 @@ router.get('/containers', requireAuth, async (req, res) => {
                 ports,
                 notes,
                 mounts,
+                env,
                 compose,
                 hasUpdate,
                 created: c.Created
