@@ -86,9 +86,10 @@ function sanitizePathWithinBase(inputPath, baseDir) {
     if (!inputPath || typeof inputPath !== 'string') return null;
     if (!baseDir || typeof baseDir !== 'string') return null;
     let sanitized = inputPath.replace(/\0/g, '');
-    // Strip leading slashes so path.resolve treats it as relative to baseDir
-    sanitized = sanitized.replace(/^\/+/, '');
-    const fullPath = path.resolve(baseDir, sanitized);
+    // If already absolute, resolve as-is; otherwise join with baseDir
+    const fullPath = sanitized.startsWith('/')
+        ? path.resolve(sanitized)
+        : path.resolve(baseDir, sanitized);
     // Use realpath to resolve symlinks and prevent symlink-based escapes
     let realBase;
     try { realBase = fs.realpathSync(baseDir); } catch (e) { realBase = path.resolve(baseDir); }

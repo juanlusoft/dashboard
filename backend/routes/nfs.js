@@ -86,14 +86,8 @@ function readExports() {
  * Write new content to /etc/exports using a temp file + sudo mv approach
  */
 async function writeExports(content) {
-  const tmpFile = path.join('/mnt/storage/.tmp', `exports.${Date.now()}.tmp`);
+  const tmpFile = `/tmp/homepinas-exports-${Date.now()}.tmp`;
   
-  // Ensure tmp dir exists
-  const tmpDir = path.dirname(tmpFile);
-  if (!fs.existsSync(tmpDir)) {
-    fs.mkdirSync(tmpDir, { recursive: true });
-  }
-
   fs.writeFileSync(tmpFile, content, 'utf8');
 
   try {
@@ -211,7 +205,10 @@ router.post('/shares', requireAuth, requireAdmin, async (req, res) => {
     // Build the share config
     const shareNetwork = network || '192.168.1.0/24';
     const baseOptions = readOnly ? 'ro' : 'rw';
-    const shareOptions = `${baseOptions},sync,no_subtree_check`;
+
+    // Generate a stable numeric fsid from the path (required for FUSE/MergerFS exports)
+    const fsid = Math.abs(sanitizedPath.split('').reduce((h, c) => (Math.imul(31, h) + c.charCodeAt(0)) | 0, 0)) % 65535 || 1;
+    const shareOptions = `${baseOptions},sync,no_subtree_check,fsid=${fsid}`;
 
     const shareConfig = {
       path: sanitizedPath,
