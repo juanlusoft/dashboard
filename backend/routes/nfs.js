@@ -311,11 +311,19 @@ router.get('/status', requireAdmin, async (req, res) => {
     }
 
     let connectedCount = 0;
+    let connectedClients = [];
     try {
-      const { stdout: ssOut } = await execFileAsync('sudo', ['ss', '-tun']);
+      const { stdout: ssOut } = await execFileAsync('sudo', ['ss', '-tnp']);
       for (const line of ssOut.split('\n')) {
         if (line.includes(':2049') && line.includes('ESTAB')) {
           connectedCount++;
+          // Extract peer IP (client): format is "ip:port" in column 5
+          const parts = line.trim().split(/\s+/);
+          const peerAddr = parts[4] || '';
+          const clientIp = peerAddr.includes(':') ? peerAddr.split(':').slice(0, -1).join(':').replace(/^\[|\]$/g, '') : peerAddr;
+          if (clientIp && !connectedClients.find(c => c.ip === clientIp)) {
+            connectedClients.push({ ip: clientIp });
+          }
         }
       }
     } catch (err) {
@@ -328,6 +336,7 @@ router.get('/status', requireAdmin, async (req, res) => {
       currentExports,
       exportsCount: currentExports.length,
       connectedCount,
+      connectedClients,
     });
   } catch (err) {
     log.error('NFS status error:', err.message);
