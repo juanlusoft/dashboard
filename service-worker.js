@@ -3,7 +3,7 @@
  * Provides offline caching and PWA functionality
  */
 
-const CACHE_NAME = 'homepinas-v2.2.0';
+const CACHE_NAME = 'homepinas-v2.2.1';
 const RUNTIME_CACHE = 'homepinas-runtime';
 
 // Static assets to cache on install

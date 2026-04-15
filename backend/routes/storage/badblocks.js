@@ -557,64 +557,69 @@ router.get('/disks/health', requireAuth, async (req, res) => {
     }
 });
 
+// Per-disk stat snapshots for delta-based I/O rate calculation
+// Map<diskId, { sectorsRead, sectorsWritten, timestamp }>
+const _ioSnapshots = new Map();
+
+// Read /sys/block/<disk>/stat and return { sectorsRead, sectorsWritten, ioErrors }
+function readSysBlockStat(diskId) {
+    const statPath = `/sys/block/${diskId}/stat`;
+    const raw = fs.readFileSync(statPath, "utf8").trim().split(/\s+/);
+    return {
+        sectorsRead:    parseInt(raw[2])  || 0,   // field 2: sectors read
+        sectorsWritten: parseInt(raw[6])  || 0,   // field 6: sectors written
+        ioErrors:       parseInt(raw[9])  || 0,   // field 9: I/O errors (in-flight)
+    };
+}
+
 // Get I/O statistics for all configured disks
-router.get("/disks/iostats", requireAuth, async (req, res) => {
+router.get("/disks/iostats", requireAuth, (req, res) => {
     try {
         const data = getData();
         const configuredDisks = (data.storageConfig || []).map(d => d.id);
-        
+
         if (configuredDisks.length === 0) {
             return res.json({ disks: [] });
         }
-        
-        // Get iostat data (1 second sample)
-        const iostatOutput = execFileSync("iostat", ["-dx", "1", "1", "-o", "JSON"], { 
-            encoding: "utf8",
-            timeout: 5000
-        });
-        
-        const iostatData = JSON.parse(iostatOutput);
-        const diskStats = iostatData.sysstat.hosts[0].statistics[0].disk || [];
-        
+
+        const now = Date.now();
         const result = [];
-        
+
         for (const diskId of configuredDisks) {
-            const stat = diskStats.find(d => d.disk_device === diskId);
-            
-            if (stat) {
-                // Convert kB/s to MB/s
-                const readMBs = (stat["rkB/s"] / 1024).toFixed(2);
-                const writeMBs = (stat["wkB/s"] / 1024).toFixed(2);
-                
-                // Get error count from /sys/block if available
-                let errorCount = 0;
-                try {
-                    const ioErrPath = `/sys/block/${diskId}/stat`;
-                    if (fs.existsSync(ioErrPath)) {
-                        const statContent = fs.readFileSync(ioErrPath, "utf8");
-                        // /sys/block/*/stat format: field 10 is I/O errors (0-indexed position 9)
-                        const fields = statContent.trim().split(/\s+/);
-                        if (fields.length > 9) {
-                            errorCount = parseInt(fields[9]) || 0;
-                        }
+            try {
+                const current = readSysBlockStat(diskId);
+                const prev    = _ioSnapshots.get(diskId);
+
+                let readMBs = 0, writeMBs = 0;
+
+                if (prev) {
+                    const elapsedS = (now - prev.timestamp) / 1000;
+                    if (elapsedS > 0) {
+                        // 1 sector = 512 bytes; result in MB/s
+                        readMBs  = ((current.sectorsRead    - prev.sectorsRead)    * 512) / elapsedS / (1024 * 1024);
+                        writeMBs = ((current.sectorsWritten - prev.sectorsWritten) * 512) / elapsedS / (1024 * 1024);
+                        // Guard against counter reset / negative delta
+                        if (readMBs  < 0) readMBs  = 0;
+                        if (writeMBs < 0) writeMBs = 0;
                     }
-                } catch (e) {
-                    // Ignore error reading /sys
                 }
-                
+
+                // Save snapshot for next call
+                _ioSnapshots.set(diskId, { ...current, timestamp: now });
+
                 result.push({
-                    diskId: diskId,
-                    readMBs: parseFloat(readMBs),
-                    writeMBs: parseFloat(writeMBs),
-                    ioErrors: errorCount,
-                    utilization: stat.util || 0
+                    diskId,
+                    readMBs:     parseFloat(readMBs.toFixed(2)),
+                    writeMBs:    parseFloat(writeMBs.toFixed(2)),
+                    ioErrors:    current.ioErrors,
+                    utilization: 0
                 });
-            } else {
-                // Disk not found in iostat (might be offline)
-                result.push({ diskId: diskId, readMBs: 0, writeMBs: 0, ioErrors: 0, utilization: 0 });
+            } catch (e) {
+                // Disk may not be present in /sys/block (offline/removed)
+                result.push({ diskId, readMBs: 0, writeMBs: 0, ioErrors: 0, utilization: 0 });
             }
         }
-        
+
         res.json({ disks: result });
     } catch (e) {
         log.error("I/O stats error:", e);
