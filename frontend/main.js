@@ -3589,17 +3589,42 @@ async function renderStorageDashboard() {
     
     try {
         // Fetch disks and pool status
-        const [disksRes, poolRes, cacheRes] = await Promise.all([
+        const [disksRes, poolRes, cacheRes, iostatsRes] = await Promise.all([
             authFetch(`${API_BASE}/system/disks`).catch(() => null),
             authFetch(`${API_BASE}/storage/pool/status`).catch(() => null),
-            authFetch(`${API_BASE}/storage/cache/status`).catch(() => null)
+            authFetch(`${API_BASE}/storage/cache/status`).catch(() => null),
+            authFetch(`${API_BASE}/storage/disks/iostats`).catch(() => null)
         ]);
-        
-        if (disksRes.ok) state.disks = await disksRes.json();
+
+        if (disksRes && disksRes.ok) state.disks = await disksRes.json();
         let poolStatus = {};
         let cacheStatus = null;
         if (cacheRes && cacheRes.ok) cacheStatus = await cacheRes.json();
-        if (poolRes.ok) poolStatus = await poolRes.json();
+        if (poolRes && poolRes.ok) poolStatus = await poolRes.json();
+
+        // Build I/O stats map: diskId → { readMBs, writeMBs }
+        let ioMap = {};
+        if (iostatsRes && iostatsRes.ok) {
+            try {
+                const ioData = await iostatsRes.json();
+                if (ioData.disks) ioData.disks.forEach(d => { ioMap[d.diskId] = d; });
+            } catch(e) { /* ignore */ }
+        }
+
+        // Helper: format MB/s value for display
+        function fmtMBs(mbs) {
+            if (!mbs || mbs < 0.001) return '0 B/s';
+            if (mbs < 1) return (mbs * 1024).toFixed(0) + ' KB/s';
+            if (mbs >= 1024) return (mbs / 1024).toFixed(2) + ' GB/s';
+            return mbs.toFixed(1) + ' MB/s';
+        }
+
+        // Compute totals for header
+        let totalReadMBs = 0, totalWriteMBs = 0;
+        Object.values(ioMap).forEach(d => {
+            totalReadMBs += d.readMBs || 0;
+            totalWriteMBs += d.writeMBs || 0;
+        });
 
         // Storage Array Header (Cockpit style)
         const arrayCard = document.createElement('div');
@@ -3622,6 +3647,14 @@ async function renderStorageDashboard() {
                     <span class="label">${t('storage.available', 'Disponible')}</span>
                     <span class="value dash-pool-free-value">${escapeHtml(poolStatus.poolFree || 'N/A')}</span>
                 </div>
+                <div class="storage-total-stat storage-total-io">
+                    <span class="label">Lectura</span>
+                    <span class="value io-read" id="storage-total-read">${fmtMBs(totalReadMBs)}</span>
+                </div>
+                <div class="storage-total-stat storage-total-io">
+                    <span class="label">Escritura</span>
+                    <span class="value io-write" id="storage-total-write">${fmtMBs(totalWriteMBs)}</span>
+                </div>
             </div>
         `;
         arrayCard.appendChild(arrayHeader);
@@ -3638,6 +3671,7 @@ async function renderStorageDashboard() {
 
             const poolRow = document.createElement('div');
             poolRow.className = 'storage-mount-row pool';
+            poolRow.dataset.diskid = 'pool';
             poolRow.innerHTML = `
                 <div class="mount-info">
                     <span class="mount-path">${escapeHtml(poolStatus.poolMount || '/mnt/storage')}</span>
@@ -3655,6 +3689,14 @@ async function renderStorageDashboard() {
                 <div class="mount-size">
                     <span class="available">${escapeHtml(poolStatus.poolFree || 'N/A')}</span>
                     <span class="total">de ${escapeHtml(poolStatus.poolSize || 'N/A')}</span>
+                </div>
+                <div class="mount-io-read-col">
+                    <span class="mount-io-label">Lectura</span>
+                    <span class="mount-io-read">↑ ${fmtMBs(totalReadMBs)}</span>
+                </div>
+                <div class="mount-io-write-col">
+                    <span class="mount-io-label">Escritura</span>
+                    <span class="mount-io-write">↓ ${fmtMBs(totalWriteMBs)}</span>
                 </div>
                 <div class="mount-type">
                     <span class="mount-type-badge mergerfs">MergerFS</span>
@@ -3675,8 +3717,13 @@ async function renderStorageDashboard() {
                               role === 'parity' ? `/mnt/parity${index + 1}` :
                               `/mnt/disks/cache${index + 1}`;
 
+            const diskIo = ioMap[disk.id] || {};
+            const diskReadMBs = diskIo.readMBs || 0;
+            const diskWriteMBs = diskIo.writeMBs || 0;
+
             const diskRow = document.createElement('div');
             diskRow.className = `storage-mount-row ${role}`;
+            diskRow.dataset.diskid = disk.id;
             diskRow.innerHTML = `
                 <div class="mount-info">
                     <span class="mount-path">${escapeHtml(mountPoint)}</span>
@@ -3694,6 +3741,14 @@ async function renderStorageDashboard() {
                 <div class="mount-size">
                     <span class="available">${escapeHtml(disk.size || 'N/A')}</span>
                     <span class="total">${role.toUpperCase()}</span>
+                </div>
+                <div class="mount-io-read-col">
+                    <span class="mount-io-label">Lectura</span>
+                    <span class="mount-io-read">↑ ${fmtMBs(diskReadMBs)}</span>
+                </div>
+                <div class="mount-io-write-col">
+                    <span class="mount-io-label">Escritura</span>
+                    <span class="mount-io-write">↓ ${fmtMBs(diskWriteMBs)}</span>
                 </div>
                 <div class="mount-type">
                     <span class="mount-type-badge ${escapeHtml(disk.fstype || 'ext4')}">${escapeHtml(disk.fstype || 'ext4')}</span>
@@ -4192,21 +4247,48 @@ async function renderStorageDashboard() {
 
         dashboardContent.appendChild(grid);
         
-        // Start auto-refresh polling (every 30 seconds)
+        // Start I/O polling (every 3 seconds — real-time read/write speeds)
         if (!state.pollingIntervals.storage) {
             state.pollingIntervals.storage = setInterval(async () => {
-                if (state.currentView === 'storage') {
-                    // Only update pool stats without full re-render (avoids flicker)
-                    try {
-                        const poolRes = await authFetch(`${API_BASE}/storage/pool/status`);
-                        if (poolRes.ok) {
-                            const poolStatus = await poolRes.json();
-                            const freeEl = document.querySelector('.dash-pool-free-value');
-                            if (freeEl) freeEl.textContent = poolStatus.poolFree || 'N/A';
+                if (state.currentView !== 'storage') return;
+                try {
+                    const ioRes = await authFetch(`${API_BASE}/storage/disks/iostats`);
+                    if (!ioRes.ok) return;
+                    const ioData = await ioRes.json();
+                    if (!ioData.disks) return;
+
+                    let pollReadMBs = 0, pollWriteMBs = 0;
+                    ioData.disks.forEach(d => {
+                        pollReadMBs += d.readMBs || 0;
+                        pollWriteMBs += d.writeMBs || 0;
+
+                        // Update individual disk row
+                        const row = document.querySelector(`.storage-mount-row[data-diskid="${d.diskId}"]`);
+                        if (row) {
+                            const readEl = row.querySelector('.mount-io-read');
+                            const writeEl = row.querySelector('.mount-io-write');
+                            if (readEl) readEl.textContent = '↑ ' + fmtMBs(d.readMBs || 0);
+                            if (writeEl) writeEl.textContent = '↓ ' + fmtMBs(d.writeMBs || 0);
                         }
-                    } catch (e) { /* ignore */ }
-                }
-            }, 30000);
+                    });
+
+                    // Update pool row aggregate
+                    const poolRow = document.querySelector('.storage-mount-row[data-diskid="pool"]');
+                    if (poolRow) {
+                        const readEl = poolRow.querySelector('.mount-io-read');
+                        const writeEl = poolRow.querySelector('.mount-io-write');
+                        if (readEl) readEl.textContent = '↑ ' + fmtMBs(pollReadMBs);
+                        if (writeEl) writeEl.textContent = '↓ ' + fmtMBs(pollWriteMBs);
+                    }
+
+                    // Update header totals
+                    const totalReadEl = document.getElementById('storage-total-read');
+                    const totalWriteEl = document.getElementById('storage-total-write');
+                    if (totalReadEl) totalReadEl.textContent = fmtMBs(pollReadMBs);
+                    if (totalWriteEl) totalWriteEl.textContent = fmtMBs(pollWriteMBs);
+
+                } catch (e) { /* ignore network errors */ }
+            }, 3000);
         }
     } catch (e) {
         console.error('Storage dashboard error:', e);

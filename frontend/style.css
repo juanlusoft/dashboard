@@ -2701,7 +2701,7 @@ body:has(#dashboard-view.active) .settings-controls {
 
 .storage-mount-row {
     display: grid;
-    grid-template-columns: 200px 1fr 150px 100px;
+    grid-template-columns: 200px 1fr 140px 95px 95px 100px;
     gap: 15px;
     align-items: center;
     padding: 15px 20px;
@@ -2791,6 +2791,43 @@ body:has(#dashboard-view.active) .settings-controls {
 .mount-size .total {
     font-size: 0.75rem;
     color: var(--text-dim);
+}
+
+.mount-io-read-col,
+.mount-io-write-col {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: center;
+}
+
+.mount-io-label {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.mount-io-read {
+    font-size: 0.82rem;
+    font-family: monospace;
+    font-weight: 600;
+    color: #10b981;
+}
+
+.mount-io-write {
+    font-size: 0.82rem;
+    font-family: monospace;
+    font-weight: 600;
+    color: #f59e0b;
+}
+
+.storage-total-io .value.io-read {
+    color: #10b981;
+}
+
+.storage-total-io .value.io-write {
+    color: #f59e0b;
 }
 
 .mount-type {
