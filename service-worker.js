@@ -1,18 +1,18 @@
 /**
- * HomePiNAS Service Worker v2.2.0
+ * HomePiNAS Service Worker v2.3.0
  * Provides offline caching and PWA functionality
  */
 
-const CACHE_NAME = 'homepinas-v2.2.0';
+const CACHE_NAME = 'homepinas-v2.3.0';
 const RUNTIME_CACHE = 'homepinas-runtime';
 
 // Static assets to cache on install
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/frontend/style.css',
-  '/frontend/responsive.css',
-  '/frontend/main.js',
+  '/frontend/style.min.css',
+  '/frontend/responsive.min.css',
+  '/frontend/main.min.js',
   '/frontend/i18n.js',
   '/frontend/i18n/es.json',
   '/frontend/i18n/en.json',
