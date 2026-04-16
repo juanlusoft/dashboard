@@ -2923,21 +2923,6 @@ async function renderDashboard(quickRefresh) {
     // Full render: build complete dashboard HTML
     if (!quickRefresh) {
 
-    // Fetch I/O stats for disks
-    try {
-        const ioRes = await authFetch(`${API_BASE}/storage/disks/iostats`);
-        if (renderGeneration !== currentGen) return;
-        if (ioRes.ok) {
-            const ioData = await ioRes.json();
-            if (ioData.disks && ioData.disks.length > 0) {
-                // We'll store this and use it after innerHTML is set
-                window._pendingIoStats = ioData.disks;
-            }
-        }
-    } catch (e) {
-        console.warn('I/O stats fetch error:', e);
-    }
-
     // Abort if user navigated away from dashboard during async fetches
     if (renderGeneration !== currentGen) return;
 
@@ -3062,24 +3047,6 @@ async function renderDashboard(quickRefresh) {
         clearInterval(state.pollingIntervals.fanStatus);
     }
     state.pollingIntervals.fanStatus = setInterval(loadFanStatus, 10000);
-
-    // Inject I/O stats into disk cards
-    if (window._pendingIoStats) {
-        window._pendingIoStats.forEach(io => {
-            const diskEls = dashboardContent.querySelectorAll('.disk-item-compact');
-            diskEls.forEach(el => {
-                const detailsSpan = el.querySelector('.disk-details');
-                if (detailsSpan && detailsSpan.textContent.includes(io.diskId)) {
-                    const ioDiv = document.createElement('div');
-                    ioDiv.className = 'disk-io-stats';
-                    ioDiv.innerHTML = `<span class="io-read">↓ ${io.readMBs} MB/s</span> <span class="io-write">↑ ${io.writeMBs} MB/s</span>` +
-                        (io.utilization > 0 ? ` <span class="io-util">${io.utilization.toFixed(0)}%</span>` : '');
-                    el.appendChild(ioDiv);
-                }
-            });
-        });
-        delete window._pendingIoStats;
-    }
 
     // Fetch and update cache status widget
     try {
@@ -3601,6 +3568,30 @@ async function renderStorageDashboard() {
         let cacheStatus = null;
         if (cacheRes && cacheRes.ok) cacheStatus = await cacheRes.json();
         if (poolRes && poolRes.ok) poolStatus = await poolRes.json();
+
+        // Build I/O stats map: diskId → { readMBs, writeMBs }
+        let ioMap = {};
+        if (iostatsRes && iostatsRes.ok) {
+            try {
+                const ioData = await iostatsRes.json();
+                if (ioData.disks) ioData.disks.forEach(d => { ioMap[d.diskId] = d; });
+            } catch(e) { /* ignore */ }
+        }
+
+        // Helper: format MB/s value for display
+        function fmtMBs(mbs) {
+            if (!mbs || mbs < 0.001) return '0 B/s';
+            if (mbs < 1) return (mbs * 1024).toFixed(0) + ' KB/s';
+            if (mbs >= 1024) return (mbs / 1024).toFixed(2) + ' GB/s';
+            return mbs.toFixed(1) + ' MB/s';
+        }
+
+        // Compute totals for header
+        let totalReadMBs = 0, totalWriteMBs = 0;
+        Object.values(ioMap).forEach(d => {
+            totalReadMBs += d.readMBs || 0;
+            totalWriteMBs += d.writeMBs || 0;
+        });
 
         // Build I/O stats map: diskId → { readMBs, writeMBs }
         let ioMap = {};

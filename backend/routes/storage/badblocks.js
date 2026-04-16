@@ -456,8 +456,16 @@ router.get('/disks/health', requireAuth, async (req, res) => {
                         const getAttribute = (id) => {
                             const attr = attrs.table.find(a => a.id === id);
                             if (!attr) return 0;
-                            // Power-on hours (attribute 9) uses normalized value — raw value causes ~82B× overflow on Seagate drives
-                            if (id === 9) return attr.value;
+                            if (id === 9) {
+                                // Some drives (e.g. Seagate) pack extra data into the 48-bit raw
+                                // value, making raw.value huge. raw.string contains the correctly
+                                // decoded value, e.g. "51746h+07m+31.827s". Parse hours from it.
+                                const str = (attr.raw && attr.raw.string) || '';
+                                const match = str.match(/^(\d+)/);
+                                if (match) return parseInt(match[1], 10);
+                                // Fallback: mask to 32 bits for drives with simple encoding
+                                return attr.raw.value & 0xFFFFFFFF;
+                            }
                             return attr.raw.value;
                         };
                         
